@@ -1,0 +1,56 @@
+{
+  "schema_id": "awp.rp.workflow-test-scenario.v1",
+  "schema_version": 1,
+  "scenario_id": "upstream_failure_propagation",
+  "scenario_name": "Upstream Failure Propagation",
+  "description": "RoundSnapshot or upstream node fails. Downstream nodes must be blocked_by_upstream_failure or not_reached. Must not disguise as normal no-op.",
+  "suite": "smoke",
+  "requires_comfyui": false,
+  "expected_outcome": "success",
+  "input_fixtures": {
+    "card_id": "test-card-upstream-001",
+    "session_id": "test-session-001",
+    "force_snapshot_failure": true
+  },
+  "workflow_fixture": "",
+  "node_expectations": [
+    {
+      "node_id": "round_snapshot",
+      "node_class": "AWPV2RoundSnapshot",
+      "expected_execution_status": "failed",
+      "expected_business_disposition": "noop",
+      "expected_semantic_health": "violation"
+    },
+    {
+      "node_id": "quality_gate",
+      "node_class": "AWPV2QualityGate",
+      "expected_execution_status": "blocked_by_upstream_failure",
+      "expected_business_disposition": "noop",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_state_commit",
+      "node_class": "AWPV2CardStateCommit",
+      "expected_execution_status": "blocked_by_upstream_failure",
+      "expected_business_disposition": "noop",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "turn_record_commit",
+      "node_class": "AWPV2TurnRecordCommit",
+      "expected_execution_status": "blocked_by_upstream_failure",
+      "expected_business_disposition": "noop",
+      "expected_semantic_health": "passed"
+    }
+  ],
+  "side_effect_expectations": [
+    {
+      "store_name": "card_state",
+      "must_be_zero": true
+    },
+    {
+      "store_name": "turn_record",
+      "must_be_zero": true
+    }
+  ]
+}

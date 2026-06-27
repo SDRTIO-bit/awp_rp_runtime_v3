@@ -99,6 +99,21 @@ from .card_quarantine_record import CardQuarantineRecord
 from .card_import_approval import CardImportApproval
 from .card_import_result import CardImportResult, ImportResultStatus
 
+# P-Observability: Trace & Diagnostic contracts
+from .workflow_run_record import WorkflowRunContext, WorkflowRunRecord
+from .node_execution_record import (
+    NodeExecutionRecord, ContractCheck,
+    ExecutionStatus, BusinessDisposition, SemanticHealth,
+)
+from .node_contract_check import NodeContractCheck
+from .node_diagnostic_spec import NodeDiagnosticSpec
+from .trace_artifact_ref import TraceArtifactRef
+from .workflow_test_result import WorkflowTestResult
+from .workflow_test_failure import WorkflowTestFailure
+from .workflow_test_scenario import (
+    WorkflowTestScenario, NodeExpectation, SideEffectExpectation,
+)
+
 __all__ = [
     "CardState", "VariableEntry", "EventFlag", "SceneState",
     "CardStatePatch", "CardStatePatchOperation", "PatchOpType",
@@ -156,4 +171,11 @@ __all__ = [
     "CardDefinition", "CardDefinitionStatus", "CardProfile", "CardGreeting",
     "CardWorldbookEntry", "CardWorldbookChunk", "CardStructureHints",
     "CardQuarantineRecord", "CardImportApproval", "CardImportResult", "ImportResultStatus",
+    # P-Observability
+    "WorkflowRunContext", "WorkflowRunRecord",
+    "NodeExecutionRecord", "ContractCheck",
+    "ExecutionStatus", "BusinessDisposition", "SemanticHealth",
+    "NodeContractCheck", "NodeDiagnosticSpec", "TraceArtifactRef",
+    "WorkflowTestResult", "WorkflowTestFailure",
+    "WorkflowTestScenario", "NodeExpectation", "SideEffectExpectation",
 ]

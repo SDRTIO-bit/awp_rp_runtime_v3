@@ -1,0 +1,104 @@
+{
+  "schema_id": "awp.rp.workflow-test-scenario.v1",
+  "schema_version": 1,
+  "scenario_id": "dynamic_agent_not_required",
+  "scenario_name": "Dynamic Agent Not Required",
+  "description": "Low-risk input. Scheduler does not start unnecessary agents. Node status should be not_required or skipped_by_policy. Must not misreport as failed.",
+  "suite": "smoke",
+  "requires_comfyui": false,
+  "expected_outcome": "success",
+  "input_fixtures": {
+    "card_id": "test-card-lowrisk-001",
+    "session_id": "test-session-001",
+    "risk_level": "low",
+    "player_input": "Hello, how are you?"
+  },
+  "workflow_fixture": "",
+  "node_expectations": [
+    {
+      "node_id": "round_snapshot",
+      "node_class": "AWPV2RoundSnapshot",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "director_plan",
+      "node_class": "AWPV2DirectorPlan",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "history_recall_trigger",
+      "node_class": "AWPV2HistoryRecallTrigger",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "history_recall_agent",
+      "node_class": "AWPV2HistoryRecallAgent",
+      "expected_execution_status": "not_reached",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "opportunity_trigger",
+      "node_class": "AWPV2OpportunityTrigger",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "opportunity_agent",
+      "node_class": "AWPV2OpportunityAgent",
+      "expected_execution_status": "not_reached",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "world_life_trigger",
+      "node_class": "AWPV2WorldLifeTrigger",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "world_life_agent",
+      "node_class": "AWPV2WorldLifeAgent",
+      "expected_execution_status": "not_reached",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "emotion_relationship_trigger",
+      "node_class": "AWPV2EmotionRelationshipTrigger",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "emotion_relationship_agent",
+      "node_class": "AWPV2EmotionRelationshipAgent",
+      "expected_execution_status": "not_reached",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "continuity_trigger",
+      "node_class": "AWPV2ContinuityTrigger",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "continuity_agent",
+      "node_class": "AWPV2ContinuityAgent",
+      "expected_execution_status": "not_reached",
+      "expected_business_disposition": "not_required",
+      "expected_semantic_health": "passed"
+    }
+  ],
+  "side_effect_expectations": []
+}

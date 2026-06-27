@@ -1,0 +1,34 @@
+{
+  "schema_id": "awp.rp.workflow-test-scenario.v1",
+  "schema_version": 1,
+  "scenario_id": "retry_idempotency",
+  "scenario_name": "Retry Idempotency",
+  "description": "Same turn/patchId retry. Must not duplicate CardState, TurnRecord, or Memory writes. attemptId must differ. turnId and workflowRunId must correlate correctly.",
+  "suite": "smoke",
+  "requires_comfyui": false,
+  "expected_outcome": "success",
+  "input_fixtures": {
+    "card_id": "test-card-retry-001",
+    "session_id": "test-session-001",
+    "patch_id": "patch-retry-001",
+    "player_input": "Test retry scenario."
+  },
+  "workflow_fixture": "",
+  "node_expectations": [
+    {
+      "node_id": "card_state_commit_attempt_0",
+      "node_class": "AWPV2CardStateCommit",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_state_commit_attempt_1",
+      "node_class": "AWPV2CardStateCommit",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "noop",
+      "expected_semantic_health": "passed"
+    }
+  ],
+  "side_effect_expectations": []
+}
