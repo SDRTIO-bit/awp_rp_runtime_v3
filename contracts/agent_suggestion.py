@@ -24,6 +24,12 @@ class SuggestionKind(str, Enum):
     RELATIONSHIP_SHIFT = "relationship_shift"
     EMOTION_CUE = "emotion_cue"
     CRITIQUE = "critique"
+    # D1: History/Recall kinds
+    HISTORICAL_CONFLICT = "historical_conflict"
+    IDENTITY_CLARIFICATION = "identity_clarification"
+    TIMELINE_WARNING = "timeline_warning"
+    WRITER_CONSTRAINT = "writer_constraint"
+    DIRECTOR_FOLLOWUP = "director_followup"
 
 # Backward compat alias
 SuggestionType = SuggestionKind

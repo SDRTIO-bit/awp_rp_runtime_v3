@@ -1,0 +1,238 @@
+{
+  "last_node_id": 20,
+  "last_link_id": 25,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "AWPV2CardStateInit",
+      "title": "卡片状态初始化",
+      "pos": [100, 100],
+      "outputs": [{"name": "card_state", "type": "CARD_STATE"}]
+    },
+    {
+      "id": 2,
+      "type": "AWPV2RoundSnapshot",
+      "title": "回合快照",
+      "pos": [350, 100],
+      "inputs": [
+        {"name": "card_state", "type": "CARD_STATE"},
+        {"name": "player_input", "type": "STRING"}
+      ],
+      "outputs": [{"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}]
+    },
+    {
+      "id": 3,
+      "type": "AWPV2DirectorPlan",
+      "title": "Director规划",
+      "pos": [600, 100],
+      "inputs": [{"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}],
+      "outputs": [
+        {"name": "director_plan", "type": "DIRECTOR_PLAN"},
+        {"name": "tool_plan", "type": "TOOL_PLAN"},
+        {"name": "delegation_plan", "type": "DELEGATION_PLAN"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "AWPV2ToolPlan",
+      "title": "工具计划验证",
+      "pos": [850, 50],
+      "inputs": [{"name": "tool_plan", "type": "TOOL_PLAN"}],
+      "outputs": [
+        {"name": "tool_plan", "type": "TOOL_PLAN"},
+        {"name": "validation_result", "type": "VALIDATION_RESULT"}
+      ]
+    },
+    {
+      "id": 5,
+      "type": "AWPV2ToolGateway",
+      "title": "工具网关",
+      "pos": [1100, 100],
+      "inputs": [
+        {"name": "tool_plan", "type": "TOOL_PLAN"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [
+        {"name": "tool_result_bundle", "type": "TOOL_RESULT_BUNDLE"},
+        {"name": "execution_trace", "type": "EXECUTION_TRACE"}
+      ]
+    },
+    {
+      "id": 6,
+      "type": "AWPV2EnrichmentMerge",
+      "title": "丰富合并",
+      "pos": [1350, 100],
+      "inputs": [{"name": "tool_result_bundle", "type": "TOOL_RESULT_BUNDLE"}],
+      "outputs": [{"name": "enrichment_bundle", "type": "ENRICHMENT_BUNDLE"}]
+    },
+    {
+      "id": 7,
+      "type": "AWPV2FinalTurnBrief",
+      "title": "最终回合简报",
+      "pos": [1600, 100],
+      "inputs": [
+        {"name": "director_plan", "type": "DIRECTOR_PLAN"},
+        {"name": "enrichment_bundle", "type": "ENRICHMENT_BUNDLE"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [{"name": "final_turn_brief", "type": "FINAL_TURN_BRIEF"}]
+    },
+    {
+      "id": 8,
+      "type": "AWPV2WriterInputBundleV2",
+      "title": "Writer输入包V2",
+      "pos": [1850, 100],
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"},
+        {"name": "final_turn_brief", "type": "FINAL_TURN_BRIEF"}
+      ],
+      "outputs": [{"name": "writer_input_bundle", "type": "WRITER_INPUT_BUNDLE"}]
+    },
+    {
+      "id": 9,
+      "type": "AWPV2WriterV2",
+      "title": "Writer V2",
+      "pos": [2100, 100],
+      "inputs": [{"name": "writer_input_bundle", "type": "WRITER_INPUT_BUNDLE"}],
+      "outputs": [{"name": "writer_draft", "type": "WRITER_DRAFT"}]
+    },
+    {
+      "id": 10,
+      "type": "AWPV2QualityPipeline",
+      "title": "质量检查流水线",
+      "pos": [2350, 100],
+      "inputs": [
+        {"name": "writer_draft", "type": "WRITER_DRAFT"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [
+        {"name": "quality_decision", "type": "QUALITY_DECISION"},
+        {"name": "gate_results", "type": "QUALITY_GATE_RESULT_LIST"}
+      ]
+    },
+    {
+      "id": 11,
+      "type": "AWPV2Reviser",
+      "title": "修订器（条件路径）",
+      "pos": [2600, 200],
+      "inputs": [
+        {"name": "writer_draft", "type": "WRITER_DRAFT"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"},
+        {"name": "writer_input_bundle", "type": "WRITER_INPUT_BUNDLE"}
+      ],
+      "outputs": [
+        {"name": "revised_draft", "type": "WRITER_DRAFT"},
+        {"name": "revision_result", "type": "REVISION_RESULT"}
+      ]
+    },
+    {
+      "id": 12,
+      "type": "AWPV2StateUpdateProposal",
+      "title": "状态更新提案",
+      "pos": [2850, 100],
+      "inputs": [
+        {"name": "accepted_text", "type": "STRING"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"}
+      ],
+      "outputs": [{"name": "state_proposal", "type": "STATE_UPDATE_PROPOSAL"}]
+    },
+    {
+      "id": 13,
+      "type": "AWPV2CardStateCommit",
+      "title": "状态提交",
+      "pos": [3100, 100],
+      "inputs": [
+        {"name": "card_state", "type": "CARD_STATE"},
+        {"name": "state_proposal", "type": "STATE_UPDATE_PROPOSAL"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"}
+      ],
+      "outputs": [{"name": "commit_result", "type": "COMMIT_RESULT"}]
+    },
+    {
+      "id": 14,
+      "type": "AWPV2TurnRecordCommit",
+      "title": "回合记录提交",
+      "pos": [3350, 100],
+      "inputs": [
+        {"name": "player_input", "type": "STRING"},
+        {"name": "accepted_text", "type": "STRING"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"}
+      ],
+      "outputs": [{"name": "turn_record", "type": "TURN_RECORD"}]
+    },
+    {
+      "id": 15,
+      "type": "AWPV2ActiveMemoryCommit",
+      "title": "活跃记忆提交",
+      "pos": [3600, 50],
+      "inputs": [
+        {"name": "memory_commit_plan", "type": "MEMORY_COMMIT_PLAN"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"}
+      ],
+      "outputs": [{"name": "commit_result", "type": "MEMORY_COMMIT_RECEIPT"}]
+    },
+    {
+      "id": 16,
+      "type": "AWPV2RagMemoryCommit",
+      "title": "RAG记忆提交",
+      "pos": [3600, 200],
+      "inputs": [
+        {"name": "memory_commit_plan", "type": "MEMORY_COMMIT_PLAN"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"}
+      ],
+      "outputs": [{"name": "commit_result", "type": "MEMORY_COMMIT_RECEIPT"}]
+    },
+    {
+      "id": 17,
+      "type": "AWPV2WriterOutput",
+      "title": "Writer输出",
+      "pos": [3850, 100],
+      "inputs": [{"name": "writer_draft", "type": "WRITER_DRAFT"}],
+      "outputs": [{"name": "player_text", "type": "STRING"}]
+    },
+    {
+      "id": 18,
+      "type": "AWPV2ToolTrace",
+      "title": "工具追踪输出",
+      "pos": [3850, 250],
+      "inputs": [{"name": "execution_trace", "type": "EXECUTION_TRACE"}],
+      "outputs": [{"name": "trace_json", "type": "STRING"}]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "CARD_STATE"],
+    [2, 2, 0, 3, 0, "ROUND_SNAPSHOT"],
+    [3, 3, 0, 4, 0, "TOOL_PLAN"],
+    [4, 3, 0, 7, 0, "DIRECTOR_PLAN"],
+    [5, 4, 0, 5, 0, "TOOL_PLAN"],
+    [6, 2, 0, 5, 1, "ROUND_SNAPSHOT"],
+    [7, 5, 0, 6, 0, "TOOL_RESULT_BUNDLE"],
+    [8, 5, 1, 18, 0, "EXECUTION_TRACE"],
+    [9, 6, 0, 7, 1, "ENRICHMENT_BUNDLE"],
+    [10, 2, 0, 7, 2, "ROUND_SNAPSHOT"],
+    [11, 2, 0, 8, 0, "ROUND_SNAPSHOT"],
+    [12, 7, 0, 8, 1, "FINAL_TURN_BRIEF"],
+    [13, 8, 0, 9, 0, "WRITER_INPUT_BUNDLE"],
+    [14, 9, 0, 10, 0, "WRITER_DRAFT"],
+    [15, 2, 0, 10, 1, "ROUND_SNAPSHOT"],
+    [16, 10, 0, 11, 1, "QUALITY_DECISION"],
+    [17, 9, 0, 11, 0, "WRITER_DRAFT"],
+    [18, 8, 0, 11, 2, "WRITER_INPUT_BUNDLE"],
+    [19, 10, 0, 12, 2, "QUALITY_DECISION"],
+    [20, 2, 0, 12, 1, "ROUND_SNAPSHOT"],
+    [21, 12, 0, 13, 1, "STATE_UPDATE_PROPOSAL"],
+    [22, 1, 0, 13, 0, "CARD_STATE"],
+    [23, 10, 0, 14, 3, "QUALITY_DECISION"],
+    [24, 2, 0, 14, 2, "ROUND_SNAPSHOT"],
+    [25, 9, 0, 17, 0, "WRITER_DRAFT"]
+  ],
+  "groups": [
+    {"title": "Director层", "bounding": [580, 30, 500, 200], "color": "#3f789e"},
+    {"title": "Tool Gateway层", "bounding": [1080, 30, 550, 200], "color": "#8e6f3e"},
+    {"title": "Writer层", "bounding": [2080, 30, 550, 200], "color": "#3e8e4f"},
+    {"title": "Quality层", "bounding": [2330, 30, 350, 300], "color": "#8e3e3e"},
+    {"title": "Commit层", "bounding": [2830, 30, 800, 250], "color": "#6f3e8e"}
+  ]
+}

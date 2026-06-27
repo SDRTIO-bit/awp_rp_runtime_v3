@@ -17,8 +17,8 @@ class TestP2NodeRegistration:
 
     def test_all_nodes_p1_plus_p2(self):
         from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
-        # 8 P1 + 6 P2 + 8 M1 memory nodes
-        assert len(NODE_CLASS_MAPPINGS) == 22
+        # 8 P1 + 6 P2 + 8 M1 + 11 C1 + 6 D1 nodes
+        assert len(NODE_CLASS_MAPPINGS) == 39
 
     def test_display_names_chinese(self):
         from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS

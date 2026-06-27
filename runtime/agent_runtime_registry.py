@@ -83,6 +83,31 @@ BUILTIN_ROLES: dict[str, AgentRoleSpec] = {
             SuggestionKind.TONE_ADJUSTMENT,
         ],
     ),
+    # D1: History/Recall Agent
+    "history-recall": AgentRoleSpec(
+        role_id="history-recall",
+        description="History/Recall sub-agent for historical evidence and continuity",
+        allowed_suggestion_kinds=[
+            SuggestionKind.CONTINUITY_ISSUE,
+            SuggestionKind.CHARACTER_CONSISTENCY,
+            SuggestionKind.HISTORICAL_CONFLICT,
+            SuggestionKind.IDENTITY_CLARIFICATION,
+            SuggestionKind.TIMELINE_WARNING,
+            SuggestionKind.WRITER_CONSTRAINT,
+            SuggestionKind.DIRECTOR_FOLLOWUP,
+        ],
+        default_budget_tokens=1000,
+        max_budget_tokens=2000,
+        allowed_tools=[
+            "rag_memory_lookup", "entity_alias_lookup", "timeline_lookup",
+            "relationship_context_lookup", "worldbook_lookup",
+            "accepted_turn_lookup", "active_memory_lookup",
+        ],
+        can_delegate=False,
+        can_write_state=False,
+        can_write_memory=False,
+        can_generate_final_text=False,
+    ),
 }
 
 

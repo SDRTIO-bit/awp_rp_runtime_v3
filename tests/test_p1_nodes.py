@@ -25,7 +25,18 @@ class TestNodeRegistration:
             "AWPV2MemoryContextAssembler", "AWPV2MemoryCommitPlan",
             "AWPV2ActiveMemoryCommit", "AWPV2RagMemoryCommit", "AWPV2MemoryDiagnostics",
         }
-        all_expected = p1_expected | p2_expected | m1_expected
+        c1_expected = {
+            "AWPV2DirectorPlan", "AWPV2ToolPlan", "AWPV2ToolGateway",
+            "AWPV2EnrichmentMerge", "AWPV2FinalTurnBrief", "AWPV2WriterV2",
+            "AWPV2WriterInputBundleV2", "AWPV2QualityPipeline", "AWPV2Reviser",
+            "AWPV2WriterOutput", "AWPV2ToolTrace",
+        }
+        d1_expected = {
+            "AWPV2HistoryRecallTrigger", "AWPV2HistoryRecallRequest",
+            "AWPV2HistoryRecallAgent", "AWPV2RecallEvidenceRanker",
+            "AWPV2HistoryRecallResult", "AWPV2HistoryRecallDiagnostics",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 
@@ -140,3 +151,49 @@ class TestWorkflowValidation:
             # link format: [link_id, from_node, from_slot, to_node, to_slot, type]
             assert link[1] in node_ids, f"Link references missing from_node: {link[1]}"
             assert link[3] in node_ids, f"Link references missing to_node: {link[3]}"
+
+    def test_d1_history_recall_workflow_valid(self):
+        """D1: History recall workflow JSON structure valid."""
+        wf_path = Path(__file__).parent.parent / "workflows" / "official_history_recall_agent_v2.json"
+        assert wf_path.exists()
+        with open(wf_path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert "nodes" in data
+        assert "links" in data
+        node_types = {n["type"] for n in data["nodes"]}
+        d1_required = {
+            "AWPV2HistoryRecallTrigger", "AWPV2HistoryRecallRequest",
+            "AWPV2HistoryRecallAgent", "AWPV2RecallEvidenceRanker",
+            "AWPV2HistoryRecallResult", "AWPV2HistoryRecallDiagnostics",
+        }
+        assert d1_required.issubset(node_types), f"Missing: {d1_required - node_types}"
+
+        # Validate links
+        node_ids = {n["id"] for n in data["nodes"]}
+        for link in data["links"]:
+            assert link[1] in node_ids
+            assert link[3] in node_ids
+
+
+class TestD1NodeRegistration:
+    """D1: History/Recall node registration tests."""
+
+    def test_d1_nodes_present(self):
+        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        d1 = {
+            "AWPV2HistoryRecallTrigger", "AWPV2HistoryRecallRequest",
+            "AWPV2HistoryRecallAgent", "AWPV2RecallEvidenceRanker",
+            "AWPV2HistoryRecallResult", "AWPV2HistoryRecallDiagnostics",
+        }
+        for name in d1:
+            assert name in NODE_CLASS_MAPPINGS, f"Missing: {name}"
+
+    def test_d1_display_names_chinese(self):
+        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        d1_displays = [
+            "AWP V2 历史回查触发", "AWP V2 历史回查请求",
+            "AWP V2 历史回查Agent", "AWP V2 回查证据排序",
+            "AWP V2 历史回查结果", "AWP V2 历史回查诊断",
+        ]
+        for display in d1_displays:
+            assert display in NODE_DISPLAY_NAME_MAPPINGS.values(), f"Missing: {display}"

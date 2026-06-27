@@ -45,6 +45,12 @@ KIND_WEIGHTS: dict[SuggestionKind, float] = {
     SuggestionKind.RELATIONSHIP_SHIFT: 0.5,
     SuggestionKind.TONE_ADJUSTMENT: 0.45,
     SuggestionKind.CRITIQUE: 0.4,
+    # D1: History/Recall kinds
+    SuggestionKind.HISTORICAL_CONFLICT: 0.98,
+    SuggestionKind.IDENTITY_CLARIFICATION: 0.92,
+    SuggestionKind.TIMELINE_WARNING: 0.90,
+    SuggestionKind.WRITER_CONSTRAINT: 0.88,
+    SuggestionKind.DIRECTOR_FOLLOWUP: 0.70,
 }
 
 MAX_ADOPTED = 15

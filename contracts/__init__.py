@@ -28,6 +28,31 @@ from .memory_commit_plan import MemoryCommitPlan, ActiveMemoryEntry, RagMemoryEn
 from .execution_trace import ExecutionTrace, TraceEvent
 from .agent_execution_result import AgentExecutionResult
 
+# C1: New contracts
+from .director_plan import DirectorPlan
+from .tool_plan import ToolPlan, PlannedToolRequest
+from .tool_request import ToolRequest
+from .tool_result import ToolResult, ToolResultStatus
+from .tool_result_bundle import ToolResultBundle
+from .tool_permission import ToolPermission
+from .tool_execution_receipt import ToolExecutionReceipt
+from .enrichment_bundle import EnrichmentBundle, EnrichmentItem
+from .final_turn_brief import FinalTurnBrief
+from .writer_draft import WriterDraft
+from .quality_issue import QualityIssue, IssueSeverity, IssueCategory
+from .quality_gate_result import QualityGateResult
+from .revision_request import RevisionRequest
+from .revision_result import RevisionResult
+
+# D1: History/Recall contracts
+from .recall_focus import RecallFocus, RecallKind
+from .recall_evidence import RecallEvidence, EvidenceSourceType
+from .continuity_risk import ContinuityRisk, RiskLevel
+from .history_recall_request import HistoryRecallRequest
+from .history_recall_result import HistoryRecallResult, HistoryRecallStatus
+from .history_recall_suggestion import HistoryRecallSuggestion, HistorySuggestionKind
+from .history_recall_diagnostics import HistoryRecallDiagnostics
+
 __all__ = [
     "CardState", "VariableEntry", "EventFlag", "SceneState",
     "CardStatePatch", "CardStatePatchOperation", "PatchOpType",
@@ -47,4 +72,26 @@ __all__ = [
     "MemoryCommitPlan", "ActiveMemoryEntry", "RagMemoryEntry",
     "ExecutionTrace", "TraceEvent",
     "AgentExecutionResult",
+    # C1
+    "DirectorPlan",
+    "ToolPlan", "PlannedToolRequest",
+    "ToolRequest",
+    "ToolResult", "ToolResultStatus",
+    "ToolResultBundle",
+    "ToolPermission",
+    "ToolExecutionReceipt",
+    "EnrichmentBundle", "EnrichmentItem",
+    "FinalTurnBrief",
+    "WriterDraft",
+    "QualityIssue", "IssueSeverity", "IssueCategory",
+    "QualityGateResult",
+    "RevisionRequest", "RevisionResult",
+    # D1: History/Recall
+    "RecallFocus", "RecallKind",
+    "RecallEvidence", "EvidenceSourceType",
+    "ContinuityRisk", "RiskLevel",
+    "HistoryRecallRequest",
+    "HistoryRecallResult", "HistoryRecallStatus",
+    "HistoryRecallSuggestion", "HistorySuggestionKind",
+    "HistoryRecallDiagnostics",
 ]
