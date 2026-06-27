@@ -68,6 +68,12 @@ class FinalTurnBrief:
     history_continuity_warnings: list[str] = field(default_factory=list)
     history_evidence_refs: list[str] = field(default_factory=list)
 
+    # D2: Opportunity findings
+    accepted_opportunities: list[dict[str, Any]] = field(default_factory=list)
+    rejected_opportunities: list[dict[str, Any]] = field(default_factory=list)
+    opportunity_warnings: list[str] = field(default_factory=list)
+    opportunity_evidence_refs: list[str] = field(default_factory=list)
+
     # Timestamp
     created_at: str = ""
 
@@ -100,6 +106,11 @@ class FinalTurnBrief:
             "rejected_history_findings": self.rejected_history_findings,
             "history_continuity_warnings": self.history_continuity_warnings,
             "history_evidence_refs": self.history_evidence_refs,
+            # D2
+            "accepted_opportunities": self.accepted_opportunities,
+            "rejected_opportunities": self.rejected_opportunities,
+            "opportunity_warnings": self.opportunity_warnings,
+            "opportunity_evidence_refs": self.opportunity_evidence_refs,
             "created_at": self.created_at,
         }
 
@@ -133,5 +144,10 @@ class FinalTurnBrief:
             rejected_history_findings=data.get("rejected_history_findings", []),
             history_continuity_warnings=data.get("history_continuity_warnings", []),
             history_evidence_refs=data.get("history_evidence_refs", []),
+            # D2
+            accepted_opportunities=data.get("accepted_opportunities", []),
+            rejected_opportunities=data.get("rejected_opportunities", []),
+            opportunity_warnings=data.get("opportunity_warnings", []),
+            opportunity_evidence_refs=data.get("opportunity_evidence_refs", []),
             created_at=data.get("created_at", ""),
         )

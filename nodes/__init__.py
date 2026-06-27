@@ -48,6 +48,15 @@ from .recall_evidence_ranker_node import AWPV2RecallEvidenceRanker
 from .history_recall_result_node import AWPV2HistoryRecallResult
 from .history_recall_diagnostics_node import AWPV2HistoryRecallDiagnostics
 
+# D2: Opportunity nodes
+from .opportunity_trigger_node import AWPV2OpportunityTrigger
+from .opportunity_request_node import AWPV2OpportunityRequest
+from .opportunity_agent_node import AWPV2OpportunityAgent
+from .opportunity_validator_node import AWPV2OpportunityValidator
+from .opportunity_ranker_node import AWPV2OpportunityRanker
+from .opportunity_result_node import AWPV2OpportunityResult
+from .opportunity_diagnostics_node import AWPV2OpportunityDiagnostics
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -93,6 +102,14 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2RecallEvidenceRanker": AWPV2RecallEvidenceRanker,
     "AWPV2HistoryRecallResult": AWPV2HistoryRecallResult,
     "AWPV2HistoryRecallDiagnostics": AWPV2HistoryRecallDiagnostics,
+    # D2: Opportunity
+    "AWPV2OpportunityTrigger": AWPV2OpportunityTrigger,
+    "AWPV2OpportunityRequest": AWPV2OpportunityRequest,
+    "AWPV2OpportunityAgent": AWPV2OpportunityAgent,
+    "AWPV2OpportunityValidator": AWPV2OpportunityValidator,
+    "AWPV2OpportunityRanker": AWPV2OpportunityRanker,
+    "AWPV2OpportunityResult": AWPV2OpportunityResult,
+    "AWPV2OpportunityDiagnostics": AWPV2OpportunityDiagnostics,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -140,6 +157,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2RecallEvidenceRanker": "AWP V2 回查证据排序",
     "AWPV2HistoryRecallResult": "AWP V2 历史回查结果",
     "AWPV2HistoryRecallDiagnostics": "AWP V2 历史回查诊断",
+    # D2: Opportunity
+    "AWPV2OpportunityTrigger": "AWP V2 戏剧机会触发",
+    "AWPV2OpportunityRequest": "AWP V2 戏剧机会请求",
+    "AWPV2OpportunityAgent": "AWP V2 戏剧机会Agent",
+    "AWPV2OpportunityValidator": "AWP V2 戏剧机会验证",
+    "AWPV2OpportunityRanker": "AWP V2 戏剧机会排序",
+    "AWPV2OpportunityResult": "AWP V2 戏剧机会结果",
+    "AWPV2OpportunityDiagnostics": "AWP V2 戏剧机会诊断",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

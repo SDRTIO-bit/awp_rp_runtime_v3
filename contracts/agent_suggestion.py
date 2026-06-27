@@ -30,6 +30,18 @@ class SuggestionKind(str, Enum):
     TIMELINE_WARNING = "timeline_warning"
     WRITER_CONSTRAINT = "writer_constraint"
     DIRECTOR_FOLLOWUP = "director_followup"
+    # D2: Opportunity kinds
+    PROMISE_PRESSURE = "promise_pressure"
+    RELATIONSHIP_TENSION = "relationship_tension"
+    EMOTIONAL_SHIFT = "emotional_shift"
+    SECRET_PRESSURE = "secret_pressure"
+    MISUNDERSTANDING_PRESSURE = "misunderstanding_pressure"
+    GOAL_REACTIVATION = "goal_reactivation"
+    SCENE_PRESSURE = "scene_pressure"
+    CHOICE_OPENING = "choice_opening"
+    FORESHADOWING_ECHO = "foreshadowing_echo"
+    PACE_VARIATION = "pace_variation"
+    OPPORTUNITY_WARNING = "opportunity_warning"
 
 # Backward compat alias
 SuggestionType = SuggestionKind

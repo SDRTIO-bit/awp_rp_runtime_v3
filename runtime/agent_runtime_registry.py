@@ -108,6 +108,35 @@ BUILTIN_ROLES: dict[str, AgentRoleSpec] = {
         can_write_memory=False,
         can_generate_final_text=False,
     ),
+    # D2: Opportunity Agent
+    "opportunity": AgentRoleSpec(
+        role_id="opportunity",
+        description="Opportunity Agent — identifies narrative opportunities based on existing facts",
+        allowed_suggestion_kinds=[
+            SuggestionKind.PROMISE_PRESSURE,
+            SuggestionKind.RELATIONSHIP_TENSION,
+            SuggestionKind.EMOTIONAL_SHIFT,
+            SuggestionKind.SECRET_PRESSURE,
+            SuggestionKind.MISUNDERSTANDING_PRESSURE,
+            SuggestionKind.GOAL_REACTIVATION,
+            SuggestionKind.SCENE_PRESSURE,
+            SuggestionKind.CHOICE_OPENING,
+            SuggestionKind.FORESHADOWING_ECHO,
+            SuggestionKind.PACE_VARIATION,
+            SuggestionKind.OPPORTUNITY_WARNING,
+        ],
+        default_budget_tokens=1000,
+        max_budget_tokens=2000,
+        allowed_tools=[
+            "accepted_turn_lookup", "active_memory_lookup",
+            "rag_memory_lookup", "relationship_context_lookup",
+            "timeline_lookup", "worldbook_lookup", "entity_alias_lookup",
+        ],
+        can_delegate=False,
+        can_write_state=False,
+        can_write_memory=False,
+        can_generate_final_text=False,
+    ),
 }
 
 

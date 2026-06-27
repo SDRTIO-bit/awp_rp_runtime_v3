@@ -51,6 +51,18 @@ KIND_WEIGHTS: dict[SuggestionKind, float] = {
     SuggestionKind.TIMELINE_WARNING: 0.90,
     SuggestionKind.WRITER_CONSTRAINT: 0.88,
     SuggestionKind.DIRECTOR_FOLLOWUP: 0.70,
+    # D2: Opportunity kinds
+    SuggestionKind.PROMISE_PRESSURE: 0.82,
+    SuggestionKind.RELATIONSHIP_TENSION: 0.78,
+    SuggestionKind.EMOTIONAL_SHIFT: 0.72,
+    SuggestionKind.SECRET_PRESSURE: 0.80,
+    SuggestionKind.MISUNDERSTANDING_PRESSURE: 0.76,
+    SuggestionKind.GOAL_REACTIVATION: 0.74,
+    SuggestionKind.SCENE_PRESSURE: 0.68,
+    SuggestionKind.CHOICE_OPENING: 0.66,
+    SuggestionKind.FORESHADOWING_ECHO: 0.62,
+    SuggestionKind.PACE_VARIATION: 0.58,
+    SuggestionKind.OPPORTUNITY_WARNING: 0.85,
 }
 
 MAX_ADOPTED = 15

@@ -36,7 +36,13 @@ class TestNodeRegistration:
             "AWPV2HistoryRecallAgent", "AWPV2RecallEvidenceRanker",
             "AWPV2HistoryRecallResult", "AWPV2HistoryRecallDiagnostics",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected
+        d2_expected = {
+            "AWPV2OpportunityTrigger", "AWPV2OpportunityRequest",
+            "AWPV2OpportunityAgent", "AWPV2OpportunityValidator",
+            "AWPV2OpportunityRanker", "AWPV2OpportunityResult",
+            "AWPV2OpportunityDiagnostics",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 
