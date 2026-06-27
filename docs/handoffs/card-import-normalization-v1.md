@@ -2,9 +2,9 @@
 
 **Date**: 2026-06-27
 **Branch**: feat/card-import-normalization-v1
-**HEAD**: 8bf4ce4
-**Tag**: card-import-normalization-v1
-**Tests**: 602 passed (570 existing + 32 new)
+**HEAD**: e227f5e
+**Tag**: card-import-normalization-v1, card-import-normalization-v1.1
+**Tests**: 615 passed (570 existing + 45 new)
 
 ---
 
@@ -121,13 +121,37 @@
 
 显式批准通过 `CardImportApproval(decision="approve")` 完成。批准旧版本时自动 supersede。
 
-## 7. 版本与幂等规则
+## 7. 版本与幂等规则（V1.1 修正）
 
-- `card_id = card_{source_hash[:16]}`
-- 同一 `source_hash` 重复导入 → `ALREADY_EXISTS`，返回已有版本
-- 同名但不同 `source_hash` → 不同 `card_id`，各自独立版本
-- 新版本不破坏已有 session
-- 后续 session 绑定 `card_id + card_version`
+### 身份模型
+
+| 字段 | 含义 | 生成方式 |
+|---|---|---|
+| `logical_card_id` | 同一逻辑角色卡的稳定身份 | `lcid_{uuid.uuid4().hex[:16]}` |
+| `card_version` | logical_card_id 下的递增版本号 | 1, 2, 3, ... |
+| `source_hash` | 精确导入 payload 的内容哈希 | SHA-256 |
+
+### 幂等规则
+
+- 同一 `source_hash` 重复导入 → `ALREADY_EXISTS`，返回已有 `logical_card_id + card_version`
+- 新建卡 → 新建 `logical_card_id`，`card_version = 1`
+- 指定 `existing_logical_card_id` → 新版本，`card_version + 1`
+- 同名但未指定 `existing_logical_card_id` → 新建独立 `logical_card_id`（不自动合并）
+- 旧 ready 版本被新版本 approve 后自动 `superseded`
+- 已有 session 不受影响
+
+### 嵌套合同校验
+
+CardDefinition.validate() 递归校验：
+- CardProfile: schema_id, schema_version
+- CardGreeting: schema_id, schema_version
+- CardWorldbookEntry: schema_id, schema_version
+- CardWorldbookChunk: schema_id, schema_version, parent_entry_id 引用完整性
+- CardStructureHints: schema_id, schema_version
+
+to_dict() / from_dict() 通过强类型合同序列化，不使用自由 dict 直接持久化。
+
+后续 session 绑定 `logical_card_id + card_version`
 
 ## 8. ComfyUI 节点与官方 Workflow
 
@@ -153,7 +177,7 @@
 
 ```bash
 python -m pytest tests/ -q
-# 602 passed in 2.38s
+# 615 passed in 2.49s
 ```
 
 ### 新增测试覆盖
@@ -189,6 +213,18 @@ python -m pytest tests/ -q
 | 31 | 已有合同不破坏 | ✅ |
 | E2E A | 正常卡全流程 | ✅ |
 | E2E B | 复杂卡全流程 | ✅ |
+| 32 | 同 source_hash 幂等 logical_card_id | ✅ |
+| 33 | 新卡 version=1 | ✅ |
+| 34 | existing_logical_card_id version 递增 | ✅ |
+| 35 | 新版本不破坏旧 session | ✅ |
+| 36 | 同名不自动合并 | ✅ |
+| 37 | 旧版本 superseded | ✅ |
+| 38 | profile 校验 | ✅ |
+| 39 | greeting schema 校验 | ✅ |
+| 40 | worldbook entry schema 校验 | ✅ |
+| 41 | chunk parent 引用校验 | ✅ |
+| 42 | Store round-trip 类型正确 | ✅ |
+| 43 | structure_hints schema 校验 | ✅ |
 
 ## 10. 已知限制
 
