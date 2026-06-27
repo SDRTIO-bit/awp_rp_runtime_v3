@@ -1,0 +1,50 @@
+{
+  "schema_id": "awp.rp.workflow-test-scenario.v1",
+  "schema_version": 1,
+  "scenario_id": "conditional_worldbook_branch",
+  "scenario_name": "Conditional Worldbook Branch",
+  "description": "Initial state contains specified flags. Conditional worldbook hits matching entries. Branch first-match-wins. Trace explains hit and miss reasons.",
+  "suite": "smoke",
+  "requires_comfyui": false,
+  "expected_outcome": "success",
+  "input_fixtures": {
+    "card_id": "test-card-wb-001",
+    "session_id": "test-session-001",
+    "active_flags": ["flag_rain", "flag_night"],
+    "worldbook_entries": [
+      {
+        "entry_id": "wb-rain-scene",
+        "required_flag": "flag_rain",
+        "content": "Rain patters against the window."
+      },
+      {
+        "entry_id": "wb-sunshine-scene",
+        "required_flag": "flag_sun",
+        "content": "Sunshine floods the room."
+      },
+      {
+        "entry_id": "wb-night-scene",
+        "required_flag": "flag_night",
+        "content": "Stars twinkle in the dark sky."
+      }
+    ]
+  },
+  "workflow_fixture": "",
+  "node_expectations": [
+    {
+      "node_id": "round_snapshot",
+      "node_class": "AWPV2RoundSnapshot",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "conditional_worldbook",
+      "node_class": "AWPV2ConditionalWorldbook",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    }
+  ],
+  "side_effect_expectations": []
+}

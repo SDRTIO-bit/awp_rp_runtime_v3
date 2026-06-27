@@ -69,6 +69,26 @@ from .memory_curator_tool_profile import (
     create_memory_curator_tool_registry,
 )
 
+# Card Import pipeline
+from .card_source_loader import load_card_source, CardSourceLoadError
+from .card_payload_parser import CardPayloadParser
+from .card_format_validator import validate_card_format
+from .card_security_scanner import CardSecurityScanner
+from .card_greeting_sanitizer import sanitize_greeting_content
+from .card_worldbook_chunk_builder import build_chunks_for_entry, build_all_chunks
+from .card_import_pipeline import CardImportPipeline
+
+# P-Observability: Trace wrapper, diagnostic specs, redaction, API
+from .awp_trace_wrapper import (
+    DiagnosticCollector, awp_trace_node, AWPTraceableNodeMixin,
+    mark_node_not_reached, mark_node_blocked,
+)
+from .node_diagnostic_specs import NODE_DIAGNOSTIC_SPECS, get_diagnostic_spec, get_all_specs
+from .diagnostic_redactor import (
+    DiagnosticRedactor, DiagnosticSummaryBuilder, ArtifactRetentionPolicy,
+)
+from .diagnostic_api import DiagnosticAPI
+
 __all__ = [
     "RoundSnapshotBuilder",
     "DirectorRuntime",
@@ -126,4 +146,18 @@ __all__ = [
     "SuggestionConflictGovernor",
     "DirectorSuggestionResolutionRuntime", "DirectorResolution",
     "AgentIntegrationTrace",
+    # Card Import
+    "load_card_source", "CardSourceLoadError",
+    "CardPayloadParser",
+    "validate_card_format",
+    "CardSecurityScanner",
+    "sanitize_greeting_content",
+    "build_chunks_for_entry", "build_all_chunks",
+    "CardImportPipeline",
+    # P-Observability
+    "DiagnosticCollector", "awp_trace_node", "AWPTraceableNodeMixin",
+    "mark_node_not_reached", "mark_node_blocked",
+    "NODE_DIAGNOSTIC_SPECS", "get_diagnostic_spec", "get_all_specs",
+    "DiagnosticRedactor", "DiagnosticSummaryBuilder", "ArtifactRetentionPolicy",
+    "DiagnosticAPI",
 ]

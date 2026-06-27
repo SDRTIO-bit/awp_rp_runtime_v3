@@ -1,0 +1,56 @@
+{
+  "schema_id": "awp.rp.workflow-test-scenario.v1",
+  "schema_version": 1,
+  "scenario_id": "accepted_turn_with_memory_curation",
+  "scenario_name": "Accepted Turn with Memory Curation",
+  "description": "Quality accept. CardState Commit success. TurnRecord Commit success. D6 may trigger or explicit no-op. Memory writes must be auditable, traceable, idempotent.",
+  "suite": "smoke",
+  "requires_comfyui": false,
+  "expected_outcome": "success",
+  "input_fixtures": {
+    "card_id": "test-card-accept-001",
+    "session_id": "test-session-001",
+    "candidate_text": "This is a sufficiently long narrative response that passes all quality checks and provides meaningful story content for the player to engage with.",
+    "player_input": "Tell me about the ancient forest."
+  },
+  "workflow_fixture": "",
+  "node_expectations": [
+    {
+      "node_id": "round_snapshot",
+      "node_class": "AWPV2RoundSnapshot",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "quality_gate",
+      "node_class": "AWPV2QualityGate",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_state_commit",
+      "node_class": "AWPV2CardStateCommit",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "turn_record_commit",
+      "node_class": "AWPV2TurnRecordCommit",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "memory_curator",
+      "node_class": "AWPV2MemoryCurator",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "noop",
+      "expected_semantic_health": "passed",
+      "allow_noop": true
+    }
+  ],
+  "side_effect_expectations": []
+}

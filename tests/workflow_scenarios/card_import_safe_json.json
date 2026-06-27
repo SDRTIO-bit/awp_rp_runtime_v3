@@ -1,0 +1,96 @@
+{
+  "schema_id": "awp.rp.workflow-test-scenario.v1",
+  "schema_version": 1,
+  "scenario_id": "card_import_safe_json",
+  "scenario_name": "Safe JSON Card Import",
+  "description": "Legal card import: staged → approved → ready. No CardState/Memory/TurnRecord writes. Trace shows import, review, approval, commit nodes execute correctly.",
+  "suite": "smoke",
+  "requires_comfyui": false,
+  "expected_outcome": "success",
+  "input_fixtures": {
+    "card_id": "test-card-import-001",
+    "session_id": "test-session-001",
+    "source_type": "json",
+    "card_payload": {
+      "name": "Test Character",
+      "description": "A test character for automated testing.",
+      "personality": "Friendly and helpful",
+      "first_mes": "Hello! I'm a test character.",
+      "mes_example": "Example message here."
+    }
+  },
+  "workflow_fixture": "",
+  "node_expectations": [
+    {
+      "node_id": "card_source_load",
+      "node_class": "AWPV2CardSourceLoad",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_payload_parse",
+      "node_class": "AWPV2CardPayloadParse",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_security_scan",
+      "node_class": "AWPV2CardSecurityScan",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_normalize",
+      "node_class": "AWPV2CardNormalize",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_import_review",
+      "node_class": "AWPV2CardImportReview",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_import_approval",
+      "node_class": "AWPV2CardImportApproval",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    },
+    {
+      "node_id": "card_definition_commit",
+      "node_class": "AWPV2CardDefinitionCommit",
+      "expected_execution_status": "executed",
+      "expected_business_disposition": "produced_result",
+      "expected_semantic_health": "passed"
+    }
+  ],
+  "side_effect_expectations": [
+    {
+      "store_name": "card_state",
+      "expected_writes": 0,
+      "must_be_zero": true
+    },
+    {
+      "store_name": "turn_record",
+      "expected_writes": 0,
+      "must_be_zero": true
+    },
+    {
+      "store_name": "active_memory",
+      "expected_writes": 0,
+      "must_be_zero": true
+    },
+    {
+      "store_name": "rag_memory",
+      "expected_writes": 0,
+      "must_be_zero": true
+    }
+  ]
+}

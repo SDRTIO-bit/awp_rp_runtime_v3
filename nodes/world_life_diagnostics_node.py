@@ -22,6 +22,7 @@ class AWPV2WorldLifeDiagnostics:
     RETURN_NAMES = ("diagnostics", "diagnostics_text")
     FUNCTION = "diagnose"
     CATEGORY = "AWP V2/WorldLife"
+    OUTPUT_NODE = True
 
     def diagnose(self, world_life_result: WorldLifeResult) -> tuple:
         diag = WorldLifeTriggerDiagnostics(

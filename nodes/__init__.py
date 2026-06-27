@@ -1,4 +1,4 @@
-"""ComfyUI nodes for RP Runtime V2 — P1 + P2 + C1."""
+"""ComfyUI nodes for RP Runtime V2 — P1 + P2 + C1 + D + P-CardImport + P-CardSession."""
 
 from .card_state_init_node import AWPV2CardStateInit
 from .round_snapshot_node import AWPV2RoundSnapshot
@@ -84,6 +84,32 @@ from .continuity_ranker_node import AWPV2ContinuityRanker
 from .continuity_result_node import AWPV2ContinuityResult
 from .continuity_diagnostics_node import AWPV2ContinuityDiagnostics
 
+# P-CardImport nodes
+from .card_source_load_node import AWPV2CardSourceLoad
+from .card_payload_parse_node import AWPV2CardPayloadParse
+from .card_security_scan_node import AWPV2CardSecurityScan
+from .card_normalize_node import AWPV2CardNormalize
+from .card_import_review_node import AWPV2CardImportReview
+from .card_import_approval_node import AWPV2CardImportApproval
+from .card_definition_commit_node import AWPV2CardDefinitionCommit
+from .card_catalog_lookup_node import AWPV2CardCatalogLookup
+from .card_import_diagnostics_node import AWPV2CardImportDiagnostics
+
+# P-CardSession Bootstrap nodes
+from .card_session_bootstrap_request_node import AWPV2CardSessionBootstrapRequest
+from .card_definition_ready_validator_node import AWPV2CardDefinitionReadyValidator
+from .greeting_selection_node import AWPV2GreetingSelection
+from .card_state_initializer_node import AWPV2CardStateInitializer
+from .opening_record_commit_node import AWPV2OpeningRecordCommit
+from .worldbook_binding_builder_node import AWPV2WorldbookBindingBuilder
+from .card_session_binding_commit_node import AWPV2CardSessionBindingCommit
+from .card_session_bootstrap_diagnostics_node import AWPV2CardSessionBootstrapDiagnostics
+from .card_import_and_bootstrap_node import AWPV2CardImportAndBootstrap
+from .card_definition_fixture_load_node import AWPV2CardDefinitionFixtureLoad
+
+# Observability: trace display output node
+from .trace_display_node import AWPV2TraceDisplay
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -161,6 +187,29 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2ContinuityRanker": AWPV2ContinuityRanker,
     "AWPV2ContinuityResult": AWPV2ContinuityResult,
     "AWPV2ContinuityDiagnostics": AWPV2ContinuityDiagnostics,
+    # P-CardImport
+    "AWPV2CardSourceLoad": AWPV2CardSourceLoad,
+    "AWPV2CardPayloadParse": AWPV2CardPayloadParse,
+    "AWPV2CardSecurityScan": AWPV2CardSecurityScan,
+    "AWPV2CardNormalize": AWPV2CardNormalize,
+    "AWPV2CardImportReview": AWPV2CardImportReview,
+    "AWPV2CardImportApproval": AWPV2CardImportApproval,
+    "AWPV2CardDefinitionCommit": AWPV2CardDefinitionCommit,
+    "AWPV2CardCatalogLookup": AWPV2CardCatalogLookup,
+    "AWPV2CardImportDiagnostics": AWPV2CardImportDiagnostics,
+    # P-CardSession Bootstrap
+    "AWPV2CardSessionBootstrapRequest": AWPV2CardSessionBootstrapRequest,
+    "AWPV2CardDefinitionReadyValidator": AWPV2CardDefinitionReadyValidator,
+    "AWPV2GreetingSelection": AWPV2GreetingSelection,
+    "AWPV2CardStateInitializer": AWPV2CardStateInitializer,
+    "AWPV2OpeningRecordCommit": AWPV2OpeningRecordCommit,
+    "AWPV2WorldbookBindingBuilder": AWPV2WorldbookBindingBuilder,
+    "AWPV2CardSessionBindingCommit": AWPV2CardSessionBindingCommit,
+    "AWPV2CardSessionBootstrapDiagnostics": AWPV2CardSessionBootstrapDiagnostics,
+    "AWPV2CardImportAndBootstrap": AWPV2CardImportAndBootstrap,
+    "AWPV2CardDefinitionFixtureLoad": AWPV2CardDefinitionFixtureLoad,
+    # Observability
+    "AWPV2TraceDisplay": AWPV2TraceDisplay,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -240,6 +289,29 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2ContinuityRanker": "AWP V2 连续性排序",
     "AWPV2ContinuityResult": "AWP V2 连续性结果",
     "AWPV2ContinuityDiagnostics": "AWP V2 连续性诊断",
+    # P-CardImport
+    "AWPV2CardSourceLoad": "AWP V2 角色卡源读取",
+    "AWPV2CardPayloadParse": "AWP V2 角色卡结构解析",
+    "AWPV2CardSecurityScan": "AWP V2 角色卡安全扫描",
+    "AWPV2CardNormalize": "AWP V2 角色卡规范化",
+    "AWPV2CardImportReview": "AWP V2 角色卡导入审核",
+    "AWPV2CardImportApproval": "AWP V2 角色卡导入批准",
+    "AWPV2CardDefinitionCommit": "AWP V2 角色卡定义提交",
+    "AWPV2CardCatalogLookup": "AWP V2 角色卡目录查询",
+    "AWPV2CardImportDiagnostics": "AWP V2 角色卡导入诊断",
+    # P-CardSession Bootstrap
+    "AWPV2CardSessionBootstrapRequest": "AWP V2 会话启动请求",
+    "AWPV2CardDefinitionReadyValidator": "AWP V2 角色卡就绪验证",
+    "AWPV2GreetingSelection": "AWP V2 开场白选择",
+    "AWPV2CardStateInitializer": "AWP V2 卡状态初始化器",
+    "AWPV2OpeningRecordCommit": "AWP V2 开场记录提交",
+    "AWPV2WorldbookBindingBuilder": "AWP V2 世界书绑定构建",
+    "AWPV2CardSessionBindingCommit": "AWP V2 会话绑定提交",
+    "AWPV2CardSessionBootstrapDiagnostics": "AWP V2 会话启动诊断",
+    "AWPV2CardImportAndBootstrap": "AWP V2 角色卡导入并启动",
+    "AWPV2CardDefinitionFixtureLoad": "AWP V2 角色卡Fixture加载",
+    # Observability
+    "AWPV2TraceDisplay": "AWP V2 追踪显示",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

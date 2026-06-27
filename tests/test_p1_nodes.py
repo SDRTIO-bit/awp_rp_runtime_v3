@@ -60,7 +60,22 @@ class TestNodeRegistration:
             "AWPV2ContinuityRanker", "AWPV2ContinuityResult",
             "AWPV2ContinuityDiagnostics",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected
+        card_import_expected = {
+            "AWPV2CardSourceLoad", "AWPV2CardPayloadParse", "AWPV2CardSecurityScan",
+            "AWPV2CardNormalize", "AWPV2CardImportReview", "AWPV2CardImportApproval",
+            "AWPV2CardDefinitionCommit", "AWPV2CardCatalogLookup", "AWPV2CardImportDiagnostics",
+        }
+        card_session_expected = {
+            "AWPV2CardSessionBootstrapRequest", "AWPV2CardDefinitionReadyValidator",
+            "AWPV2GreetingSelection", "AWPV2CardStateInitializer",
+            "AWPV2OpeningRecordCommit", "AWPV2WorldbookBindingBuilder",
+            "AWPV2CardSessionBindingCommit", "AWPV2CardSessionBootstrapDiagnostics",
+            "AWPV2CardImportAndBootstrap", "AWPV2CardDefinitionFixtureLoad",
+        }
+        observability_expected = {
+            "AWPV2TraceDisplay",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | observability_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 

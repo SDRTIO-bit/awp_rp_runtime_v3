@@ -21,6 +21,7 @@ class AWPV2ToolTrace:
     RETURN_NAMES = ("trace_json",)
     FUNCTION = "execute"
     CATEGORY = "AWP V2 / Tool Gateway"
+    OUTPUT_NODE = True
 
     def execute(self, execution_trace: dict):
         import json
