@@ -112,6 +112,8 @@ def inject_unique_ids(workflow: dict, scenario_name: str) -> None:
     for node_id, node_def in workflow.items():
         if isinstance(node_def, dict):
             inputs = node_def.get("inputs", {})
+            if "run_id" in inputs:
+                inputs["run_id"] = f"run-{unique_suffix}"
             if "trace_id" in inputs:
                 inputs["trace_id"] = f"tr-{unique_suffix}"
             if "request_id" in inputs:

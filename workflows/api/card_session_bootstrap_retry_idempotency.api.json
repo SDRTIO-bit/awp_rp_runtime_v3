@@ -7,7 +7,8 @@
       "greeting_id": "g0",
       "request_id": "req-bootstrap-idempotent-fixed",
       "workflow_run_id": "wr-bootstrap-idempotent",
-      "trace_id": "tr-bootstrap-idempotent"
+      "trace_id": "tr-bootstrap-idempotent",
+      "run_id": "placeholder"
     }
   },
   "2": {
@@ -18,7 +19,8 @@
       "greeting_id": "g0",
       "request_id": "req-bootstrap-idempotent-fixed",
       "workflow_run_id": "wr-bootstrap-idempotent",
-      "trace_id": "tr-bootstrap-idempotent"
+      "trace_id": "tr-bootstrap-idempotent",
+      "run_id": "placeholder"
     }
   }
 }

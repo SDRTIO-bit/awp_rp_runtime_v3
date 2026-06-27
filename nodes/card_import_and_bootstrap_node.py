@@ -18,6 +18,7 @@ class AWPV2CardImportAndBootstrap:
                 "session_id": ("STRING", {"default": "test-session-001"}),
                 "greeting_id": ("STRING", {"default": "g0"}),
                 "request_id": ("STRING", {"default": "req-001"}),
+                "run_id": ("STRING", {"default": ""}),
             },
             "optional": {
                 "workflow_run_id": ("STRING", {"default": ""}),
@@ -43,6 +44,7 @@ class AWPV2CardImportAndBootstrap:
         session_id: str = "test-session-001",
         greeting_id: str = "g0",
         request_id: str = "req-001",
+        run_id: str = "",
         workflow_run_id: str = "",
         trace_id: str = "",
         initial_state_seed: str = "{}",

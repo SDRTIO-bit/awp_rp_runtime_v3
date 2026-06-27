@@ -9,8 +9,14 @@
   "2": {
     "class_type": "AWPV2CardDefinitionReadyValidator",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "card_definition": ["1", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "card_definition": [
+        "1",
+        0
+      ]
     }
   },
   "3": {
@@ -29,59 +35,128 @@
   "4": {
     "class_type": "AWPV2GreetingSelection",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "card_definition": ["2", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "card_definition": [
+        "2",
+        0
+      ]
     }
   },
   "5": {
     "class_type": "AWPV2CardStateInitializer",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "card_definition": ["2", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "card_definition": [
+        "2",
+        0
+      ]
     }
   },
   "6": {
     "class_type": "AWPV2OpeningRecordCommit",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "greeting_selection": ["4", 0],
-      "card_definition": ["2", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "greeting_selection": [
+        "4",
+        0
+      ],
+      "card_definition": [
+        "2",
+        0
+      ]
     }
   },
   "7": {
     "class_type": "AWPV2WorldbookBindingBuilder",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "card_definition": ["2", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "card_definition": [
+        "2",
+        0
+      ]
     }
   },
   "8": {
     "class_type": "AWPV2CardSessionBindingCommit",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "card_definition": ["2", 0],
-      "greeting_selection": ["4", 0],
-      "opening_record": ["6", 0],
-      "worldbook_binding": ["7", 0],
-      "card_state": ["5", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "card_definition": [
+        "2",
+        0
+      ],
+      "greeting_selection": [
+        "4",
+        0
+      ],
+      "opening_record": [
+        "6",
+        0
+      ],
+      "worldbook_binding": [
+        "7",
+        0
+      ],
+      "card_state": [
+        "5",
+        0
+      ]
     }
   },
   "9": {
     "class_type": "AWPV2CardSessionBootstrapDiagnostics",
     "inputs": {
-      "bootstrap_request": ["3", 0],
-      "card_definition": ["2", 0],
-      "greeting_selection": ["4", 0],
-      "opening_record": ["6", 0],
-      "worldbook_binding": ["7", 0],
-      "card_state": ["5", 0],
-      "session_binding": ["8", 0]
+      "bootstrap_request": [
+        "3",
+        0
+      ],
+      "card_definition": [
+        "2",
+        0
+      ],
+      "greeting_selection": [
+        "4",
+        0
+      ],
+      "opening_record": [
+        "6",
+        0
+      ],
+      "worldbook_binding": [
+        "7",
+        0
+      ],
+      "card_state": [
+        "5",
+        0
+      ],
+      "session_binding": [
+        "8",
+        0
+      ]
     }
   },
   "10": {
     "class_type": "AWPV2TraceDisplay",
     "inputs": {
-      "data": ["9", 0],
+      "data": [
+        "9",
+        0
+      ],
       "label": "CardSession Bootstrap Diagnostics"
     }
   }
