@@ -26,7 +26,7 @@ class SqliteCardImportReportStore(CardImportReportStore):
                 report.report_id,
                 report.request_id,
                 report.source_id,
-                report.card_id,
+                report.logical_card_id,
                 report.card_version,
                 report.status,
                 report.name,
@@ -46,18 +46,18 @@ class SqliteCardImportReportStore(CardImportReportStore):
             return None
         return CardImportReport.from_dict(json.loads(row["report_json"]))
 
-    def get_by_card(self, card_id: str, card_version: int = 0) -> list[CardImportReport]:
+    def get_by_card(self, logical_card_id: str, card_version: int = 0) -> list[CardImportReport]:
         conn = self.db.connect()
         if card_version > 0:
             rows = conn.execute(
                 "SELECT report_json FROM card_import_reports "
                 "WHERE card_id=? AND card_version=? ORDER BY created_at",
-                (card_id, card_version),
+                (logical_card_id, card_version),
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT report_json FROM card_import_reports "
                 "WHERE card_id=? ORDER BY card_version, created_at",
-                (card_id,),
+                (logical_card_id,),
             ).fetchall()
         return [CardImportReport.from_dict(json.loads(r["report_json"])) for r in rows]

@@ -24,6 +24,7 @@ class CardImportRequest:
     request_id: str = ""
     source_path: str = ""
     source_filename: str = ""
+    existing_logical_card_id: str = ""  # if set, import as new version of this card
     trace_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -33,6 +34,7 @@ class CardImportRequest:
             "request_id": self.request_id,
             "source_path": self.source_path,
             "source_filename": self.source_filename,
+            "existing_logical_card_id": self.existing_logical_card_id,
             "trace_id": self.trace_id,
         }
 
@@ -44,5 +46,6 @@ class CardImportRequest:
             request_id=data.get("request_id", ""),
             source_path=data.get("source_path", ""),
             source_filename=data.get("source_filename", ""),
+            existing_logical_card_id=data.get("existing_logical_card_id", ""),
             trace_id=data.get("trace_id", ""),
         )

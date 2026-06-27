@@ -30,8 +30,8 @@ class AWPV2CardDefinitionCommit:
         else:
             ns, rs = defn.status, ImportResultStatus.INTERNAL_ERROR
         return (CardImportResult(
-            result_id=f"res_{hashlib.sha256(f'{defn.card_id}_{now}'.encode()).hexdigest()[:16]}",
-            status=rs, card_id=defn.card_id, card_version=defn.card_version,
+            result_id=f"res_{hashlib.sha256(f'{defn.logical_card_id}_{now}'.encode()).hexdigest()[:16]}",
+            status=rs, logical_card_id=defn.logical_card_id, card_version=defn.card_version,
             source_id=defn.source_id, source_hash=defn.source_hash,
             name=defn.name, report_ref=defn.import_report_ref, trace_id=defn.trace_id,
         ).to_dict(),)

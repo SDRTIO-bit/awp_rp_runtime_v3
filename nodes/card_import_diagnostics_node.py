@@ -35,6 +35,7 @@ class AWPV2CardImportDiagnostics:
                 lines.append("- ⚠️ 检测到变量模式")
         if card_definition:
             lines += ["", "## CardDefinition",
-                      f"- card_id: {card_definition.get('card_id', 'N/A')}",
+                      f"- logical_card_id: {card_definition.get('logical_card_id', 'N/A')}",
+                      f"- card_version: {card_definition.get('card_version', 'N/A')}",
                       f"- status: {card_definition.get('status', 'N/A')}"]
         return ("\n".join(lines),)

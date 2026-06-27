@@ -34,7 +34,7 @@ class CardImportResult:
     result_id: str = ""
     request_id: str = ""
     status: str = ImportResultStatus.INTERNAL_ERROR
-    card_id: str = ""
+    logical_card_id: str = ""
     card_version: int = 0
     source_id: str = ""
     source_hash: str = ""
@@ -50,7 +50,7 @@ class CardImportResult:
             "result_id": self.result_id,
             "request_id": self.request_id,
             "status": self.status,
-            "card_id": self.card_id,
+            "logical_card_id": self.logical_card_id,
             "card_version": self.card_version,
             "source_id": self.source_id,
             "source_hash": self.source_hash,
@@ -68,7 +68,7 @@ class CardImportResult:
             result_id=data.get("result_id", ""),
             request_id=data.get("request_id", ""),
             status=data.get("status", ImportResultStatus.INTERNAL_ERROR),
-            card_id=data.get("card_id", ""),
+            logical_card_id=data.get("logical_card_id", "") or data.get("card_id", ""),
             card_version=data.get("card_version", 0),
             source_id=data.get("source_id", ""),
             source_hash=data.get("source_hash", ""),

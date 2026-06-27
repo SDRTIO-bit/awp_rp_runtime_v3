@@ -17,16 +17,16 @@ class CardDefinitionStore(ABC):
 
     @abstractmethod
     def save(self, definition: CardDefinition) -> None:
-        """Save a card definition. Overwrites if same card_id + card_version."""
+        """Save a card definition. Overwrites if same logical_card_id + card_version."""
         ...
 
     @abstractmethod
-    def load(self, card_id: str, card_version: int) -> CardDefinition | None:
-        """Load a card definition by ID and version. Returns None if not found."""
+    def load(self, logical_card_id: str, card_version: int) -> CardDefinition | None:
+        """Load a card definition by logical_card_id and version. Returns None if not found."""
         ...
 
     @abstractmethod
-    def get_latest(self, card_id: str) -> CardDefinition | None:
+    def get_latest(self, logical_card_id: str) -> CardDefinition | None:
         """Load the latest version of a card definition. Returns None if not found."""
         ...
 
@@ -41,13 +41,13 @@ class CardDefinitionStore(ABC):
         ...
 
     @abstractmethod
-    def update_status(self, card_id: str, card_version: int, status: str) -> None:
+    def update_status(self, logical_card_id: str, card_version: int, status: str) -> None:
         """Update the status of a card definition."""
         ...
 
     @abstractmethod
-    def get_next_version(self, card_id: str) -> int:
-        """Get the next version number for a card ID."""
+    def get_next_version(self, logical_card_id: str) -> int:
+        """Get the next version number for a logical card."""
         ...
 
 
@@ -84,6 +84,6 @@ class CardImportReportStore(ABC):
         ...
 
     @abstractmethod
-    def get_by_card(self, card_id: str, card_version: int = 0) -> list[CardImportReport]:
+    def get_by_card(self, logical_card_id: str, card_version: int = 0) -> list[CardImportReport]:
         """Get import reports for a card. If card_version is 0, returns all versions."""
         ...

@@ -26,7 +26,7 @@ class CardImportReport:
     report_id: str = ""
     request_id: str = ""
     source_id: str = ""
-    card_id: str = ""
+    logical_card_id: str = ""
     card_version: int = 0
     trace_id: str = ""
     status: str = ""
@@ -48,7 +48,7 @@ class CardImportReport:
             "report_id": self.report_id,
             "request_id": self.request_id,
             "source_id": self.source_id,
-            "card_id": self.card_id,
+            "logical_card_id": self.logical_card_id,
             "card_version": self.card_version,
             "trace_id": self.trace_id,
             "status": self.status,
@@ -75,7 +75,7 @@ class CardImportReport:
             report_id=data.get("report_id", ""),
             request_id=data.get("request_id", ""),
             source_id=data.get("source_id", ""),
-            card_id=data.get("card_id", ""),
+            logical_card_id=data.get("logical_card_id", "") or data.get("card_id", ""),
             card_version=data.get("card_version", 0),
             trace_id=data.get("trace_id", ""),
             status=data.get("status", ""),

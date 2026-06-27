@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -56,11 +57,11 @@ class CardImportPipeline:
             return CardImportResult(result_id=_id("res", request.request_id), request_id=request.request_id,
                                     status=ImportResultStatus.VALIDATION_FAILED, error_message=f"[{e.code}] {e.message}", trace_id=trace_id)
 
-        # Idempotency
+        # Idempotency: same source_hash → return existing
         existing = self._defs.get_by_source_hash(snapshot.source_hash)
         if existing:
             return CardImportResult(result_id=_id("res", request.request_id), request_id=request.request_id,
-                                    status=ImportResultStatus.ALREADY_EXISTS, card_id=existing.card_id,
+                                    status=ImportResultStatus.ALREADY_EXISTS, logical_card_id=existing.logical_card_id,
                                     card_version=existing.card_version, source_id=existing.source_id,
                                     source_hash=existing.source_hash, name=existing.name, trace_id=trace_id)
 
@@ -94,15 +95,22 @@ class CardImportPipeline:
         # Chunks
         wb_entries, wb_chunks = build_all_chunks(wb_entries)
 
-        # IDs
-        card_id = f"card_{snapshot.source_hash[:16]}"
-        card_version = self._defs.get_next_version(card_id)
-        report_id = _id("rpt", f"{request.request_id}_{card_id}")
+        # Determine logical_card_id and card_version
+        if request.existing_logical_card_id:
+            # Import as new version of existing logical card
+            logical_card_id = request.existing_logical_card_id
+            card_version = self._defs.get_next_version(logical_card_id)
+        else:
+            # New logical card
+            logical_card_id = f"lcid_{uuid.uuid4().hex[:16]}"
+            card_version = 1
+
+        report_id = _id("rpt", f"{request.request_id}_{logical_card_id}")
 
         # Report
         report = CardImportReport(
             report_id=report_id, request_id=request.request_id, source_id=snapshot.source_id,
-            card_id=card_id, card_version=card_version, trace_id=trace_id,
+            logical_card_id=logical_card_id, card_version=card_version, trace_id=trace_id,
             status="warnings" if all_issues else "ok", name=profile.name, spec=snapshot.spec,
             greeting_count=len(san_greetings), worldbook_entry_count=len(wb_entries),
             worldbook_chunk_count=len(wb_chunks), quarantine_count=len(all_q),
@@ -113,7 +121,7 @@ class CardImportPipeline:
 
         # Definition
         defn = CardDefinition(
-            card_id=card_id, card_version=card_version, source_id=snapshot.source_id,
+            logical_card_id=logical_card_id, card_version=card_version, source_id=snapshot.source_id,
             source_hash=snapshot.source_hash, name=profile.name, display_name=profile.name,
             status=CardDefinitionStatus.STAGED, profile=profile.to_dict(),
             greetings=san_greetings,
@@ -126,26 +134,26 @@ class CardImportPipeline:
         self._defs.save(defn)
 
         return CardImportResult(result_id=_id("res", request.request_id), request_id=request.request_id,
-                                status=ImportResultStatus.APPROVAL_REQUIRED, card_id=card_id, card_version=card_version,
+                                status=ImportResultStatus.APPROVAL_REQUIRED, logical_card_id=logical_card_id, card_version=card_version,
                                 source_id=snapshot.source_id, source_hash=snapshot.source_hash,
                                 name=profile.name, report_ref=report_id, trace_id=trace_id)
 
     def approve_card(self, approval: CardImportApproval) -> CardDefinition | None:
-        defn = self._defs.load(approval.card_id, approval.card_version)
+        defn = self._defs.load(approval.logical_card_id, approval.card_version)
         if not defn:
             return None
         new_status = CardDefinitionStatus.READY if approval.decision == ApprovalDecision.APPROVE else CardDefinitionStatus.REJECTED if approval.decision == ApprovalDecision.REJECT else None
         if not new_status:
             return None
-        self._defs.update_status(approval.card_id, approval.card_version, new_status)
+        self._defs.update_status(approval.logical_card_id, approval.card_version, new_status)
         if new_status == CardDefinitionStatus.READY:
             for d in self._defs.list_all():
-                if d.card_id == approval.card_id and d.card_version < approval.card_version and d.status == CardDefinitionStatus.READY:
-                    self._defs.update_status(d.card_id, d.card_version, CardDefinitionStatus.SUPERSEDED)
-        return self._defs.load(approval.card_id, approval.card_version)
+                if d.logical_card_id == approval.logical_card_id and d.card_version < approval.card_version and d.status == CardDefinitionStatus.READY:
+                    self._defs.update_status(d.logical_card_id, d.card_version, CardDefinitionStatus.SUPERSEDED)
+        return self._defs.load(approval.logical_card_id, approval.card_version)
 
-    def get_definition(self, card_id: str, card_version: int = 0) -> CardDefinition | None:
-        return self._defs.load(card_id, card_version) if card_version > 0 else self._defs.get_latest(card_id)
+    def get_definition(self, logical_card_id: str, card_version: int = 0) -> CardDefinition | None:
+        return self._defs.load(logical_card_id, card_version) if card_version > 0 else self._defs.get_latest(logical_card_id)
 
     def get_report(self, report_id: str) -> CardImportReport | None:
         return self._rpts.load(report_id)

@@ -21,6 +21,7 @@ class AWPV2CardNormalize:
 
     def execute(self, source_snapshot: dict, profile: dict, greetings: list,
                 worldbook_entries: list, structure_hints: dict, quarantine_records: list) -> tuple[dict]:
+        import uuid
         from ..runtime.card_greeting_sanitizer import sanitize_greeting_content
         from ..runtime.card_worldbook_chunk_builder import build_all_chunks
         from ..contracts.card_definition import CardDefinition, CardDefinitionStatus
@@ -28,7 +29,7 @@ class AWPV2CardNormalize:
         from ..contracts.card_worldbook_entry import CardWorldbookEntry
 
         sh = source_snapshot.get("source_hash", "")
-        card_id = f"card_{sh[:16]}"
+        logical_card_id = f"lcid_{uuid.uuid4().hex[:16]}"
         now = datetime.now(timezone.utc).isoformat()
         san_g, all_q = [], list(quarantine_records)
         for g in greetings:
@@ -41,7 +42,7 @@ class AWPV2CardNormalize:
         for q in all_q:
             k = q.get("kind", "") if isinstance(q, dict) else ""
             kc[k] = kc.get(k, 0) + 1
-        defn = CardDefinition(card_id=card_id, card_version=1, source_id=source_snapshot.get("source_id", ""),
+        defn = CardDefinition(logical_card_id=logical_card_id, card_version=1, source_id=source_snapshot.get("source_id", ""),
                               source_hash=sh, name=profile.get("name", "Unknown"), display_name=profile.get("name", "Unknown"),
                               status=CardDefinitionStatus.STAGED, profile=profile, greetings=san_g,
                               worldbook_catalog=[e.to_dict() for e in entries],

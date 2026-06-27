@@ -28,7 +28,7 @@ class CardImportApproval:
     schema_version: int = SCHEMA_VERSION
 
     approval_id: str = ""
-    card_id: str = ""
+    logical_card_id: str = ""
     card_version: int = 0
     decision: str = ApprovalDecision.REJECT
     reason: str = ""
@@ -41,7 +41,7 @@ class CardImportApproval:
             "schema_id": self.schema_id,
             "schema_version": self.schema_version,
             "approval_id": self.approval_id,
-            "card_id": self.card_id,
+            "logical_card_id": self.logical_card_id,
             "card_version": self.card_version,
             "decision": self.decision,
             "reason": self.reason,
@@ -56,7 +56,7 @@ class CardImportApproval:
             schema_id=data.get("schema_id", SCHEMA_ID),
             schema_version=data.get("schema_version", SCHEMA_VERSION),
             approval_id=data.get("approval_id", ""),
-            card_id=data.get("card_id", ""),
+            logical_card_id=data.get("logical_card_id", "") or data.get("card_id", ""),
             card_version=data.get("card_version", 0),
             decision=data.get("decision", ApprovalDecision.REJECT),
             reason=data.get("reason", ""),

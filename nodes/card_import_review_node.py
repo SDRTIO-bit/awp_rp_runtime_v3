@@ -21,11 +21,11 @@ class AWPV2CardImportReview:
         now = datetime.now(timezone.utc).isoformat()
         qs = card_definition.get("quarantine_summary", {})
         hints = card_definition.get("structure_hints", {})
-        cid = card_definition.get("card_id", "")
+        cid = card_definition.get("logical_card_id", "")
         report = CardImportReport(
             report_id=f"rpt_{hashlib.sha256(f'{cid}_{now}'.encode()).hexdigest()[:16]}",
             source_id=source_snapshot.get("source_id", ""),
-            card_id=card_definition.get("card_id", ""),
+            logical_card_id=card_definition.get("logical_card_id", ""),
             card_version=card_definition.get("card_version", 1),
             status="warnings" if qs.get("total", 0) > 0 else "ok",
             name=card_definition.get("name", ""), spec=source_snapshot.get("spec", ""),

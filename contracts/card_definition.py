@@ -29,7 +29,7 @@ class CardDefinition:
     schema_id: str = SCHEMA_ID
     schema_version: int = SCHEMA_VERSION
 
-    card_id: str = ""
+    logical_card_id: str = ""
     card_version: int = 0
     source_id: str = ""
     source_hash: str = ""
@@ -48,10 +48,21 @@ class CardDefinition:
     trace_id: str = ""
 
     def validate(self) -> list[str]:
-        """Validate this CardDefinition. Returns list of errors (empty = valid)."""
-        errors = []
-        if not self.card_id:
-            errors.append("card_id is required")
+        """Validate this CardDefinition with recursive nested contract checks.
+
+        Returns list of errors (empty = valid).
+        """
+        from .card_profile import CardProfile, SCHEMA_ID as PROFILE_SID
+        from .card_greeting import CardGreeting, SCHEMA_ID as GREETING_SID
+        from .card_worldbook_entry import CardWorldbookEntry, SCHEMA_ID as WB_SID
+        from .card_worldbook_chunk import CardWorldbookChunk, SCHEMA_ID as CHUNK_SID
+        from .card_structure_hints import CardStructureHints, SCHEMA_ID as HINTS_SID
+
+        errors: list[str] = []
+
+        # Top-level
+        if not self.logical_card_id:
+            errors.append("logical_card_id is required")
         if self.card_version < 1:
             errors.append("card_version must be >= 1")
         if not self.source_id:
@@ -62,24 +73,75 @@ class CardDefinition:
             errors.append("name is required")
         if self.schema_id != SCHEMA_ID:
             errors.append(f"schema_id must be {SCHEMA_ID}")
+
+        # Nested: profile
+        if self.profile:
+            p = CardProfile.from_dict(self.profile)
+            if p.schema_id != PROFILE_SID:
+                errors.append(f"profile.schema_id must be {PROFILE_SID}")
+            if p.schema_version != 1:
+                errors.append("profile.schema_version must be 1")
+
+        # Nested: greetings
+        for i, g_data in enumerate(self.greetings):
+            g = CardGreeting.from_dict(g_data)
+            if g.schema_id != GREETING_SID:
+                errors.append(f"greetings[{i}].schema_id must be {GREETING_SID}")
+            if g.schema_version != 1:
+                errors.append(f"greetings[{i}].schema_version must be 1")
+
+        # Nested: worldbook_catalog
+        for i, e_data in enumerate(self.worldbook_catalog):
+            e = CardWorldbookEntry.from_dict(e_data)
+            if e.schema_id != WB_SID:
+                errors.append(f"worldbook_catalog[{i}].schema_id must be {WB_SID}")
+            if e.schema_version != 1:
+                errors.append(f"worldbook_catalog[{i}].schema_version must be 1")
+
+        # Nested: worldbook_chunks
+        for i, c_data in enumerate(self.worldbook_chunks):
+            c = CardWorldbookChunk.from_dict(c_data)
+            if c.schema_id != CHUNK_SID:
+                errors.append(f"worldbook_chunks[{i}].schema_id must be {CHUNK_SID}")
+            if c.schema_version != 1:
+                errors.append(f"worldbook_chunks[{i}].schema_version must be 1")
+            if self.worldbook_catalog:
+                parent_ids = {e.get("entry_id", "") if isinstance(e, dict) else "" for e in self.worldbook_catalog}
+                if c.parent_entry_id and c.parent_entry_id not in parent_ids:
+                    errors.append(f"worldbook_chunks[{i}].parent_entry_id '{c.parent_entry_id}' not in catalog")
+
+        # Nested: structure_hints
+        if self.structure_hints:
+            h = CardStructureHints.from_dict(self.structure_hints)
+            if h.schema_id != HINTS_SID:
+                errors.append(f"structure_hints.schema_id must be {HINTS_SID}")
+            if h.schema_version != 1:
+                errors.append("structure_hints.schema_version must be 1")
+
         return errors
 
     def to_dict(self) -> dict[str, Any]:
+        from .card_profile import CardProfile
+        from .card_greeting import CardGreeting
+        from .card_worldbook_entry import CardWorldbookEntry
+        from .card_worldbook_chunk import CardWorldbookChunk
+        from .card_structure_hints import CardStructureHints
+
         return {
             "schema_id": self.schema_id,
             "schema_version": self.schema_version,
-            "card_id": self.card_id,
+            "logical_card_id": self.logical_card_id,
             "card_version": self.card_version,
             "source_id": self.source_id,
             "source_hash": self.source_hash,
             "name": self.name,
             "display_name": self.display_name,
             "status": self.status,
-            "profile": dict(self.profile),
-            "greetings": list(self.greetings),
-            "worldbook_catalog": list(self.worldbook_catalog),
-            "worldbook_chunks": list(self.worldbook_chunks),
-            "structure_hints": dict(self.structure_hints),
+            "profile": CardProfile.from_dict(self.profile).to_dict() if self.profile else {},
+            "greetings": [CardGreeting.from_dict(g).to_dict() for g in self.greetings],
+            "worldbook_catalog": [CardWorldbookEntry.from_dict(e).to_dict() for e in self.worldbook_catalog],
+            "worldbook_chunks": [CardWorldbookChunk.from_dict(c).to_dict() for c in self.worldbook_chunks],
+            "structure_hints": CardStructureHints.from_dict(self.structure_hints).to_dict() if self.structure_hints else {},
             "quarantine_summary": dict(self.quarantine_summary),
             "import_report_ref": self.import_report_ref,
             "created_at": self.created_at,
@@ -89,10 +151,12 @@ class CardDefinition:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CardDefinition:
+        # Accept both old "card_id" and new "logical_card_id" for migration
+        logical_card_id = data.get("logical_card_id", "") or data.get("card_id", "")
         return cls(
             schema_id=data.get("schema_id", SCHEMA_ID),
             schema_version=data.get("schema_version", SCHEMA_VERSION),
-            card_id=data.get("card_id", ""),
+            logical_card_id=logical_card_id,
             card_version=data.get("card_version", 0),
             source_id=data.get("source_id", ""),
             source_hash=data.get("source_hash", ""),
