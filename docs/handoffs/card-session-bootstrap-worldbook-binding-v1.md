@@ -148,9 +148,55 @@ All 8 new nodes support `@awp_trace_node` via the existing `AWPTraceableNodeMixi
 
 ---
 
-## 10. Readiness for P-First Turn Execution
+## 10. Real Comfy API Acceptance
 
-✅ Ready to proceed. The bootstrap chain provides:
+### Current Status
+
+| Check | Status |
+|-------|--------|
+| Unit tests | ✅ 711 passing |
+| Node registration | ✅ 87 nodes registered |
+| Diagnostic specs | ✅ 6 new specs |
+| Real Comfy API smoke | ✅ Previously verified |
+| Bootstrap real Comfy API | ⏳ Requires ComfyUI restart |
+
+### Running Bootstrap Acceptance
+
+```bash
+# 1. Restart ComfyUI (required to discover new nodes)
+#    Stop the running ComfyUI instance and start it again
+
+# 2. Run the bootstrap acceptance suite
+cd F:\12\语英\本体_ComfyUI\ComfyUI\custom_nodes\awp_rp_runtime_v2
+python testing/real_comfy_acceptance.py --suite card-session-bootstrap
+```
+
+### Expected Output
+
+The acceptance runs 5 scenarios against real ComfyUI:
+
+1. **Default Greeting** — ready card → Session Ready, OpeningRecord written
+2. **Alternate Greeting** — g1 selected, belongs to exact card version
+3. **Version Lock** — session binding immutable after creation
+4. **Worldbook Binding** — disabled bound but not activatable, selective deferred
+5. **Retry Idempotency** — same requestId → no duplicate writes
+
+Each scenario verifies:
+- WebSocket: `execution_start` / `executing` / `execution_success`
+- `/history/{promptId}`: output node results exist
+- All bootstrap nodes have `executionStatus`, `businessDisposition`, `semanticHealth`
+
+### Running Full Acceptance
+
+```bash
+python testing/real_comfy_acceptance.py --suite all
+```
+
+---
+
+## 11. Readiness for P-First Turn Execution
+
+✅ Ready to proceed (pending real Comfy API acceptance pass). The bootstrap chain provides:
 
 - Immutable session-to-card binding
 - OpeningRecord for greeting context
@@ -181,7 +227,7 @@ All 8 new nodes support `@awp_trace_node` via the existing `AWPTraceableNodeMixi
 ### Runtime (1)
 - `runtime/card_session_bootstrap_pipeline.py`
 
-### Nodes (8)
+### Nodes (10)
 - `nodes/card_session_bootstrap_request_node.py`
 - `nodes/card_definition_ready_validator_node.py`
 - `nodes/greeting_selection_node.py`
@@ -190,6 +236,8 @@ All 8 new nodes support `@awp_trace_node` via the existing `AWPTraceableNodeMixi
 - `nodes/worldbook_binding_builder_node.py`
 - `nodes/card_session_binding_commit_node.py`
 - `nodes/card_session_bootstrap_diagnostics_node.py`
+- `nodes/card_import_and_bootstrap_node.py` (test helper)
+- `nodes/card_definition_fixture_load_node.py` (test helper)
 
 ### Testing (1)
 - `testing/fakes/fake_card_session_stores.py`
@@ -197,13 +245,23 @@ All 8 new nodes support `@awp_trace_node` via the existing `AWPTraceableNodeMixi
 ### Tests (1)
 - `tests/test_card_session_bootstrap.py` (31 tests)
 
-### Workflows (2)
+### Test Fixtures (2)
+- `test_fixtures/test_card_v3_with_worldbook.json`
+- `test_fixtures/ready_card_definition.json`
+
+### Workflows (7)
 - `workflows/official_card_session_bootstrap_v1.json`
 - `workflows/api/card_session_bootstrap_v1.api.json`
+- `workflows/api/card_session_bootstrap_default_greeting.api.json`
+- `workflows/api/card_session_bootstrap_alternate_greeting.api.json`
+- `workflows/api/card_session_bootstrap_version_lock.api.json`
+- `workflows/api/card_session_bootstrap_worldbook_binding.api.json`
+- `workflows/api/card_session_bootstrap_retry_idempotency.api.json`
 
 ### Modified
-- `nodes/__init__.py` — registered 8 new nodes
+- `nodes/__init__.py` — registered 10 new nodes
 - `runtime/node_diagnostic_specs.py` — added 6 new diagnostic specs
 - `tests/test_p1_nodes.py` — updated node count assertion
-- `tests/test_p2_nodes.py` — updated node count assertion (77 → 85)
+- `tests/test_p2_nodes.py` — updated node count assertion (77 → 87)
 - `nodes/trace_display_node.py` — fixed `*` wildcard type compatibility
+- `testing/real_comfy_acceptance.py` — added `--suite card-session-bootstrap`
