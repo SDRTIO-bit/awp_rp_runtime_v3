@@ -16,7 +16,7 @@ class AWPV2TraceDisplay:
     def INPUT_TYPES(cls) -> dict[str, Any]:
         return {
             "required": {
-                "data": ("*",),  # Accept any type
+                "data": (["EXECUTION_TRACE", "DIAGNOSTICS", "STRING", "JSON"],),
             },
             "optional": {
                 "label": ("STRING", {"default": "AWP Trace"}),

@@ -329,6 +329,118 @@ _register(NodeDiagnosticSpec(
     ],
 ))
 
+# ---------------------------------------------------------------------------
+# P-CardSession Bootstrap Nodes
+# ---------------------------------------------------------------------------
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2CardDefinitionReadyValidator",
+    role="Validate CardDefinition is ready for session bootstrap",
+    diagnostic_version="1",
+    success_invariants=[
+        "card_definition.status == ready",
+        "source_hash matches expected",
+        "card_version matches requested",
+    ],
+    normal_noop_reasons=["card not found", "card not ready"],
+    must_expose=["logical_card_id", "card_version", "source_hash", "status"],
+    redaction_rules={},
+    enforced_checks=[
+        {"id": "card_ready", "name": "Card is ready",
+         "invariant": "validation_result.valid == True"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2GreetingSelection",
+    role="Select and validate greeting from CardDefinition",
+    diagnostic_version="1",
+    success_invariants=[
+        "greeting_id belongs to the card version",
+        "safe_display_content is not empty",
+    ],
+    normal_noop_reasons=["greeting not found"],
+    must_expose=["greeting_id", "logical_card_id", "card_version", "is_default"],
+    redaction_rules={"safe_display_content": "hash_only"},
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2CardStateInitializer",
+    role="Initialize CardState from safe initialStateSeed only",
+    diagnostic_version="1",
+    success_invariants=[
+        "card_state.revision == 1",
+        "variables only from initialStateSeed",
+        "no script execution",
+    ],
+    normal_noop_reasons=[],
+    must_expose=["card_id", "session_id", "revision", "variable_count"],
+    redaction_rules={"initial_state_seed": "summary_only"},
+    observational_checks=[
+        {"id": "revision_one", "name": "Initial revision is one",
+         "invariant": "output.revision == 1"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2OpeningRecordCommit",
+    role="Commit OpeningRecord for bootstrap greeting",
+    diagnostic_version="1",
+    success_invariants=[
+        "opening_record_id is not empty",
+        "greeting_id matches selection",
+        "safe_display_content is preserved",
+    ],
+    normal_noop_reasons=[],
+    must_expose=["opening_record_id", "session_id", "greeting_id", "logical_card_id"],
+    redaction_rules={"safe_display_content": "hash_only"},
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2WorldbookBindingBuilder",
+    role="Build WorldbookBinding from CardDefinition catalog",
+    diagnostic_version="1",
+    success_invariants=[
+        "worldbook_binding_id is not empty",
+        "bound entries are from card catalog",
+        "disabled entries are tracked separately",
+        "chunks preserve parentEntryId",
+    ],
+    normal_noop_reasons=["no worldbook entries in card"],
+    must_expose=[
+        "worldbook_binding_id", "session_id", "logical_card_id",
+        "bound_entry_count", "disabled_entry_count", "deferred_entry_count",
+    ],
+    redaction_rules={},
+    observational_checks=[
+        {"id": "binding_not_activation", "name": "Binding is not activation",
+         "invariant": "output.entries[].activation_status in [candidate, disabled, deferred, unsupported]"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2CardSessionBindingCommit",
+    role="Commit final CardSessionBinding and Bootstrap Receipt",
+    diagnostic_version="1",
+    success_invariants=[
+        "session_id is bound",
+        "logical_card_id and card_version are immutable",
+        "source_hash is recorded",
+        "all sub-records are linked",
+    ],
+    normal_noop_reasons=["idempotent retry returns existing receipt"],
+    must_expose=[
+        "session_id", "logical_card_id", "card_version", "source_hash",
+        "greeting_id", "opening_record_id", "worldbook_binding_id",
+        "commit_status", "idempotency_status",
+    ],
+    redaction_rules={},
+    enforced_checks=[
+        {"id": "binding_ready", "name": "Session binding is ready",
+         "invariant": "session_binding.status == ready"},
+    ],
+))
+
 
 def get_diagnostic_spec(node_class: str) -> NodeDiagnosticSpec | None:
     """Get the diagnostic spec for a node class, or None if not registered."""

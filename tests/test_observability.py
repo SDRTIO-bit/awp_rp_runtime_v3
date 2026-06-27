@@ -397,6 +397,13 @@ class TestNodeDiagnosticSpecs:
             "AWPV2FinalTurnBrief",
             "AWPV2QualityPipeline",
             "AWPV2ExecutionTrace",
+            # P-CardSession Bootstrap
+            "AWPV2CardDefinitionReadyValidator",
+            "AWPV2GreetingSelection",
+            "AWPV2CardStateInitializer",
+            "AWPV2OpeningRecordCommit",
+            "AWPV2WorldbookBindingBuilder",
+            "AWPV2CardSessionBindingCommit",
         ]
         for node_class in must_have:
             assert node_class in registered, f"Missing diagnostic spec for {node_class}"
