@@ -1,0 +1,38 @@
+{
+  "1": {
+    "class_type": "AWPV2CardStateInit",
+    "inputs": {
+      "card_id": "test-card-reject-001",
+      "session_id": "test-session-reject-001"
+    }
+  },
+  "2": {
+    "class_type": "AWPV2RoundSnapshot",
+    "inputs": {
+      "card_state": ["1", 0],
+      "player_input": "Test input for rejection."
+    }
+  },
+  "3": {
+    "class_type": "AWPV2QualityGate",
+    "inputs": {
+      "candidate_text": "Hi",
+      "round_snapshot": ["2", 0],
+      "trace_id": "reject-trace-001"
+    }
+  },
+  "4": {
+    "class_type": "AWPV2ExecutionTrace",
+    "inputs": {
+      "round_snapshot": ["2", 0],
+      "quality_decision": ["3", 0]
+    }
+  },
+  "5": {
+    "class_type": "AWPV2TraceDisplay",
+    "inputs": {
+      "data": ["4", 0],
+      "label": "Quality Reject Trace"
+    }
+  }
+}

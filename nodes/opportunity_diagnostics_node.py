@@ -22,6 +22,7 @@ class AWPV2OpportunityDiagnostics:
     RETURN_NAMES = ("diagnostics", "diagnostics_text")
     FUNCTION = "diagnose"
     CATEGORY = "AWP V2/Opportunity"
+    OUTPUT_NODE = True
 
     def diagnose(self, opportunity_result: OpportunityResult) -> tuple:
         diag = OpportunityTriggerDiagnostics(

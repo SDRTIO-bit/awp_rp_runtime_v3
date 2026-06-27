@@ -1,7 +1,12 @@
 # register_awp_comfy_e2e_task.ps1 — Register Windows scheduled task for E2E tests
 #
 # Creates an OPTIONAL Windows Task Scheduler job that runs the E2E suite daily.
-# Default: daily at Asia/Tokyo 03:17 (UTC 18:17 previous day).
+# Default: daily at 03:17 Asia/Tokyo local time (18:17 UTC previous day).
+#
+# Time configuration:
+#   GitHub nightly cron: 18:17 UTC = 03:17 Asia/Tokyo next day
+#   Windows scheduled task: 03:17 local (Asia/Tokyo)
+#   Both fire at the same absolute moment.
 #
 # IMPORTANT:
 #   - This script does NOT auto-register. You must run it explicitly.
@@ -16,7 +21,7 @@
 param(
     [switch]$Remove,
     [string]$TaskName = "AWP-RP-ComfyUI-E2E",
-    [string]$Time = "18:17"
+    [string]$Time = "03:17"
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,7 +51,7 @@ Write-Host "Register AWP ComfyUI E2E Scheduled Task" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Task Name: $TaskName" -ForegroundColor White
-Write-Host "Schedule:  Daily at $Time (UTC)" -ForegroundColor White
+Write-Host "Schedule:  Daily at $Time (Asia/Tokyo local)" -ForegroundColor White
 Write-Host "Script:    $scriptPath" -ForegroundColor White
 Write-Host "Work Dir:  $repoRoot" -ForegroundColor White
 Write-Host ""

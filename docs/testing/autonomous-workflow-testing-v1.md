@@ -107,4 +107,13 @@ full card text, full player input, raw model chain-of-thought.
 .\scripts\register_awp_comfy_e2e_task.ps1 -Remove
 ```
 
-Default: daily at 18:17 UTC (03:17 Asia/Tokyo).
+Default: daily at 03:17 Asia/Tokyo local (18:17 UTC previous day).
+
+### Time Configuration
+
+| System | Time | Timezone |
+|--------|------|----------|
+| GitHub nightly cron | 18:17 | UTC |
+| Windows scheduled task | 03:17 | Asia/Tokyo local |
+
+Both fire at the same absolute moment.

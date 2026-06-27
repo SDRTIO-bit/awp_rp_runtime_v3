@@ -24,6 +24,7 @@ class AWPV2ContinuityDiagnostics:
     RETURN_NAMES = ("diagnostics", "diagnostics_summary")
     FUNCTION = "diagnose"
     CATEGORY = "AWP V2/Continuity"
+    OUTPUT_NODE = True
 
     def diagnose(
         self,

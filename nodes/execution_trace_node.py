@@ -28,6 +28,7 @@ class AWPV2ExecutionTrace:
     RETURN_NAMES = ("execution_trace",)
     FUNCTION = "execute"
     CATEGORY = "AWP/RP_V2"
+    OUTPUT_NODE = True
 
     def execute(
         self,

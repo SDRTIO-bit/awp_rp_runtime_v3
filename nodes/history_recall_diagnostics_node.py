@@ -21,6 +21,7 @@ class AWPV2HistoryRecallDiagnostics:
     RETURN_NAMES = ("diagnostics_json",)
     FUNCTION = "diagnose"
     CATEGORY = "AWP V2/History Recall"
+    OUTPUT_NODE = True
 
     def diagnose(self, history_recall_result):
         import json

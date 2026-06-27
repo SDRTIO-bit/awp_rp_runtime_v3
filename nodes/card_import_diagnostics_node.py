@@ -14,6 +14,7 @@ class AWPV2CardImportDiagnostics:
     RETURN_NAMES = ("diagnostics",)
     FUNCTION = "execute"
     CATEGORY = "AWP/CardImport"
+    OUTPUT_NODE = True
 
     def execute(self, import_report: dict, card_definition: dict | None = None) -> tuple[str]:
         lines = ["# 角色卡导入诊断报告", ""]

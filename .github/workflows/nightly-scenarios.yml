@@ -2,8 +2,8 @@ name: AWP Nightly Scenario Suite
 
 on:
   schedule:
-    # Run daily at 03:17 UTC (12:17 JST)
-    - cron: "17 3 * * *"
+    # Run daily at 18:17 UTC = 03:17 Asia/Tokyo next day
+    - cron: "17 18 * * *"
   workflow_dispatch:
 
 jobs:

@@ -26,6 +26,7 @@ class AWPV2MemoryDiagnostics:
     RETURN_NAMES = ("memory_diagnostics",)
     FUNCTION = "execute"
     CATEGORY = "AWP/RP_V2"
+    OUTPUT_NODE = True
     OUTPUT_SCHEMA_ID = "awp.rp.memory-diagnostics.v1"
 
     def execute(

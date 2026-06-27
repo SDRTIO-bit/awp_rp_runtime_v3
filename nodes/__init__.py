@@ -95,6 +95,9 @@ from .card_definition_commit_node import AWPV2CardDefinitionCommit
 from .card_catalog_lookup_node import AWPV2CardCatalogLookup
 from .card_import_diagnostics_node import AWPV2CardImportDiagnostics
 
+# Observability: trace display output node
+from .trace_display_node import AWPV2TraceDisplay
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -182,6 +185,8 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2CardDefinitionCommit": AWPV2CardDefinitionCommit,
     "AWPV2CardCatalogLookup": AWPV2CardCatalogLookup,
     "AWPV2CardImportDiagnostics": AWPV2CardImportDiagnostics,
+    # Observability
+    "AWPV2TraceDisplay": AWPV2TraceDisplay,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -271,6 +276,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2CardDefinitionCommit": "AWP V2 角色卡定义提交",
     "AWPV2CardCatalogLookup": "AWP V2 角色卡目录查询",
     "AWPV2CardImportDiagnostics": "AWP V2 角色卡导入诊断",
+    # Observability
+    "AWPV2TraceDisplay": "AWP V2 追踪显示",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

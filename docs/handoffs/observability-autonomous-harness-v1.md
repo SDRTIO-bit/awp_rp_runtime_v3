@@ -7,7 +7,7 @@ P-Observability & Autonomous Workflow Test Harness V1
 feat/observability-autonomous-harness-v1
 
 ## HEAD
-3446bb7
+3f4b2ee
 
 ## Tag
 observability-autonomous-harness-v1
@@ -149,7 +149,7 @@ Branched from feat/card-import-normalization-v1 @ a1b14e5 (card-import-normaliza
 - No GPU, no real ComfyUI, no real models, no API keys
 
 **`.github/workflows/nightly-scenarios.yml`**:
-- Daily at 03:17 UTC (12:17 JST)
+- Daily at 18:17 UTC = 03:17 Asia/Tokyo
 - All test suites (smoke + integration)
 - Uploads test artifacts (7-day retention)
 
@@ -165,7 +165,7 @@ Branched from feat/card-import-normalization-v1 @ a1b14e5 (card-import-normaliza
 
 **`scripts/register_awp_comfy_e2e_task.ps1`**:
 - Creates optional Windows Task Scheduler job
-- Default: daily at 18:17 UTC (03:17 Asia/Tokyo)
+- Default: daily at 03:17 Asia/Tokyo local (18:17 UTC previous day)
 - Must be explicitly run — not auto-registered
 - Does not access real models, commit code, or modify main
 
@@ -201,6 +201,32 @@ Branched from feat/card-import-normalization-v1 @ a1b14e5 (card-import-normaliza
 - Full card text, worldbook text, player input
 - System prompts, API keys, tokens
 - Raw model chain-of-thought
+
+---
+
+## Real ComfyUI API Acceptance
+
+Verified against live ComfyUI 0.3.62 (RTX 3060):
+
+| Check | Result |
+|-------|--------|
+| AWP nodes discovered | 77 nodes via /object_info |
+| Critical nodes present | All found |
+| Smoke workflow | SUCCESS |
+| card_import_safe_json | SUCCESS |
+| quality_reject_zero_side_effect | SUCCESS |
+| retry_idempotency | SUCCESS |
+
+Run: `python -m awp_rp_runtime_v2.testing.real_comfy_acceptance`
+
+## Time Configuration
+
+| System | Time | Timezone |
+|--------|------|----------|
+| GitHub nightly cron | 18:17 | UTC |
+| Windows scheduled task | 03:17 | Asia/Tokyo local |
+
+Both fire at the same absolute moment.
 
 ---
 
