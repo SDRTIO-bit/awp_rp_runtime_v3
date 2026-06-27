@@ -2,7 +2,7 @@
 
 **Date**: 2026-06-27
 **Branch**: main
-**HEAD**: 0d3446b
+**HEAD**: 2665f43
 **Tag**: d-integration-dynamic-agent-conflict-governance-v1
 **Tests**: 566 passed (497 existing + 69 new)
 
