@@ -7,6 +7,11 @@ from .interfaces import (
     RagMemoryStore,
     TraceStore,
 )
+from .card_import_interfaces import (
+    CardDefinitionStore,
+    CardSourceStore,
+    CardImportReportStore,
+)
 
 __all__ = [
     "CardStateStore",
@@ -14,4 +19,7 @@ __all__ = [
     "ActiveMemoryStore",
     "RagMemoryStore",
     "TraceStore",
+    "CardDefinitionStore",
+    "CardSourceStore",
+    "CardImportReportStore",
 ]

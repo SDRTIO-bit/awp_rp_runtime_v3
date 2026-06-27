@@ -234,6 +234,70 @@ CREATE INDEX IF NOT EXISTS idx_retention_session
     ON memory_retention_decisions(card_id, session_id, turn_id);
 """,
     ),
+    (
+        3,
+        "Card import pipeline: definitions, source snapshots, import reports, quarantine",
+        """
+CREATE TABLE IF NOT EXISTS card_definitions (
+    card_id TEXT NOT NULL,
+    card_version INTEGER NOT NULL,
+    source_id TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'staged',
+    definition_json TEXT NOT NULL,
+    import_report_ref TEXT NOT NULL DEFAULT '',
+    trace_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (card_id, card_version)
+);
+CREATE INDEX IF NOT EXISTS idx_card_definitions_source_hash ON card_definitions(source_hash);
+CREATE INDEX IF NOT EXISTS idx_card_definitions_status ON card_definitions(status);
+
+CREATE TABLE IF NOT EXISTS card_source_snapshots (
+    source_id TEXT PRIMARY KEY,
+    source_hash TEXT NOT NULL,
+    source_filename TEXT NOT NULL DEFAULT '',
+    source_format TEXT NOT NULL DEFAULT '',
+    source_size_bytes INTEGER NOT NULL DEFAULT 0,
+    imported_at TEXT NOT NULL DEFAULT '',
+    spec TEXT NOT NULL DEFAULT '',
+    raw_payload_ref TEXT NOT NULL DEFAULT '',
+    snapshot_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_card_source_hash ON card_source_snapshots(source_hash);
+
+CREATE TABLE IF NOT EXISTS card_import_reports (
+    report_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL DEFAULT '',
+    source_id TEXT NOT NULL DEFAULT '',
+    card_id TEXT NOT NULL DEFAULT '',
+    card_version INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    report_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_card_import_reports_card ON card_import_reports(card_id, card_version);
+
+CREATE TABLE IF NOT EXISTS card_quarantine_records (
+    record_id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL DEFAULT '',
+    card_version INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT '',
+    source_path TEXT NOT NULL DEFAULT '',
+    severity TEXT NOT NULL DEFAULT 'medium',
+    evidence_preview TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL DEFAULT 'quarantined',
+    reason TEXT NOT NULL DEFAULT '',
+    record_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_quarantine_card ON card_quarantine_records(card_id, card_version);
+""",
+    ),
 ]
 
 

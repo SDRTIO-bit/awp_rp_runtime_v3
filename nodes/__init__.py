@@ -84,6 +84,17 @@ from .continuity_ranker_node import AWPV2ContinuityRanker
 from .continuity_result_node import AWPV2ContinuityResult
 from .continuity_diagnostics_node import AWPV2ContinuityDiagnostics
 
+# P-CardImport nodes
+from .card_source_load_node import AWPV2CardSourceLoad
+from .card_payload_parse_node import AWPV2CardPayloadParse
+from .card_security_scan_node import AWPV2CardSecurityScan
+from .card_normalize_node import AWPV2CardNormalize
+from .card_import_review_node import AWPV2CardImportReview
+from .card_import_approval_node import AWPV2CardImportApproval
+from .card_definition_commit_node import AWPV2CardDefinitionCommit
+from .card_catalog_lookup_node import AWPV2CardCatalogLookup
+from .card_import_diagnostics_node import AWPV2CardImportDiagnostics
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -161,6 +172,16 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2ContinuityRanker": AWPV2ContinuityRanker,
     "AWPV2ContinuityResult": AWPV2ContinuityResult,
     "AWPV2ContinuityDiagnostics": AWPV2ContinuityDiagnostics,
+    # P-CardImport
+    "AWPV2CardSourceLoad": AWPV2CardSourceLoad,
+    "AWPV2CardPayloadParse": AWPV2CardPayloadParse,
+    "AWPV2CardSecurityScan": AWPV2CardSecurityScan,
+    "AWPV2CardNormalize": AWPV2CardNormalize,
+    "AWPV2CardImportReview": AWPV2CardImportReview,
+    "AWPV2CardImportApproval": AWPV2CardImportApproval,
+    "AWPV2CardDefinitionCommit": AWPV2CardDefinitionCommit,
+    "AWPV2CardCatalogLookup": AWPV2CardCatalogLookup,
+    "AWPV2CardImportDiagnostics": AWPV2CardImportDiagnostics,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -240,6 +261,16 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2ContinuityRanker": "AWP V2 连续性排序",
     "AWPV2ContinuityResult": "AWP V2 连续性结果",
     "AWPV2ContinuityDiagnostics": "AWP V2 连续性诊断",
+    # P-CardImport
+    "AWPV2CardSourceLoad": "AWP V2 角色卡源读取",
+    "AWPV2CardPayloadParse": "AWP V2 角色卡结构解析",
+    "AWPV2CardSecurityScan": "AWP V2 角色卡安全扫描",
+    "AWPV2CardNormalize": "AWP V2 角色卡规范化",
+    "AWPV2CardImportReview": "AWP V2 角色卡导入审核",
+    "AWPV2CardImportApproval": "AWP V2 角色卡导入批准",
+    "AWPV2CardDefinitionCommit": "AWP V2 角色卡定义提交",
+    "AWPV2CardCatalogLookup": "AWP V2 角色卡目录查询",
+    "AWPV2CardImportDiagnostics": "AWP V2 角色卡导入诊断",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

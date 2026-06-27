@@ -84,6 +84,21 @@ from .memory_curation_evidence import MemoryCurationEvidence
 from .memory_curation_result import MemoryCurationResult
 from .memory_curation_trigger_diagnostics import MemoryCurationTriggerDiagnostics
 
+# P-CardImport
+from .card_source_snapshot import CardSourceSnapshot
+from .card_import_request import CardImportRequest
+from .card_import_report import CardImportReport
+from .card_import_issue import CardImportIssue
+from .card_definition import CardDefinition, CardDefinitionStatus
+from .card_profile import CardProfile
+from .card_greeting import CardGreeting
+from .card_worldbook_entry import CardWorldbookEntry
+from .card_worldbook_chunk import CardWorldbookChunk
+from .card_structure_hints import CardStructureHints
+from .card_quarantine_record import CardQuarantineRecord
+from .card_import_approval import CardImportApproval
+from .card_import_result import CardImportResult, ImportResultStatus
+
 __all__ = [
     "CardState", "VariableEntry", "EventFlag", "SceneState",
     "CardStatePatch", "CardStatePatchOperation", "PatchOpType",
@@ -136,4 +151,9 @@ __all__ = [
     "AgentExecutionReport", "AgentExecutionOutcome",
     "TurnAgentBudgetReport",
     "IntegratedTurnTrace",
+    # P-CardImport
+    "CardSourceSnapshot", "CardImportRequest", "CardImportReport", "CardImportIssue",
+    "CardDefinition", "CardDefinitionStatus", "CardProfile", "CardGreeting",
+    "CardWorldbookEntry", "CardWorldbookChunk", "CardStructureHints",
+    "CardQuarantineRecord", "CardImportApproval", "CardImportResult", "ImportResultStatus",
 ]
