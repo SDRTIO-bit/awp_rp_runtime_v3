@@ -32,6 +32,11 @@ class AWPV2CardImportAndBootstrap:
     CATEGORY = "AWP/CardSession"
     OUTPUT_NODE = True
 
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        # Never cache — always re-execute
+        return float("nan")
+
     def execute(
         self,
         source_path: str,
@@ -62,8 +67,13 @@ class AWPV2CardImportAndBootstrap:
 
         now = datetime.now(timezone.utc).isoformat()
 
-        # Step 1: Load and parse card
-        snap, payload = load_card_source(source_path, "", now)
+        # Step 1: Load and parse card — resolve relative path from project root
+        from pathlib import Path as _Path
+        p = _Path(source_path)
+        if not p.is_absolute():
+            project_root = _Path(__file__).parent.parent
+            p = project_root / source_path
+        snap, payload = load_card_source(str(p), "", now)
         parser = CardPayloadParser()
         profile = parser.parse_profile(payload)
         greetings = parser.parse_greetings(payload)
