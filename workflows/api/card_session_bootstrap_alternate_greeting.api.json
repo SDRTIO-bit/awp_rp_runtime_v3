@@ -9,12 +9,5 @@
       "workflow_run_id": "wr-bootstrap-alternate",
       "trace_id": "tr-bootstrap-alternate"
     }
-  },
-  "2": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["1", 4],
-      "label": "Bootstrap Alternate Greeting Diagnostics"
-    }
   }
 }

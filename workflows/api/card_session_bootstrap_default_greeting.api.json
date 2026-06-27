@@ -9,12 +9,5 @@
       "workflow_run_id": "wr-bootstrap-default",
       "trace_id": "tr-bootstrap-default"
     }
-  },
-  "2": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["1", 4],
-      "label": "Bootstrap Default Greeting Diagnostics"
-    }
   }
 }

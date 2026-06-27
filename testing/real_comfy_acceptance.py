@@ -48,9 +48,14 @@ def submit_workflow(workflow: dict[str, Any], client_id: str = "awp-acceptance")
         f"{COMFY_URL}/prompt", data=payload,
         headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read())
-        return result.get("prompt_id", "")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read())
+            return result.get("prompt_id", "")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"  [ERROR] HTTP {e.code}: {body[:500]}")
+        return ""
 
 
 def wait_for_completion(prompt_id: str, timeout: float = 120.0) -> dict[str, Any]:

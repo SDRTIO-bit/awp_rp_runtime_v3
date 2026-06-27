@@ -9,19 +9,5 @@
       "workflow_run_id": "wr-bootstrap-worldbook",
       "trace_id": "tr-bootstrap-worldbook"
     }
-  },
-  "2": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["1", 2],
-      "label": "Worldbook Binding Output"
-    }
-  },
-  "3": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["1", 4],
-      "label": "Bootstrap Worldbook Diagnostics"
-    }
   }
 }

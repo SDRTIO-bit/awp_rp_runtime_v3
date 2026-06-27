@@ -9,12 +9,5 @@
       "workflow_run_id": "wr-bootstrap-versionlock",
       "trace_id": "tr-bootstrap-versionlock"
     }
-  },
-  "2": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["1", 0],
-      "label": "Session Binding (Version Lock)"
-    }
   }
 }

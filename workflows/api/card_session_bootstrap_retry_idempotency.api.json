@@ -20,19 +20,5 @@
       "workflow_run_id": "wr-bootstrap-idempotent",
       "trace_id": "tr-bootstrap-idempotent"
     }
-  },
-  "3": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["1", 3],
-      "label": "First Bootstrap Receipt"
-    }
-  },
-  "4": {
-    "class_type": "AWPV2TraceDisplay",
-    "inputs": {
-      "data": ["2", 3],
-      "label": "Second Bootstrap Receipt (Idempotent)"
-    }
   }
 }

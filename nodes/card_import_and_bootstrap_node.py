@@ -30,6 +30,7 @@ class AWPV2CardImportAndBootstrap:
     RETURN_NAMES = ("session_binding", "opening_record", "worldbook_binding", "bootstrap_receipt", "diagnostics")
     FUNCTION = "execute"
     CATEGORY = "AWP/CardSession"
+    OUTPUT_NODE = True
 
     def execute(
         self,
