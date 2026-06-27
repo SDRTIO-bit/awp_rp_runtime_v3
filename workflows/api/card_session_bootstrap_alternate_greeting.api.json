@@ -1,0 +1,20 @@
+{
+  "1": {
+    "class_type": "AWPV2CardImportAndBootstrap",
+    "inputs": {
+      "source_path": "test_fixtures/test_card_v3_with_worldbook.json",
+      "session_id": "test-session-bootstrap-alternate",
+      "greeting_id": "g1",
+      "request_id": "req-bootstrap-alternate-001",
+      "workflow_run_id": "wr-bootstrap-alternate",
+      "trace_id": "tr-bootstrap-alternate"
+    }
+  },
+  "2": {
+    "class_type": "AWPV2TraceDisplay",
+    "inputs": {
+      "data": ["1", 4],
+      "label": "Bootstrap Alternate Greeting Diagnostics"
+    }
+  }
+}

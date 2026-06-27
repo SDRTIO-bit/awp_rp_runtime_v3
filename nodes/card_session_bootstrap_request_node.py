@@ -1,4 +1,8 @@
-"""AWPV2CardSessionBootstrapRequest — creates a bootstrap request contract."""
+"""AWPV2CardSessionBootstrapRequest — creates a bootstrap request contract.
+
+Can optionally accept a CARD_DEFINITION to auto-extract logical_card_id,
+card_version, and source_hash.
+"""
 
 from __future__ import annotations
 from typing import Any
@@ -11,15 +15,16 @@ class AWPV2CardSessionBootstrapRequest:
             "required": {
                 "request_id": ("STRING", {"default": ""}),
                 "session_id": ("STRING", {"default": ""}),
-                "logical_card_id": ("STRING", {"default": ""}),
-                "card_version": ("INT", {"default": 0, "min": 1}),
                 "greeting_id": ("STRING", {"default": "g0"}),
-                "expected_source_hash": ("STRING", {"default": ""}),
             },
             "optional": {
+                "card_definition": ("CARD_DEFINITION",),
+                "logical_card_id": ("STRING", {"default": ""}),
+                "card_version": ("INT", {"default": 0, "min": 0}),
+                "expected_source_hash": ("STRING", {"default": ""}),
                 "workflow_run_id": ("STRING", {"default": ""}),
                 "trace_id": ("STRING", {"default": ""}),
-                "initial_state_seed": ("JSON", {"default": "{}"}),
+                "initial_state_seed": ("STRING", {"default": "{}"}),
             },
         }
 
@@ -32,10 +37,11 @@ class AWPV2CardSessionBootstrapRequest:
         self,
         request_id: str,
         session_id: str,
-        logical_card_id: str,
-        card_version: int,
         greeting_id: str,
-        expected_source_hash: str,
+        card_definition: dict | None = None,
+        logical_card_id: str = "",
+        card_version: int = 0,
+        expected_source_hash: str = "",
         workflow_run_id: str = "",
         trace_id: str = "",
         initial_state_seed: str = "{}",
@@ -43,6 +49,15 @@ class AWPV2CardSessionBootstrapRequest:
         import json
         from datetime import datetime, timezone
         from ..contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
+
+        # Extract from card_definition if provided and not overridden
+        if card_definition:
+            if not logical_card_id:
+                logical_card_id = card_definition.get("logical_card_id", "")
+            if card_version == 0:
+                card_version = card_definition.get("card_version", 0)
+            if not expected_source_hash:
+                expected_source_hash = card_definition.get("source_hash", "")
 
         seed = {}
         if initial_state_seed:

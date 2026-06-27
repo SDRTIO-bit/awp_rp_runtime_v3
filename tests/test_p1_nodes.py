@@ -70,6 +70,7 @@ class TestNodeRegistration:
             "AWPV2GreetingSelection", "AWPV2CardStateInitializer",
             "AWPV2OpeningRecordCommit", "AWPV2WorldbookBindingBuilder",
             "AWPV2CardSessionBindingCommit", "AWPV2CardSessionBootstrapDiagnostics",
+            "AWPV2CardImportAndBootstrap", "AWPV2CardDefinitionFixtureLoad",
         }
         observability_expected = {
             "AWPV2TraceDisplay",

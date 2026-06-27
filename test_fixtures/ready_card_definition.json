@@ -1,0 +1,136 @@
+{
+  "schema_id": "awp.rp.card-definition.v1",
+  "schema_version": 1,
+  "logical_card_id": "lcid_bootstrap_test_fixture",
+  "card_version": 1,
+  "source_id": "src_bootstrap_fixture",
+  "source_hash": "fixture_hash_bootstrap_001",
+  "name": "BootstrapTestChar",
+  "display_name": "BootstrapTestChar",
+  "status": "ready",
+  "profile": {
+    "schema_id": "awp.rp.card-profile.v1",
+    "schema_version": 1,
+    "name": "BootstrapTestChar",
+    "description": "A test character for bootstrap acceptance.",
+    "personality": "Friendly"
+  },
+  "greetings": [
+    {
+      "schema_id": "awp.rp.card-greeting.v1",
+      "schema_version": 1,
+      "greeting_id": "g0",
+      "index": 0,
+      "safe_display_content": "Welcome, traveler! What brings you to the Hearthstone Tavern?",
+      "content_hash": "gh_default_001",
+      "is_default": true,
+      "label": "Default"
+    },
+    {
+      "schema_id": "awp.rp.card-greeting.v1",
+      "schema_version": 1,
+      "greeting_id": "g1",
+      "index": 1,
+      "safe_display_content": "Hey there! You look like you could use a drink.",
+      "content_hash": "gh_alt_001",
+      "is_default": false,
+      "label": "Alternate 1"
+    },
+    {
+      "schema_id": "awp.rp.card-greeting.v1",
+      "schema_version": 1,
+      "greeting_id": "g2",
+      "index": 2,
+      "safe_display_content": "The tavern keeper looks up from polishing a mug. Another customer!",
+      "content_hash": "gh_alt_002",
+      "is_default": false,
+      "label": "Alternate 2"
+    }
+  ],
+  "worldbook_catalog": [
+    {
+      "schema_id": "awp.rp.card-worldbook-entry.v1",
+      "schema_version": 1,
+      "entry_id": "wb_1",
+      "source_uid": 1,
+      "title": "Tavern description",
+      "content": "The Hearthstone Tavern is a cozy establishment with a crackling fireplace.",
+      "keys": ["tavern", "hearthstone"],
+      "secondary_keys": [],
+      "priority": 10,
+      "enabled": true,
+      "constant": true,
+      "selective": false,
+      "activation_raw": "",
+      "source_order": 0,
+      "has_chunks": false
+    },
+    {
+      "schema_id": "awp.rp.card-worldbook-entry.v1",
+      "schema_version": 1,
+      "entry_id": "wb_2",
+      "source_uid": 2,
+      "title": "Magic rules",
+      "content": "Magic is rare but real in this world. Only trained mages can cast spells.",
+      "keys": ["magic", "spell"],
+      "secondary_keys": [],
+      "priority": 5,
+      "enabled": true,
+      "constant": false,
+      "selective": false,
+      "activation_raw": "",
+      "source_order": 1,
+      "has_chunks": false
+    },
+    {
+      "schema_id": "awp.rp.card-worldbook-entry.v1",
+      "schema_version": 1,
+      "entry_id": "wb_3",
+      "source_uid": 3,
+      "title": "Secret passage",
+      "content": "The tavern keeper has a secret passage behind the bar.",
+      "keys": ["secret", "hidden"],
+      "secondary_keys": [],
+      "priority": 8,
+      "enabled": false,
+      "constant": false,
+      "selective": false,
+      "activation_raw": "",
+      "source_order": 2,
+      "has_chunks": false
+    },
+    {
+      "schema_id": "awp.rp.card-worldbook-entry.v1",
+      "schema_version": 1,
+      "entry_id": "wb_4",
+      "source_uid": 4,
+      "title": "Quest board",
+      "content": "There is a quest board near the entrance with various tasks.",
+      "keys": ["quest", "adventure"],
+      "secondary_keys": [],
+      "priority": 7,
+      "enabled": true,
+      "constant": false,
+      "selective": true,
+      "activation_raw": "",
+      "source_order": 3,
+      "has_chunks": false
+    }
+  ],
+  "worldbook_chunks": [],
+  "structure_hints": {
+    "schema_id": "awp.rp.card-structure-hints.v1",
+    "schema_version": 1,
+    "phase_hints": [],
+    "event_hints": [],
+    "variable_hints": [],
+    "relationship_hints": []
+  },
+  "quarantine_summary": {
+    "total": 0
+  },
+  "import_report_ref": "rpt_fixture",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "trace_id": "tr_fixture"
+}

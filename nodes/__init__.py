@@ -104,6 +104,8 @@ from .opening_record_commit_node import AWPV2OpeningRecordCommit
 from .worldbook_binding_builder_node import AWPV2WorldbookBindingBuilder
 from .card_session_binding_commit_node import AWPV2CardSessionBindingCommit
 from .card_session_bootstrap_diagnostics_node import AWPV2CardSessionBootstrapDiagnostics
+from .card_import_and_bootstrap_node import AWPV2CardImportAndBootstrap
+from .card_definition_fixture_load_node import AWPV2CardDefinitionFixtureLoad
 
 # Observability: trace display output node
 from .trace_display_node import AWPV2TraceDisplay
@@ -204,6 +206,8 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2WorldbookBindingBuilder": AWPV2WorldbookBindingBuilder,
     "AWPV2CardSessionBindingCommit": AWPV2CardSessionBindingCommit,
     "AWPV2CardSessionBootstrapDiagnostics": AWPV2CardSessionBootstrapDiagnostics,
+    "AWPV2CardImportAndBootstrap": AWPV2CardImportAndBootstrap,
+    "AWPV2CardDefinitionFixtureLoad": AWPV2CardDefinitionFixtureLoad,
     # Observability
     "AWPV2TraceDisplay": AWPV2TraceDisplay,
 }
@@ -304,6 +308,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2WorldbookBindingBuilder": "AWP V2 世界书绑定构建",
     "AWPV2CardSessionBindingCommit": "AWP V2 会话绑定提交",
     "AWPV2CardSessionBootstrapDiagnostics": "AWP V2 会话启动诊断",
+    "AWPV2CardImportAndBootstrap": "AWP V2 角色卡导入并启动",
+    "AWPV2CardDefinitionFixtureLoad": "AWP V2 角色卡Fixture加载",
     # Observability
     "AWPV2TraceDisplay": "AWP V2 追踪显示",
 }
