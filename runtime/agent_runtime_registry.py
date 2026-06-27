@@ -167,6 +167,34 @@ BUILTIN_ROLES: dict[str, AgentRoleSpec] = {
         can_write_memory=False,
         can_generate_final_text=False,
     ),
+    # D5: Continuity Agent
+    "continuity": AgentRoleSpec(
+        role_id="continuity",
+        description="Continuity Agent — checks that confirmed facts, states, and suggestions do not conflict",
+        allowed_suggestion_kinds=[
+            SuggestionKind.CONTINUITY_FACT_CONSTRAINT,
+            SuggestionKind.CONTINUITY_BLOCKING_RISK,
+            SuggestionKind.CONTINUITY_TIMELINE_WARNING,
+            SuggestionKind.CONTINUITY_IDENTITY_WARNING,
+            SuggestionKind.CONTINUITY_LOCATION_WARNING,
+            SuggestionKind.CONTINUITY_KNOWLEDGE_BOUNDARY_WARNING,
+            SuggestionKind.CONTINUITY_SUGGESTION_CONFLICT,
+            SuggestionKind.CONTINUITY_WRITER_CONSTRAINT,
+            SuggestionKind.CONTINUITY_DIRECTOR_FOLLOWUP,
+        ],
+        default_budget_tokens=1000,
+        max_budget_tokens=2000,
+        allowed_tools=[
+            "accepted_turn_lookup", "active_memory_lookup",
+            "rag_memory_lookup", "relationship_context_lookup",
+            "timeline_lookup", "worldbook_lookup", "entity_alias_lookup",
+            "event_stage_lookup", "scene_context_lookup", "npc_context_lookup",
+        ],
+        can_delegate=False,
+        can_write_state=False,
+        can_write_memory=False,
+        can_generate_final_text=False,
+    ),
 }
 
 

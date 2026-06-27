@@ -76,6 +76,16 @@ KIND_WEIGHTS: dict[SuggestionKind, float] = {
     SuggestionKind.ER_RELATIONSHIP_BOUNDARY: 0.84,
     SuggestionKind.ER_SUBTEXT_OPPORTUNITY: 0.68,
     SuggestionKind.ER_WARNING: 0.85,
+    # D5: Continuity kinds
+    SuggestionKind.CONTINUITY_FACT_CONSTRAINT: 1.0,
+    SuggestionKind.CONTINUITY_BLOCKING_RISK: 0.99,
+    SuggestionKind.CONTINUITY_TIMELINE_WARNING: 0.92,
+    SuggestionKind.CONTINUITY_IDENTITY_WARNING: 0.91,
+    SuggestionKind.CONTINUITY_LOCATION_WARNING: 0.90,
+    SuggestionKind.CONTINUITY_KNOWLEDGE_BOUNDARY_WARNING: 0.89,
+    SuggestionKind.CONTINUITY_SUGGESTION_CONFLICT: 0.88,
+    SuggestionKind.CONTINUITY_WRITER_CONSTRAINT: 0.95,
+    SuggestionKind.CONTINUITY_DIRECTOR_FOLLOWUP: 0.72,
 }
 
 MAX_ADOPTED = 15

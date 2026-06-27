@@ -62,6 +62,15 @@ from .world_life_risk import WorldLifeRisk, WorldLifeRiskLevel
 from .world_life_suggestion import WorldLifeSuggestion, WorldLifeSuggestionKind
 from .world_life_trigger_diagnostics import WorldLifeTriggerDiagnostics
 
+# D4: Emotion/Relationship contracts
+from .emotion_relationship_request import EmotionRelationshipRequest
+from .emotion_relationship_candidate import EmotionRelationshipCandidate, RelationshipKind
+from .relationship_evidence import RelationshipEvidence
+from .emotion_relationship_result import EmotionRelationshipResult, EmotionRelationshipStatus, RejectedEmotionCandidate
+from .relationship_risk import RelationshipRisk, RelationshipRiskLevel
+from .emotion_relationship_suggestion import EmotionRelationshipSuggestion, EmotionRelationshipSuggestionKind
+from .emotion_relationship_trigger_diagnostics import EmotionRelationshipTriggerDiagnostics
+
 __all__ = [
     "CardState", "VariableEntry", "EventFlag", "SceneState",
     "CardStatePatch", "CardStatePatchOperation", "PatchOpType",

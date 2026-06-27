@@ -66,6 +66,24 @@ from .world_life_ranker_node import AWPV2WorldLifeRanker
 from .world_life_result_node import AWPV2WorldLifeResult
 from .world_life_diagnostics_node import AWPV2WorldLifeDiagnostics
 
+# D4: Emotion/Relationship nodes
+from .emotion_relationship_trigger_node import AWPV2EmotionRelationshipTrigger
+from .emotion_relationship_request_node import AWPV2EmotionRelationshipRequest
+from .emotion_relationship_agent_node import AWPV2EmotionRelationshipAgent
+from .emotion_relationship_validator_node import AWPV2EmotionRelationshipValidator
+from .emotion_relationship_ranker_node import AWPV2EmotionRelationshipRanker
+from .emotion_relationship_result_node import AWPV2EmotionRelationshipResult
+from .emotion_relationship_diagnostics_node import AWPV2EmotionRelationshipDiagnostics
+
+# D5: Continuity nodes
+from .continuity_trigger_node import AWPV2ContinuityTrigger
+from .continuity_request_node import AWPV2ContinuityRequest
+from .continuity_agent_node import AWPV2ContinuityAgent
+from .continuity_validator_node import AWPV2ContinuityValidator
+from .continuity_ranker_node import AWPV2ContinuityRanker
+from .continuity_result_node import AWPV2ContinuityResult
+from .continuity_diagnostics_node import AWPV2ContinuityDiagnostics
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -127,6 +145,22 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2WorldLifeRanker": AWPV2WorldLifeRanker,
     "AWPV2WorldLifeResult": AWPV2WorldLifeResult,
     "AWPV2WorldLifeDiagnostics": AWPV2WorldLifeDiagnostics,
+    # D4: Emotion/Relationship
+    "AWPV2EmotionRelationshipTrigger": AWPV2EmotionRelationshipTrigger,
+    "AWPV2EmotionRelationshipRequest": AWPV2EmotionRelationshipRequest,
+    "AWPV2EmotionRelationshipAgent": AWPV2EmotionRelationshipAgent,
+    "AWPV2EmotionRelationshipValidator": AWPV2EmotionRelationshipValidator,
+    "AWPV2EmotionRelationshipRanker": AWPV2EmotionRelationshipRanker,
+    "AWPV2EmotionRelationshipResult": AWPV2EmotionRelationshipResult,
+    "AWPV2EmotionRelationshipDiagnostics": AWPV2EmotionRelationshipDiagnostics,
+    # D5: Continuity
+    "AWPV2ContinuityTrigger": AWPV2ContinuityTrigger,
+    "AWPV2ContinuityRequest": AWPV2ContinuityRequest,
+    "AWPV2ContinuityAgent": AWPV2ContinuityAgent,
+    "AWPV2ContinuityValidator": AWPV2ContinuityValidator,
+    "AWPV2ContinuityRanker": AWPV2ContinuityRanker,
+    "AWPV2ContinuityResult": AWPV2ContinuityResult,
+    "AWPV2ContinuityDiagnostics": AWPV2ContinuityDiagnostics,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -190,6 +224,22 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2WorldLifeRanker": "AWP V2 世界活性排序",
     "AWPV2WorldLifeResult": "AWP V2 世界活性结果",
     "AWPV2WorldLifeDiagnostics": "AWP V2 世界活性诊断",
+    # D4: Emotion/Relationship
+    "AWPV2EmotionRelationshipTrigger": "AWP V2 情绪关系触发",
+    "AWPV2EmotionRelationshipRequest": "AWP V2 情绪关系请求",
+    "AWPV2EmotionRelationshipAgent": "AWP V2 情绪关系Agent",
+    "AWPV2EmotionRelationshipValidator": "AWP V2 情绪关系验证",
+    "AWPV2EmotionRelationshipRanker": "AWP V2 情绪关系排序",
+    "AWPV2EmotionRelationshipResult": "AWP V2 情绪关系结果",
+    "AWPV2EmotionRelationshipDiagnostics": "AWP V2 情绪关系诊断",
+    # D5: Continuity
+    "AWPV2ContinuityTrigger": "AWP V2 连续性触发",
+    "AWPV2ContinuityRequest": "AWP V2 连续性请求",
+    "AWPV2ContinuityAgent": "AWP V2 连续性Agent",
+    "AWPV2ContinuityValidator": "AWP V2 连续性验证",
+    "AWPV2ContinuityRanker": "AWP V2 连续性排序",
+    "AWPV2ContinuityResult": "AWP V2 连续性结果",
+    "AWPV2ContinuityDiagnostics": "AWP V2 连续性诊断",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

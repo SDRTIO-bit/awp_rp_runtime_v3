@@ -66,6 +66,16 @@ class SuggestionKind(str, Enum):
     ER_RELATIONSHIP_BOUNDARY = "er_relationship_boundary"
     ER_SUBTEXT_OPPORTUNITY = "er_subtext_opportunity"
     ER_WARNING = "er_warning"
+    # D5: Continuity kinds
+    CONTINUITY_FACT_CONSTRAINT = "continuity_fact_constraint"
+    CONTINUITY_BLOCKING_RISK = "continuity_blocking_risk"
+    CONTINUITY_TIMELINE_WARNING = "continuity_timeline_warning"
+    CONTINUITY_IDENTITY_WARNING = "continuity_identity_warning"
+    CONTINUITY_LOCATION_WARNING = "continuity_location_warning"
+    CONTINUITY_KNOWLEDGE_BOUNDARY_WARNING = "continuity_knowledge_boundary_warning"
+    CONTINUITY_SUGGESTION_CONFLICT = "continuity_suggestion_conflict"
+    CONTINUITY_WRITER_CONSTRAINT = "continuity_writer_constraint"
+    CONTINUITY_DIRECTOR_FOLLOWUP = "continuity_director_followup"
 
 # Backward compat alias
 SuggestionType = SuggestionKind

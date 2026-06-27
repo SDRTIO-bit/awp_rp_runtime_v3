@@ -48,7 +48,19 @@ class TestNodeRegistration:
             "AWPV2WorldLifeRanker", "AWPV2WorldLifeResult",
             "AWPV2WorldLifeDiagnostics",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected
+        d4_expected = {
+            "AWPV2EmotionRelationshipTrigger", "AWPV2EmotionRelationshipRequest",
+            "AWPV2EmotionRelationshipAgent", "AWPV2EmotionRelationshipValidator",
+            "AWPV2EmotionRelationshipRanker", "AWPV2EmotionRelationshipResult",
+            "AWPV2EmotionRelationshipDiagnostics",
+        }
+        d5_expected = {
+            "AWPV2ContinuityTrigger", "AWPV2ContinuityRequest",
+            "AWPV2ContinuityAgent", "AWPV2ContinuityValidator",
+            "AWPV2ContinuityRanker", "AWPV2ContinuityResult",
+            "AWPV2ContinuityDiagnostics",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 

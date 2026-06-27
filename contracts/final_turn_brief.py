@@ -86,6 +86,12 @@ class FinalTurnBrief:
     relationship_warnings: list[str] = field(default_factory=list)
     relationship_evidence_refs: list[str] = field(default_factory=list)
 
+    # D5: Continuity findings
+    accepted_continuity_constraints: list[str] = field(default_factory=list)
+    rejected_continuity_findings: list[dict[str, Any]] = field(default_factory=list)
+    continuity_warnings: list[str] = field(default_factory=list)
+    continuity_evidence_refs: list[str] = field(default_factory=list)
+
     # Timestamp
     created_at: str = ""
 
@@ -133,6 +139,11 @@ class FinalTurnBrief:
             "rejected_relationship_findings": self.rejected_relationship_findings,
             "relationship_warnings": self.relationship_warnings,
             "relationship_evidence_refs": self.relationship_evidence_refs,
+            # D5
+            "accepted_continuity_constraints": self.accepted_continuity_constraints,
+            "rejected_continuity_findings": self.rejected_continuity_findings,
+            "continuity_warnings": self.continuity_warnings,
+            "continuity_evidence_refs": self.continuity_evidence_refs,
             "created_at": self.created_at,
         }
 
@@ -181,5 +192,10 @@ class FinalTurnBrief:
             rejected_relationship_findings=data.get("rejected_relationship_findings", []),
             relationship_warnings=data.get("relationship_warnings", []),
             relationship_evidence_refs=data.get("relationship_evidence_refs", []),
+            # D5
+            accepted_continuity_constraints=data.get("accepted_continuity_constraints", []),
+            rejected_continuity_findings=data.get("rejected_continuity_findings", []),
+            continuity_warnings=data.get("continuity_warnings", []),
+            continuity_evidence_refs=data.get("continuity_evidence_refs", []),
             created_at=data.get("created_at", ""),
         )
