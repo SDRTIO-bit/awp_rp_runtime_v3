@@ -2,10 +2,12 @@
 
 Uses the new CardStatePatch / CardStateCommitRequest / Gate contracts.
 D6: Integrates Memory Curator Agent for post-acceptance memory governance.
+D-Integration: Wave-based agent execution with conflict governance.
 """
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any
 
@@ -19,6 +21,7 @@ from ..contracts.card_state_patch import CardStatePatch
 from ..contracts.card_state_commit import CardStateCommitResult
 from ..contracts.turn_record import TurnRecord, TurnMode
 from ..contracts.execution_trace import ExecutionTrace, TraceEvent
+from ..contracts.integrated_turn_trace import IntegratedTurnTrace
 
 from .round_snapshot_builder import RoundSnapshotBuilder
 from .director_runtime import DirectorRuntime
@@ -45,6 +48,7 @@ class TurnResult:
         self.state_commit_result: CardStateCommitResult | None = None
         self.snapshot: RoundSnapshot | None = None
         self.trace: ExecutionTrace | None = None
+        self.integrated_trace: IntegratedTurnTrace | None = None
         self.error: str | None = None
 
 
@@ -66,6 +70,13 @@ class TurnOrchestrator:
         rag_commit: RagMemoryCommitRuntime,
         retry_runtime: RetryRuntime,
         max_retries: int = 3,
+        # D-Integration optional components
+        budget_policy: Any = None,
+        scheduler: Any = None,
+        wave_executor: Any = None,
+        conflict_governor: Any = None,
+        resolution_runtime: Any = None,
+        integration_trace_builder: Any = None,
     ):
         self.snapshot_builder = snapshot_builder
         self.director = director
@@ -81,6 +92,13 @@ class TurnOrchestrator:
         self.rag_commit = rag_commit
         self.retry_runtime = retry_runtime
         self.max_retries = max_retries
+        # D-Integration
+        self.budget_policy = budget_policy
+        self.scheduler = scheduler
+        self.wave_executor = wave_executor
+        self.conflict_governor = conflict_governor
+        self.resolution_runtime = resolution_runtime
+        self.integration_trace_builder = integration_trace_builder
 
     def execute_turn(
         self,
@@ -92,6 +110,7 @@ class TurnOrchestrator:
         parent_turn_id: str = "",
     ) -> TurnResult:
         result = TurnResult()
+        turn_start = time.monotonic()
         trace = ExecutionTrace(
             trace_id=f"trace_{uuid.uuid4().hex[:12]}",
             card_id=card_id,
@@ -116,15 +135,27 @@ class TurnOrchestrator:
             self._trace(trace, "delegation_planned", "delegation_planner")
             delegation_plan, _ = self.delegation_planner.validate_and_filter(delegation_plan)
 
-            # 4. Sub-agents
-            self._trace(trace, "subagent_called", "subagent_pool")
-            exec_results = self.subagent_pool.execute(delegation_plan, snapshot)
-
-            # 5. Merge
-            self._trace(trace, "suggestions_merged", "suggestion_merger")
-            merge_result = self.suggestion_merger.merge(
-                delegation_plan, turn_brief, snapshot, exec_results
+            # 4-5. Sub-agent execution + merge
+            use_waves = (
+                self.scheduler is not None
+                and self.wave_executor is not None
+                and self.budget_policy is not None
             )
+
+            if use_waves:
+                exec_results, merge_result, integration_trace = self._execute_waves(
+                    delegation_plan, snapshot, turn_brief, trace
+                )
+                result.integrated_trace = integration_trace
+            else:
+                # Legacy sequential path
+                self._trace(trace, "subagent_called", "subagent_pool")
+                exec_results = self.subagent_pool.execute(delegation_plan, snapshot)
+
+                self._trace(trace, "suggestions_merged", "suggestion_merger")
+                merge_result = self.suggestion_merger.merge(
+                    delegation_plan, turn_brief, snapshot, exec_results
+                )
 
             # 6-7. Writer + Quality Gate (retry loop)
             retry_count = 0
@@ -210,12 +241,105 @@ class TurnOrchestrator:
             result.success = True
             trace.success = True
 
+            # Record total duration
+            total_ms = int((time.monotonic() - turn_start) * 1000)
+            if result.integrated_trace:
+                result.integrated_trace.total_duration_ms = total_ms
+
         except Exception as e:
             result.error = str(e)
             trace.success = False
             self._trace(trace, "error", "orchestrator", error=str(e))
 
         return result
+
+    def _execute_waves(
+        self,
+        delegation_plan: DelegationPlan,
+        snapshot: RoundSnapshot,
+        turn_brief: TurnBrief,
+        trace: ExecutionTrace,
+    ) -> tuple[list[AgentExecutionResult], SuggestionMergeResult, IntegratedTurnTrace | None]:
+        """Execute agents via wave-based scheduling with conflict governance.
+
+        Returns (exec_results, merge_result, integrated_trace).
+        """
+        from .dynamic_agent_scheduler import DynamicAgentScheduler
+        from .dynamic_agent_wave_executor import DynamicAgentWaveExecutor
+        from .continuity_barrier_runtime import ContinuityBarrierRuntime
+        from .suggestion_conflict_governor import SuggestionConflictGovernor
+        from .director_suggestion_resolution_runtime import DirectorSuggestionResolutionRuntime
+        from .agent_integration_trace import AgentIntegrationTrace
+        from ..contracts.agent_execution_report import AgentExecutionReport
+
+        # Create budget report
+        budget_report = self.budget_policy.create_report(
+            turn_id=snapshot.snapshot_id,
+            trace_id=snapshot.trace_id,
+        )
+
+        # Schedule agents into waves
+        self._trace(trace, "agents_scheduled", "scheduler")
+        scheduled = self.scheduler.schedule(delegation_plan, snapshot)
+        budget_report.agents_scheduled = (
+            len(scheduled.wave_a_tasks) + len(scheduled.wave_b_tasks)
+        )
+
+        # Execute waves
+        self._trace(trace, "wave_a_executed", "wave_executor")
+        exec_results, agent_reports = self.wave_executor.execute_waves(
+            scheduled, snapshot, budget_report, brief_id=turn_brief.brief_id,
+        )
+
+        # Merge suggestions
+        self._trace(trace, "suggestions_merged", "suggestion_merger")
+        merge_result = self.suggestion_merger.merge(
+            delegation_plan, turn_brief, snapshot, exec_results
+        )
+
+        # Apply conflict governance
+        conflicts = []
+        if self.conflict_governor:
+            self._trace(trace, "conflicts_governed", "conflict_governor")
+            merge_result, conflicts = self.conflict_governor.govern(
+                merge_result, snapshot, turn_brief,
+            )
+
+        # Director resolution
+        resolution = None
+        if self.resolution_runtime:
+            self._trace(trace, "director_resolved", "resolution_runtime")
+            from ..contracts.director_plan import DirectorPlan
+            director_plan = DirectorPlan(
+                plan_id=turn_brief.brief_id,
+                trace_id=snapshot.trace_id,
+                snapshot_id=snapshot.snapshot_id,
+                card_id=snapshot.card_id,
+                session_id=snapshot.session_id,
+                turn_goal=turn_brief.turn_goal,
+                must_preserve_facts=turn_brief.must_preserve_facts,
+                must_not_do=turn_brief.must_not_do,
+            )
+            resolution = self.resolution_runtime.resolve(
+                merge_result, conflicts, director_plan, snapshot, trace,
+            )
+
+        # Build integration trace
+        integrated_trace = None
+        if self.integration_trace_builder and resolution:
+            self._trace(trace, "integration_traced", "integration_trace")
+            integrated_trace = self.integration_trace_builder.build(
+                turn_id=snapshot.snapshot_id,
+                trace_id=snapshot.trace_id,
+                card_id=snapshot.card_id,
+                session_id=snapshot.session_id,
+                agent_reports=agent_reports,
+                budget_report=budget_report,
+                conflicts=conflicts,
+                resolution=resolution,
+            )
+
+        return exec_results, merge_result, integrated_trace
 
     def _commit_memory(
         self,

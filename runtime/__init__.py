@@ -44,6 +44,17 @@ from .history_recall_tool_profile import (
     create_history_recall_tool_registry,
 )
 
+# D-Integration: Dynamic Agent Integration & Conflict Governance
+from .turn_agent_budget_policy import (
+    TurnAgentBudgetPolicy, SIMPLE_TURN_POLICY, NORMAL_TURN_POLICY, COMPLEX_TURN_POLICY,
+)
+from .dynamic_agent_scheduler import DynamicAgentScheduler, ScheduledWave, WAVE_A_ROLES, WAVE_B_ROLES
+from .dynamic_agent_wave_executor import DynamicAgentWaveExecutor, WaveExecutionResult
+from .continuity_barrier_runtime import ContinuityBarrierRuntime, ContinuityBarrierResult
+from .suggestion_conflict_governor import SuggestionConflictGovernor
+from .director_suggestion_resolution_runtime import DirectorSuggestionResolutionRuntime, DirectorResolution
+from .agent_integration_trace import AgentIntegrationTrace
+
 # D6: Memory Curator runtime
 from .memory_curation_trigger_policy import MemoryCurationTriggerPolicy
 from .memory_curation_runtime import MemoryCurationRuntime
@@ -107,4 +118,12 @@ __all__ = [
     "FakeMemoryCuratorAdapter",
     "MEMORY_CURATOR_TOOLS", "MEMORY_CURATOR_ROLE_SPEC",
     "create_memory_curator_tool_registry",
+    # D-Integration
+    "TurnAgentBudgetPolicy", "SIMPLE_TURN_POLICY", "NORMAL_TURN_POLICY", "COMPLEX_TURN_POLICY",
+    "DynamicAgentScheduler", "ScheduledWave", "WAVE_A_ROLES", "WAVE_B_ROLES",
+    "DynamicAgentWaveExecutor", "WaveExecutionResult",
+    "ContinuityBarrierRuntime", "ContinuityBarrierResult",
+    "SuggestionConflictGovernor",
+    "DirectorSuggestionResolutionRuntime", "DirectorResolution",
+    "AgentIntegrationTrace",
 ]

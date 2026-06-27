@@ -71,6 +71,12 @@ from .relationship_risk import RelationshipRisk, RelationshipRiskLevel
 from .emotion_relationship_suggestion import EmotionRelationshipSuggestion, EmotionRelationshipSuggestionKind
 from .emotion_relationship_trigger_diagnostics import EmotionRelationshipTriggerDiagnostics
 
+# D-Integration: Conflict Governance contracts
+from .suggestion_conflict import SuggestionConflict, ConflictKind, ConflictResolution
+from .agent_execution_report import AgentExecutionReport, AgentExecutionOutcome
+from .turn_agent_budget_report import TurnAgentBudgetReport
+from .integrated_turn_trace import IntegratedTurnTrace
+
 # D6: Memory Curator contracts
 from .memory_curation_request import MemoryCurationRequest
 from .memory_curation_candidate import MemoryCurationCandidate
@@ -125,4 +131,9 @@ __all__ = [
     "MemoryCurationEvidence",
     "MemoryCurationResult",
     "MemoryCurationTriggerDiagnostics",
+    # D-Integration
+    "SuggestionConflict", "ConflictKind", "ConflictResolution",
+    "AgentExecutionReport", "AgentExecutionOutcome",
+    "TurnAgentBudgetReport",
+    "IntegratedTurnTrace",
 ]

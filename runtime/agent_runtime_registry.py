@@ -177,6 +177,35 @@ BUILTIN_ROLES: dict[str, AgentRoleSpec] = {
         can_write_memory=False,
         can_generate_final_text=False,
     ),
+    # D3: World-Life Agent
+    "world-life": AgentRoleSpec(
+        role_id="world-life",
+        description="World-Life Agent — identifies world activity beyond protagonist's view",
+        allowed_suggestion_kinds=[
+            SuggestionKind.ENVIRONMENTAL_PRESSURE,
+            SuggestionKind.WEATHER_OR_TIME_ATMOSPHERE,
+            SuggestionKind.NPC_SIDE_TENSION,
+            SuggestionKind.EVENT_STAGE_ECHO,
+            SuggestionKind.LOCATION_LIFE_DETAIL,
+            SuggestionKind.SOCIAL_BACKGROUND_SIGNAL,
+            SuggestionKind.WORLDBOOK_RESONANCE,
+            SuggestionKind.OFFSCREEN_CONSEQUENCE_HINT,
+            SuggestionKind.AMBIENT_RUMOR_SIGNAL,
+            SuggestionKind.WORLD_LIFE_WARNING,
+        ],
+        default_budget_tokens=1000,
+        max_budget_tokens=2000,
+        allowed_tools=[
+            "accepted_turn_lookup", "active_memory_lookup",
+            "rag_memory_lookup", "relationship_context_lookup",
+            "timeline_lookup", "worldbook_lookup", "entity_alias_lookup",
+            "event_stage_lookup", "scene_context_lookup", "npc_context_lookup",
+        ],
+        can_delegate=False,
+        can_write_state=False,
+        can_write_memory=False,
+        can_generate_final_text=False,
+    ),
     # D5: Continuity Agent
     "continuity": AgentRoleSpec(
         role_id="continuity",
