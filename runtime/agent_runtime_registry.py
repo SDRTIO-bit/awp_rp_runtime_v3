@@ -63,10 +63,20 @@ BUILTIN_ROLES: dict[str, AgentRoleSpec] = {
     ),
     "memory-curator": AgentRoleSpec(
         role_id="memory-curator",
-        description="Identifies memory candidates from the current turn",
+        description="Memory Curator Agent — post-accept memory governance",
         allowed_suggestion_kinds=[
             SuggestionKind.MEMORY_CANDIDATE,
         ],
+        default_budget_tokens=1000,
+        max_budget_tokens=2000,
+        allowed_tools=[
+            "accepted_turn_lookup", "active_memory_lookup", "rag_memory_lookup",
+            "entity_alias_lookup", "timeline_lookup", "relationship_context_lookup",
+        ],
+        can_delegate=False,
+        can_write_state=False,
+        can_write_memory=False,
+        can_generate_final_text=False,
     ),
     "state-updater": AgentRoleSpec(
         role_id="state-updater",

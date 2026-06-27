@@ -1,6 +1,7 @@
 """TurnOrchestrator — orchestrates the complete turn lifecycle.
 
 Uses the new CardStatePatch / CardStateCommitRequest / Gate contracts.
+D6: Integrates Memory Curator Agent for post-acceptance memory governance.
 """
 
 from __future__ import annotations
@@ -226,17 +227,42 @@ class TurnOrchestrator:
     ) -> list:
         """Run ActiveMemory + RAG memory commits via the formal commit_request path.
 
-        Builds a deterministic MemoryCommitPlan (FakeMemoryCuration-style fixture
-        in M1 — the Memory Curator is NOT a free dynamic subagent yet) and only
-        writes after the gate accepts and CardState+TurnRecord commits succeed.
+        D6: Uses MemoryCurationRuntime + MemoryPlanCompiler to produce an
+        intelligent MemoryCommitPlan, then commits via the existing runtimes.
+        Falls back to deterministic M1 fixture if curator is not available or
+        returns a degraded/no-op result.
         """
-        from ..contracts.memory_commit_plan import (
-            MemoryCommitPlan, MemoryCommitRequest,
+        from ..contracts.memory_commit_plan import MemoryCommitRequest
+        from .memory_curation_runtime import MemoryCurationRuntime
+        from .memory_plan_compiler import MemoryPlanCompiler
+
+        # D6: Run Memory Curator
+        curation_runtime = MemoryCurationRuntime()
+        curation_result = curation_runtime.curate(
+            quality_decision=quality_decision,
+            card_state_commit_result=state_result,
+            turn_record=turn_record,
+            snapshot=snapshot,
+            trace=trace,
         )
 
-        plan = self._build_memory_plan(snapshot, turn_record, quality_decision)
-        memory_commit_id = f"mc_{uuid.uuid4().hex[:12]}"
-        idempotency_key = f"{turn_record.turn_id}:{memory_commit_id}"
+        # Compile curation result into MemoryCommitPlan
+        compiler = MemoryPlanCompiler()
+        plan = compiler.compile(
+            curation_result=curation_result,
+            turn_id=turn_record.turn_id,
+            card_id=turn_record.card_id,
+            session_id=turn_record.session_id,
+            trace_id=snapshot.trace_id,
+            expected_card_state_revision=(
+                state_result.to_revision if state_result
+                else snapshot.base_card_state_revision
+            ),
+            quality_decision_ref=quality_decision.trace_id,
+        )
+
+        memory_commit_id = plan.memory_commit_id or f"mc_{uuid.uuid4().hex[:12]}"
+        idempotency_key = plan.idempotency_key or f"{turn_record.turn_id}:{memory_commit_id}"
 
         request = MemoryCommitRequest(
             plan=plan,
@@ -254,89 +280,12 @@ class TurnOrchestrator:
                 or (state_result is None and True),
             turn_record_commit_success=True,
         )
-        # If there was no state patch, state commit is trivially satisfied.
-        if state_result is None:
-            request = MemoryCommitRequest(
-                plan=plan,
-                card_id=turn_record.card_id,
-                session_id=turn_record.session_id,
-                turn_id=turn_record.turn_id,
-                trace_id=snapshot.trace_id,
-                memory_commit_id=memory_commit_id,
-                idempotency_key=idempotency_key,
-                quality_decision_ref=quality_decision.trace_id,
-                expected_card_state_revision=snapshot.base_card_state_revision,
-                card_state_commit_success=True,
-                turn_record_commit_success=True,
-            )
 
         active_result = self.memory_commit.commit_request(request, quality_decision)
         rag_result = self.rag_commit.commit_request(request, quality_decision)
 
         self._trace(trace, "memory_committed", "memory_commit")
         return [active_result, rag_result]
-
-    def _build_memory_plan(
-        self,
-        snapshot: RoundSnapshot,
-        turn_record: TurnRecord,
-        quality_decision: QualityDecision,
-    ) -> MemoryCommitPlan:
-        """Deterministic fixture plan (M1). Real MemoryCuratorAgent is future work.
-
-        M1 rule: do NOT invent rich memories from free LLM judgement. We produce
-        a minimal, source-bound RAG record of the accepted turn so long-term
-        recall has something to retrieve, and no active memory unless the
-        deterministic fixture explicitly provides one (none by default).
-        """
-        from ..contracts.memory_commit_plan import MemoryCommitPlan
-        from ..contracts.rag_memory import RagMemoryRecord
-        from ..contracts.active_memory import ActiveMemoryRecord
-
-        summary = (turn_record.writer_output or "")[:80]
-        rag_entry = RagMemoryRecord(
-            memory_id=f"rag_{turn_record.turn_id}",
-            card_id=turn_record.card_id,
-            session_id=turn_record.session_id,
-            scope="session",
-            content=turn_record.writer_output or "",
-            summary=summary,
-            source_turn_ids=[turn_record.turn_id],
-            source_card_state_revision=turn_record.result_card_state_revision,
-            importance=0.5,
-            confidence=0.6,
-            provenance=f"commit:{turn_record.turn_id}",
-            evidence=[turn_record.turn_id],
-        )
-        # Deterministic active-memory fixture: one scene-pressure slot per
-        # accepted turn, source-bound. Summary is a fixed 30-80 char template
-        # (no free LLM, no novel prose). The MemoryCuratorAgent is future work.
-        active_entry = ActiveMemoryRecord(
-            memory_id=f"am_{turn_record.turn_id}",
-            card_id=turn_record.card_id,
-            session_id=turn_record.session_id,
-            summary="本回合叙事已发生并写入长期记忆，主角行为被记录为当前剧情压力节点",
-            kind="scene_pressure",
-            source_turn_ids=[turn_record.turn_id],
-            source_snapshot_ids=[snapshot.snapshot_id],
-            source_card_state_revision=turn_record.result_card_state_revision,
-            importance=0.5,
-            confidence=0.6,
-            status="active",
-        )
-        return MemoryCommitPlan(
-            turn_id=turn_record.turn_id,
-            card_id=turn_record.card_id,
-            session_id=turn_record.session_id,
-            trace_id=snapshot.trace_id,
-            expected_card_state_revision=turn_record.result_card_state_revision,
-            memory_commit_id="",
-            idempotency_key="",
-            quality_decision_ref=quality_decision.trace_id,
-            new_active_entries=[active_entry],
-            new_rag_entries=[rag_entry],
-            write_reasons=["accepted_turn_long_term_record"],
-        )
 
     def _trace(self, trace: ExecutionTrace, event_type: str, actor: str, error: str | None = None):
         trace.add_event(TraceEvent(

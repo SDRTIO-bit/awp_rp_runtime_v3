@@ -44,6 +44,20 @@ from .history_recall_tool_profile import (
     create_history_recall_tool_registry,
 )
 
+# D6: Memory Curator runtime
+from .memory_curation_trigger_policy import MemoryCurationTriggerPolicy
+from .memory_curation_runtime import MemoryCurationRuntime
+from .memory_curation_query_planner import MemoryCurationQueryPlanner
+from .memory_candidate_generator import FakeMemoryCandidateGenerator
+from .memory_curation_validator import MemoryCurationValidator
+from .memory_curation_ranker import MemoryCurationRanker
+from .memory_plan_compiler import MemoryPlanCompiler
+from .memory_curator_adapter import FakeMemoryCuratorAdapter
+from .memory_curator_tool_profile import (
+    MEMORY_CURATOR_TOOLS, MEMORY_CURATOR_ROLE_SPEC,
+    create_memory_curator_tool_registry,
+)
+
 __all__ = [
     "RoundSnapshotBuilder",
     "DirectorRuntime",
@@ -82,4 +96,15 @@ __all__ = [
     "HistoryRecallAdapter",
     "HISTORY_RECALL_TOOLS", "HISTORY_RECALL_ROLE_SPEC",
     "create_history_recall_tool_registry",
+    # D6
+    "MemoryCurationTriggerPolicy",
+    "MemoryCurationRuntime",
+    "MemoryCurationQueryPlanner",
+    "FakeMemoryCandidateGenerator",
+    "MemoryCurationValidator",
+    "MemoryCurationRanker",
+    "MemoryPlanCompiler",
+    "FakeMemoryCuratorAdapter",
+    "MEMORY_CURATOR_TOOLS", "MEMORY_CURATOR_ROLE_SPEC",
+    "create_memory_curator_tool_registry",
 ]

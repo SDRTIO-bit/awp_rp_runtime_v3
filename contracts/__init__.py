@@ -71,6 +71,13 @@ from .relationship_risk import RelationshipRisk, RelationshipRiskLevel
 from .emotion_relationship_suggestion import EmotionRelationshipSuggestion, EmotionRelationshipSuggestionKind
 from .emotion_relationship_trigger_diagnostics import EmotionRelationshipTriggerDiagnostics
 
+# D6: Memory Curator contracts
+from .memory_curation_request import MemoryCurationRequest
+from .memory_curation_candidate import MemoryCurationCandidate
+from .memory_curation_evidence import MemoryCurationEvidence
+from .memory_curation_result import MemoryCurationResult
+from .memory_curation_trigger_diagnostics import MemoryCurationTriggerDiagnostics
+
 __all__ = [
     "CardState", "VariableEntry", "EventFlag", "SceneState",
     "CardStatePatch", "CardStatePatchOperation", "PatchOpType",
@@ -112,4 +119,10 @@ __all__ = [
     "HistoryRecallResult", "HistoryRecallStatus",
     "HistoryRecallSuggestion", "HistorySuggestionKind",
     "HistoryRecallDiagnostics",
+    # D6: Memory Curator
+    "MemoryCurationRequest",
+    "MemoryCurationCandidate",
+    "MemoryCurationEvidence",
+    "MemoryCurationResult",
+    "MemoryCurationTriggerDiagnostics",
 ]
