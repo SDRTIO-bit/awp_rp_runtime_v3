@@ -1,0 +1,99 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 7,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "AWPV2CardStateInit",
+      "pos": [100, 100],
+      "size": [240, 100],
+      "widgets_values": ["test_card", "sess_001", ""],
+      "outputs": [{"name": "card_state", "type": "CARD_STATE", "links": [1]}]
+    },
+    {
+      "id": 2,
+      "type": "AWPV2RoundSnapshot",
+      "pos": [400, 100],
+      "size": [240, 120],
+      "widgets_values": [""],
+      "inputs": [
+        {"name": "card_state", "type": "CARD_STATE", "link": 1},
+        {"name": "player_input", "type": "STRING", "link": 2}
+      ],
+      "outputs": [{"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "links": [3, 5, 6]}]
+    },
+    {
+      "id": 3,
+      "type": "AWPV2QualityGate",
+      "pos": [700, 100],
+      "size": [240, 160],
+      "widgets_values": ["", 0, 3, true],
+      "inputs": [
+        {"name": "candidate_text", "type": "STRING", "link": 4},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 3}
+      ],
+      "outputs": [{"name": "quality_decision", "type": "QUALITY_DECISION", "links": [5, 6]}]
+    },
+    {
+      "id": 4,
+      "type": "AWPV2CardStateCommit",
+      "pos": [1000, 100],
+      "size": [240, 160],
+      "widgets_values": [""],
+      "inputs": [
+        {"name": "state_update_proposal", "type": "STATE_UPDATE_PROPOSAL", "link": null},
+        {"name": "quality_decision", "type": "QUALITY_DECISION", "link": 5},
+        {"name": "expected_revision", "type": "INT", "link": null, "widget": {"name": "expected_revision", "value": 0}},
+        {"name": "patch_id", "type": "STRING", "link": null, "widget": {"name": "patch_id", "value": "patch_001"}}
+      ],
+      "outputs": [
+        {"name": "commit_result", "type": "CARD_STATE_COMMIT_RESULT", "links": [7]},
+        {"name": "new_card_state", "type": "CARD_STATE", "links": null}
+      ]
+    },
+    {
+      "id": 5,
+      "type": "AWPV2TurnRecordCommit",
+      "pos": [1000, 350],
+      "size": [240, 180],
+      "widgets_values": [0, 0, "", "normal", ""],
+      "inputs": [
+        {"name": "player_input", "type": "STRING", "link": null, "widget": {"name": "player_input", "value": ""}},
+        {"name": "accepted_text", "type": "STRING", "link": null, "widget": {"name": "accepted_text", "value": ""}},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 6},
+        {"name": "quality_decision", "type": "QUALITY_DECISION", "link": 6},
+        {"name": "base_card_state_revision", "type": "INT", "link": null, "widget": {"name": "base_card_state_revision", "value": 0}},
+        {"name": "result_card_state_revision", "type": "INT", "link": null, "widget": {"name": "result_card_state_revision", "value": 0}}
+      ],
+      "outputs": [{"name": "turn_record", "type": "TURN_RECORD", "links": null}]
+    },
+    {
+      "id": 6,
+      "type": "AWPV2ExecutionTrace",
+      "pos": [1300, 100],
+      "size": [240, 140],
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": null},
+        {"name": "quality_decision", "type": "QUALITY_DECISION", "link": null},
+        {"name": "commit_result", "type": "CARD_STATE_COMMIT_RESULT", "link": 7},
+        {"name": "turn_record", "type": "TURN_RECORD", "link": null}
+      ],
+      "outputs": [{"name": "execution_trace", "type": "EXECUTION_TRACE", "links": null}]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "CARD_STATE"],
+    [3, 2, 0, 3, 1, "ROUND_SNAPSHOT"],
+    [5, 3, 0, 4, 1, "QUALITY_DECISION"],
+    [6, 3, 0, 5, 2, "QUALITY_DECISION"],
+    [7, 4, 0, 6, 2, "CARD_STATE_COMMIT_RESULT"]
+  ],
+  "groups": [
+    {"title": "初始化", "bounding": [50, 50, 300, 200], "color": "#3f789e"},
+    {"title": "快照与门禁", "bounding": [350, 50, 650, 250], "color": "#2a5a3a"},
+    {"title": "提交与追踪", "bounding": [950, 50, 650, 500], "color": "#5a2a2a"}
+  ],
+  "config": {},
+  "extra": {"info": "AWP RP Runtime V2 官方状态回合工作流"},
+  "version": 0.4
+}

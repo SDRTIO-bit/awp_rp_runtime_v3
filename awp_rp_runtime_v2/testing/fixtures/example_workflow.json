@@ -1,0 +1,161 @@
+{
+  "last_node_id": 15,
+  "last_link_id": 14,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "AWPCardStateInit_V2",
+      "pos": [100, 100],
+      "size": [200, 80],
+      "outputs": [{"name": "card_state", "type": "CARD_STATE"}]
+    },
+    {
+      "id": 2,
+      "type": "AWPConditionalWorldbook_V2",
+      "pos": [100, 250],
+      "size": [200, 80],
+      "inputs": [
+        {"name": "card_state", "type": "CARD_STATE"},
+        {"name": "worldbook_entries", "type": "WORLDBOOK_ENTRIES"}
+      ],
+      "outputs": [{"name": "active_entries", "type": "WORLDBOOK_ENTRIES"}]
+    },
+    {
+      "id": 3,
+      "type": "AWPRoundSnapshot_V2",
+      "pos": [400, 100],
+      "size": [200, 120],
+      "inputs": [
+        {"name": "card_state", "type": "CARD_STATE"},
+        {"name": "player_input", "type": "STRING"},
+        {"name": "worldbook_entries", "type": "WORLDBOOK_ENTRIES"}
+      ],
+      "outputs": [{"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}]
+    },
+    {
+      "id": 4,
+      "type": "AWPDirector_V2",
+      "pos": [700, 100],
+      "size": [200, 80],
+      "inputs": [{"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}],
+      "outputs": [
+        {"name": "turn_brief", "type": "TURN_BRIEF"},
+        {"name": "delegation_plan", "type": "DELEGATION_PLAN"}
+      ]
+    },
+    {
+      "id": 5,
+      "type": "AWPDynamicSubAgentPool_V2",
+      "pos": [700, 250],
+      "size": [200, 80],
+      "inputs": [
+        {"name": "delegation_plan", "type": "DELEGATION_PLAN"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [{"name": "agent_suggestions", "type": "AGENT_SUGGESTIONS"}]
+    },
+    {
+      "id": 6,
+      "type": "AWPSuggestionMerge_V2",
+      "pos": [1000, 250],
+      "size": [200, 80],
+      "inputs": [{"name": "agent_suggestions", "type": "AGENT_SUGGESTIONS"}],
+      "outputs": [{"name": "suggestion_merge_result", "type": "SUGGESTION_MERGE_RESULT"}]
+    },
+    {
+      "id": 7,
+      "type": "AWPWriter_V2",
+      "pos": [1000, 100],
+      "size": [200, 120],
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"},
+        {"name": "turn_brief", "type": "TURN_BRIEF"},
+        {"name": "suggestion_merge_result", "type": "SUGGESTION_MERGE_RESULT"}
+      ],
+      "outputs": [{"name": "candidate_text", "type": "STRING"}]
+    },
+    {
+      "id": 8,
+      "type": "AWPQualityGate_V2",
+      "pos": [1300, 100],
+      "size": [200, 80],
+      "inputs": [
+        {"name": "candidate_text", "type": "STRING"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [{"name": "quality_decision", "type": "QUALITY_DECISION"}]
+    },
+    {
+      "id": 9,
+      "type": "AWPStateUpdateProposal_V2",
+      "pos": [1300, 250],
+      "size": [200, 120],
+      "inputs": [
+        {"name": "quality_decision", "type": "QUALITY_DECISION"},
+        {"name": "candidate_text", "type": "STRING"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [{"name": "state_update_proposal", "type": "STATE_UPDATE_PROPOSAL"}]
+    },
+    {
+      "id": 10,
+      "type": "AWPCardStateCommit_V2",
+      "pos": [1600, 100],
+      "size": [200, 120],
+      "inputs": [
+        {"name": "state_update_proposal", "type": "STATE_UPDATE_PROPOSAL"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"},
+        {"name": "expected_revision", "type": "INT"},
+        {"name": "patch_id", "type": "STRING"}
+      ],
+      "outputs": [{"name": "committed_card_state", "type": "CARD_STATE"}]
+    },
+    {
+      "id": 11,
+      "type": "AWPTurnRecordCommit_V2",
+      "pos": [1600, 300],
+      "size": [200, 120],
+      "inputs": [
+        {"name": "player_input", "type": "STRING"},
+        {"name": "accepted_text", "type": "STRING"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"},
+        {"name": "quality_decision", "type": "QUALITY_DECISION"}
+      ],
+      "outputs": [{"name": "turn_record", "type": "TURN_RECORD"}]
+    },
+    {
+      "id": 12,
+      "type": "AWPMemoryCommit_V2",
+      "pos": [1600, 500],
+      "size": [200, 100],
+      "inputs": [
+        {"name": "accepted_text", "type": "STRING"},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT"}
+      ],
+      "outputs": [
+        {"name": "active_memories", "type": "ACTIVE_MEMORIES"},
+        {"name": "rag_memories", "type": "RAG_RECALL"}
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "CARD_STATE"],
+    [2, 2, 0, 3, 2, "WORLDBOOK_ENTRIES"],
+    [3, 3, 0, 4, 0, "ROUND_SNAPSHOT"],
+    [4, 4, 0, 7, 1, "TURN_BRIEF"],
+    [5, 4, 1, 5, 0, "DELEGATION_PLAN"],
+    [6, 3, 0, 5, 1, "ROUND_SNAPSHOT"],
+    [7, 5, 0, 6, 0, "AGENT_SUGGESTIONS"],
+    [8, 6, 0, 7, 2, "SUGGESTION_MERGE_RESULT"],
+    [9, 3, 0, 7, 0, "ROUND_SNAPSHOT"],
+    [10, 7, 0, 8, 0, "STRING"],
+    [11, 3, 0, 8, 1, "ROUND_SNAPSHOT"],
+    [12, 8, 0, 9, 0, "QUALITY_DECISION"],
+    [13, 7, 0, 9, 1, "STRING"],
+    [14, 9, 0, 10, 0, "STATE_UPDATE_PROPOSAL"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
