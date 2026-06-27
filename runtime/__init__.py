@@ -69,6 +69,9 @@ from .memory_curator_tool_profile import (
     create_memory_curator_tool_registry,
 )
 
+# P-FirstTurn: First Turn Execution pipeline
+from .first_turn_pipeline import FirstTurnPipeline
+
 # Card Import pipeline
 from .card_source_loader import load_card_source, CardSourceLoadError
 from .card_payload_parser import CardPayloadParser
@@ -146,6 +149,8 @@ __all__ = [
     "SuggestionConflictGovernor",
     "DirectorSuggestionResolutionRuntime", "DirectorResolution",
     "AgentIntegrationTrace",
+    # P-FirstTurn
+    "FirstTurnPipeline",
     # Card Import
     "load_card_source", "CardSourceLoadError",
     "CardPayloadParser",

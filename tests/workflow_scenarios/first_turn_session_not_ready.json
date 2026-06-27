@@ -1,0 +1,43 @@
+{
+  "scenario_id": "first_turn_session_not_ready",
+  "scenario_name": "First Turn Session Not Ready",
+  "description": "First turn attempted on non-ready session. Must be rejected with zero side effects.",
+  "suite": "first-turn",
+  "requires_comfyui": false,
+  "input_fixtures": {
+    "session_id": "s_first_003",
+    "logical_card_id": "card_village_001",
+    "card_version": 1,
+    "source_hash": "abc123def456",
+    "player_input": "你好",
+    "session_status": "pending"
+  },
+  "node_expectations": [
+    {
+      "node_class": "AWPV2FirstTurnRequest",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2FirstTurnExecution",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "violation"
+    }
+  ],
+  "side_effect_expectations": [
+    {
+      "store": "card_state",
+      "operation": "commit",
+      "must_be_zero": true,
+      "description": "Non-ready session must not commit CardState"
+    },
+    {
+      "store": "turn_record",
+      "operation": "save",
+      "must_be_zero": true,
+      "description": "Non-ready session must not save TurnRecord"
+    }
+  ]
+}

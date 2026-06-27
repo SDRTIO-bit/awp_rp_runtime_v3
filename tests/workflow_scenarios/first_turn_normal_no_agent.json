@@ -1,0 +1,80 @@
+{
+  "scenario_id": "first_turn_normal_no_agent",
+  "scenario_name": "First Turn Normal - No Agent",
+  "description": "Normal first turn with low-risk input. All dynamic agents are not_required. Quality accepts.",
+  "suite": "first-turn",
+  "requires_comfyui": false,
+  "input_fixtures": {
+    "session_id": "s_first_001",
+    "logical_card_id": "card_village_001",
+    "card_version": 1,
+    "source_hash": "abc123def456",
+    "player_input": "你好，我想了解一下桃花村",
+    "greeting_id": "g0",
+    "greeting_content": "欢迎来到桃花村，这里是一个宁静的小村庄。"
+  },
+  "node_expectations": [
+    {
+      "node_class": "AWPV2FirstTurnRequest",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2SessionReadyValidator",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2OpeningContextLoader",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2SessionBoundWorldbookRetriever",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2FirstTurnContextAssembler",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2FirstTurnExecution",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    },
+    {
+      "node_class": "AWPV2FirstTurnReceipt",
+      "execution_status": "executed",
+      "business_disposition": "produced_result",
+      "semantic_health": "passed"
+    }
+  ],
+  "side_effect_expectations": [
+    {
+      "store": "turn_record",
+      "operation": "save",
+      "must_be_zero": false,
+      "description": "First turn must produce a TurnRecord"
+    },
+    {
+      "store": "active_memory",
+      "operation": "upsert",
+      "must_be_zero": true,
+      "description": "First turn should not write active memory (D6 noop)"
+    },
+    {
+      "store": "rag_memory",
+      "operation": "save",
+      "must_be_zero": true,
+      "description": "First turn should not write RAG memory (D6 noop)"
+    }
+  ]
+}

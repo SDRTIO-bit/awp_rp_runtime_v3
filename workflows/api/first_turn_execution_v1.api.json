@@ -1,0 +1,59 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "AWPV2CardDefinitionFixtureLoad",
+      "inputs": {
+        "fixture_path": "test_fixtures/ready_card_definition.json"
+      }
+    },
+    "2": {
+      "class_type": "AWPV2CardImportAndBootstrap",
+      "inputs": {
+        "source_path": "test_fixtures/ready_card_definition.json",
+        "session_id": "{{session_id}}",
+        "greeting_id": "g0",
+        "request_id": "{{request_id}}_bootstrap",
+        "run_id": "{{run_id}}_bootstrap",
+        "workflow_run_id": "{{workflow_run_id}}",
+        "trace_id": "{{trace_id}}",
+        "initial_state_seed": "{}"
+      }
+    },
+    "3": {
+      "class_type": "AWPV2CardStateInit",
+      "inputs": {
+        "card_id": "{{logical_card_id}}",
+        "session_id": "{{session_id}}",
+        "greeting": ""
+      }
+    },
+    "10": {
+      "class_type": "AWPV2FirstTurnExecution",
+      "inputs": {
+        "session_id": "{{session_id}}",
+        "player_input": "{{player_input}}",
+        "logical_card_id": "{{logical_card_id}}",
+        "card_version": 1,
+        "source_hash": "{{source_hash}}",
+        "card_state": ["3", 0],
+        "card_session_binding": ["2", 0],
+        "opening_record": ["2", 1],
+        "worldbook_binding": ["2", 2],
+        "card_definition": ["1", 0],
+        "workflow_run_id": "{{workflow_run_id}}",
+        "trace_id": "{{trace_id}}",
+        "turn_id": "{{turn_id}}",
+        "attempt_id": "{{attempt_id}}",
+        "request_id": "{{request_id}}",
+        "run_id": "{{run_id}}"
+      }
+    },
+    "20": {
+      "class_type": "AWPV2TraceDisplay",
+      "inputs": {
+        "data": ["10", 2],
+        "label": "First Turn Diagnostics"
+      }
+    }
+  }
+}
