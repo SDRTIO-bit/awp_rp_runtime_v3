@@ -137,6 +137,36 @@ BUILTIN_ROLES: dict[str, AgentRoleSpec] = {
         can_write_memory=False,
         can_generate_final_text=False,
     ),
+    # D4: Emotion/Relationship Agent
+    "emotion-relationship": AgentRoleSpec(
+        role_id="emotion-relationship",
+        description="Emotion/Relationship Agent — interprets character emotions and relationship dynamics from existing facts",
+        allowed_suggestion_kinds=[
+            SuggestionKind.ER_TRUST_TENSION,
+            SuggestionKind.ER_GUARDEDNESS,
+            SuggestionKind.ER_EMOTIONAL_RESIDUE,
+            SuggestionKind.ER_UNRESOLVED_HURT,
+            SuggestionKind.ER_PROMISE_PRESSURE,
+            SuggestionKind.ER_MISUNDERSTANDING_SIGNAL,
+            SuggestionKind.ER_JEALOUSY_RISK,
+            SuggestionKind.ER_AFFECTION_RESTRAINT,
+            SuggestionKind.ER_CONFLICT_DEESCALATION,
+            SuggestionKind.ER_RELATIONSHIP_BOUNDARY,
+            SuggestionKind.ER_SUBTEXT_OPPORTUNITY,
+            SuggestionKind.ER_WARNING,
+        ],
+        default_budget_tokens=1000,
+        max_budget_tokens=2000,
+        allowed_tools=[
+            "accepted_turn_lookup", "active_memory_lookup",
+            "rag_memory_lookup", "relationship_context_lookup",
+            "timeline_lookup", "worldbook_lookup", "entity_alias_lookup",
+        ],
+        can_delegate=False,
+        can_write_state=False,
+        can_write_memory=False,
+        can_generate_final_text=False,
+    ),
 }
 
 

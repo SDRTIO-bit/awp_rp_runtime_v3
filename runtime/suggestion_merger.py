@@ -63,6 +63,19 @@ KIND_WEIGHTS: dict[SuggestionKind, float] = {
     SuggestionKind.FORESHADOWING_ECHO: 0.62,
     SuggestionKind.PACE_VARIATION: 0.58,
     SuggestionKind.OPPORTUNITY_WARNING: 0.85,
+    # D4: Emotion/Relationship kinds
+    SuggestionKind.ER_TRUST_TENSION: 0.80,
+    SuggestionKind.ER_GUARDEDNESS: 0.76,
+    SuggestionKind.ER_EMOTIONAL_RESIDUE: 0.74,
+    SuggestionKind.ER_UNRESOLVED_HURT: 0.82,
+    SuggestionKind.ER_PROMISE_PRESSURE: 0.78,
+    SuggestionKind.ER_MISUNDERSTANDING_SIGNAL: 0.77,
+    SuggestionKind.ER_JEALOUSY_RISK: 0.75,
+    SuggestionKind.ER_AFFECTION_RESTRAINT: 0.70,
+    SuggestionKind.ER_CONFLICT_DEESCALATION: 0.73,
+    SuggestionKind.ER_RELATIONSHIP_BOUNDARY: 0.84,
+    SuggestionKind.ER_SUBTEXT_OPPORTUNITY: 0.68,
+    SuggestionKind.ER_WARNING: 0.85,
 }
 
 MAX_ADOPTED = 15

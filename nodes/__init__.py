@@ -57,6 +57,15 @@ from .opportunity_ranker_node import AWPV2OpportunityRanker
 from .opportunity_result_node import AWPV2OpportunityResult
 from .opportunity_diagnostics_node import AWPV2OpportunityDiagnostics
 
+# D3: World-Life nodes
+from .world_life_trigger_node import AWPV2WorldLifeTrigger
+from .world_life_request_node import AWPV2WorldLifeRequest
+from .world_life_agent_node import AWPV2WorldLifeAgent
+from .world_life_validator_node import AWPV2WorldLifeValidator
+from .world_life_ranker_node import AWPV2WorldLifeRanker
+from .world_life_result_node import AWPV2WorldLifeResult
+from .world_life_diagnostics_node import AWPV2WorldLifeDiagnostics
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -110,6 +119,14 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2OpportunityRanker": AWPV2OpportunityRanker,
     "AWPV2OpportunityResult": AWPV2OpportunityResult,
     "AWPV2OpportunityDiagnostics": AWPV2OpportunityDiagnostics,
+    # D3: World-Life
+    "AWPV2WorldLifeTrigger": AWPV2WorldLifeTrigger,
+    "AWPV2WorldLifeRequest": AWPV2WorldLifeRequest,
+    "AWPV2WorldLifeAgent": AWPV2WorldLifeAgent,
+    "AWPV2WorldLifeValidator": AWPV2WorldLifeValidator,
+    "AWPV2WorldLifeRanker": AWPV2WorldLifeRanker,
+    "AWPV2WorldLifeResult": AWPV2WorldLifeResult,
+    "AWPV2WorldLifeDiagnostics": AWPV2WorldLifeDiagnostics,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -165,6 +182,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2OpportunityRanker": "AWP V2 戏剧机会排序",
     "AWPV2OpportunityResult": "AWP V2 戏剧机会结果",
     "AWPV2OpportunityDiagnostics": "AWP V2 戏剧机会诊断",
+    # D3: World-Life
+    "AWPV2WorldLifeTrigger": "AWP V2 世界活性触发",
+    "AWPV2WorldLifeRequest": "AWP V2 世界活性请求",
+    "AWPV2WorldLifeAgent": "AWP V2 世界活性Agent",
+    "AWPV2WorldLifeValidator": "AWP V2 世界活性验证",
+    "AWPV2WorldLifeRanker": "AWP V2 世界活性排序",
+    "AWPV2WorldLifeResult": "AWP V2 世界活性结果",
+    "AWPV2WorldLifeDiagnostics": "AWP V2 世界活性诊断",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

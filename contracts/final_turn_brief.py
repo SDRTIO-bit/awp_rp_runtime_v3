@@ -74,6 +74,18 @@ class FinalTurnBrief:
     opportunity_warnings: list[str] = field(default_factory=list)
     opportunity_evidence_refs: list[str] = field(default_factory=list)
 
+    # D3: World-Life findings
+    accepted_world_life_candidates: list[dict[str, Any]] = field(default_factory=list)
+    rejected_world_life_candidates: list[dict[str, Any]] = field(default_factory=list)
+    world_life_warnings: list[str] = field(default_factory=list)
+    world_life_evidence_refs: list[str] = field(default_factory=list)
+
+    # D4: Emotion/Relationship findings
+    accepted_relationship_findings: list[str] = field(default_factory=list)
+    rejected_relationship_findings: list[dict[str, Any]] = field(default_factory=list)
+    relationship_warnings: list[str] = field(default_factory=list)
+    relationship_evidence_refs: list[str] = field(default_factory=list)
+
     # Timestamp
     created_at: str = ""
 
@@ -111,6 +123,16 @@ class FinalTurnBrief:
             "rejected_opportunities": self.rejected_opportunities,
             "opportunity_warnings": self.opportunity_warnings,
             "opportunity_evidence_refs": self.opportunity_evidence_refs,
+            # D3
+            "accepted_world_life_candidates": self.accepted_world_life_candidates,
+            "rejected_world_life_candidates": self.rejected_world_life_candidates,
+            "world_life_warnings": self.world_life_warnings,
+            "world_life_evidence_refs": self.world_life_evidence_refs,
+            # D4
+            "accepted_relationship_findings": self.accepted_relationship_findings,
+            "rejected_relationship_findings": self.rejected_relationship_findings,
+            "relationship_warnings": self.relationship_warnings,
+            "relationship_evidence_refs": self.relationship_evidence_refs,
             "created_at": self.created_at,
         }
 
@@ -149,5 +171,15 @@ class FinalTurnBrief:
             rejected_opportunities=data.get("rejected_opportunities", []),
             opportunity_warnings=data.get("opportunity_warnings", []),
             opportunity_evidence_refs=data.get("opportunity_evidence_refs", []),
+            # D3
+            accepted_world_life_candidates=data.get("accepted_world_life_candidates", []),
+            rejected_world_life_candidates=data.get("rejected_world_life_candidates", []),
+            world_life_warnings=data.get("world_life_warnings", []),
+            world_life_evidence_refs=data.get("world_life_evidence_refs", []),
+            # D4
+            accepted_relationship_findings=data.get("accepted_relationship_findings", []),
+            rejected_relationship_findings=data.get("rejected_relationship_findings", []),
+            relationship_warnings=data.get("relationship_warnings", []),
+            relationship_evidence_refs=data.get("relationship_evidence_refs", []),
             created_at=data.get("created_at", ""),
         )

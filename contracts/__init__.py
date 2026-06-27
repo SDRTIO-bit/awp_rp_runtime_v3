@@ -53,6 +53,15 @@ from .history_recall_result import HistoryRecallResult, HistoryRecallStatus
 from .history_recall_suggestion import HistoryRecallSuggestion, HistorySuggestionKind
 from .history_recall_diagnostics import HistoryRecallDiagnostics
 
+# D3: World-Life contracts
+from .world_life_request import WorldLifeRequest
+from .world_life_candidate import WorldLifeCandidate, WorldLifeKind, WorldLayer, VisibilityMode
+from .world_life_evidence import WorldLifeEvidence
+from .world_life_result import WorldLifeResult, WorldLifeStatus, RejectedWorldLifeCandidate
+from .world_life_risk import WorldLifeRisk, WorldLifeRiskLevel
+from .world_life_suggestion import WorldLifeSuggestion, WorldLifeSuggestionKind
+from .world_life_trigger_diagnostics import WorldLifeTriggerDiagnostics
+
 __all__ = [
     "CardState", "VariableEntry", "EventFlag", "SceneState",
     "CardStatePatch", "CardStatePatchOperation", "PatchOpType",

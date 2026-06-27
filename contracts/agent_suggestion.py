@@ -42,6 +42,30 @@ class SuggestionKind(str, Enum):
     FORESHADOWING_ECHO = "foreshadowing_echo"
     PACE_VARIATION = "pace_variation"
     OPPORTUNITY_WARNING = "opportunity_warning"
+    # D3: World-Life kinds
+    ENVIRONMENTAL_PRESSURE = "environmental_pressure"
+    WEATHER_OR_TIME_ATMOSPHERE = "weather_or_time_atmosphere"
+    NPC_SIDE_TENSION = "npc_side_tension"
+    EVENT_STAGE_ECHO = "event_stage_echo"
+    LOCATION_LIFE_DETAIL = "location_life_detail"
+    SOCIAL_BACKGROUND_SIGNAL = "social_background_signal"
+    WORLDBOOK_RESONANCE = "worldbook_resonance"
+    OFFSCREEN_CONSEQUENCE_HINT = "offscreen_consequence_hint"
+    AMBIENT_RUMOR_SIGNAL = "ambient_rumor_signal"
+    WORLD_LIFE_WARNING = "world_life_warning"
+    # D4: Emotion/Relationship kinds
+    ER_TRUST_TENSION = "er_trust_tension"
+    ER_GUARDEDNESS = "er_guardedness"
+    ER_EMOTIONAL_RESIDUE = "er_emotional_residue"
+    ER_UNRESOLVED_HURT = "er_unresolved_hurt"
+    ER_PROMISE_PRESSURE = "er_promise_pressure"
+    ER_MISUNDERSTANDING_SIGNAL = "er_misunderstanding_signal"
+    ER_JEALOUSY_RISK = "er_jealousy_risk"
+    ER_AFFECTION_RESTRAINT = "er_affection_restraint"
+    ER_CONFLICT_DEESCALATION = "er_conflict_deescalation"
+    ER_RELATIONSHIP_BOUNDARY = "er_relationship_boundary"
+    ER_SUBTEXT_OPPORTUNITY = "er_subtext_opportunity"
+    ER_WARNING = "er_warning"
 
 # Backward compat alias
 SuggestionType = SuggestionKind

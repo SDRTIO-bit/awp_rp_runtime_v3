@@ -42,7 +42,13 @@ class TestNodeRegistration:
             "AWPV2OpportunityRanker", "AWPV2OpportunityResult",
             "AWPV2OpportunityDiagnostics",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected
+        d3_expected = {
+            "AWPV2WorldLifeTrigger", "AWPV2WorldLifeRequest",
+            "AWPV2WorldLifeAgent", "AWPV2WorldLifeValidator",
+            "AWPV2WorldLifeRanker", "AWPV2WorldLifeResult",
+            "AWPV2WorldLifeDiagnostics",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 

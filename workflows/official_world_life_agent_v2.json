@@ -1,0 +1,290 @@
+{
+  "last_node_id": 18,
+  "last_link_id": 17,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "AWPV2RoundSnapshot",
+      "pos": [100, 100],
+      "size": [200, 80],
+      "title": "回合快照",
+      "inputs": [],
+      "outputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "links": [1]}
+      ]
+    },
+    {
+      "id": 2,
+      "type": "AWPV2DirectorPlan",
+      "pos": [100, 250],
+      "size": [200, 80],
+      "title": "Director规划",
+      "inputs": [],
+      "outputs": [
+        {"name": "director_plan", "type": "DIRECTOR_PLAN", "links": [2]}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "AWPV2HistoryRecallTrigger",
+      "pos": [350, 100],
+      "size": [200, 80],
+      "title": "历史回查触发",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "director_plan", "type": "DIRECTOR_PLAN", "link": 2}
+      ],
+      "outputs": [
+        {"name": "trigger_result", "type": "HISTORY_TRIGGER_RESULT", "links": [3]}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "AWPV2HistoryRecallAgent",
+      "pos": [600, 100],
+      "size": [200, 80],
+      "title": "历史回查Agent",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "trigger_result", "type": "HISTORY_TRIGGER_RESULT", "link": 3}
+      ],
+      "outputs": [
+        {"name": "history_recall_result", "type": "HISTORY_RECALL_RESULT", "links": [4, 5]}
+      ]
+    },
+    {
+      "id": 5,
+      "type": "AWPV2OpportunityTrigger",
+      "pos": [350, 300],
+      "size": [200, 100],
+      "title": "戏剧机会触发",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "director_plan", "type": "DIRECTOR_PLAN", "link": 2},
+        {"name": "history_recall_result", "type": "HISTORY_RECALL_RESULT", "link": 4, "optional": true}
+      ],
+      "outputs": [
+        {"name": "trigger_result", "type": "OPPORTUNITY_TRIGGER_RESULT", "links": [6]}
+      ]
+    },
+    {
+      "id": 6,
+      "type": "AWPV2OpportunityAgent",
+      "pos": [600, 300],
+      "size": [200, 100],
+      "title": "戏剧机会Agent",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "trigger_result", "type": "OPPORTUNITY_TRIGGER_RESULT", "link": 6}
+      ],
+      "outputs": [
+        {"name": "opportunity_result", "type": "OPPORTUNITY_RESULT", "links": [7]}
+      ]
+    },
+    {
+      "id": 7,
+      "type": "AWPV2WorldLifeTrigger",
+      "pos": [350, 500],
+      "size": [200, 120],
+      "title": "世界活性触发",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "director_plan", "type": "DIRECTOR_PLAN", "link": 2},
+        {"name": "history_recall_result", "type": "HISTORY_RECALL_RESULT", "link": 4, "optional": true},
+        {"name": "opportunity_result", "type": "OPPORTUNITY_RESULT", "link": 7, "optional": true}
+      ],
+      "outputs": [
+        {"name": "trigger_result", "type": "WORLD_LIFE_TRIGGER_RESULT", "links": [8]}
+      ]
+    },
+    {
+      "id": 8,
+      "type": "AWPV2WorldLifeAgent",
+      "pos": [600, 500],
+      "size": [200, 100],
+      "title": "世界活性Agent",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "trigger_result", "type": "WORLD_LIFE_TRIGGER_RESULT", "link": 8}
+      ],
+      "outputs": [
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "links": [9]}
+      ]
+    },
+    {
+      "id": 9,
+      "type": "AWPV2WorldLifeValidator",
+      "pos": [850, 500],
+      "size": [200, 100],
+      "title": "世界活性验证",
+      "inputs": [
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "link": 9},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1}
+      ],
+      "outputs": [
+        {"name": "validated_result", "type": "WORLD_LIFE_RESULT", "links": [10]}
+      ]
+    },
+    {
+      "id": 10,
+      "type": "AWPV2WorldLifeRanker",
+      "pos": [1100, 500],
+      "size": [200, 80],
+      "title": "世界活性排序",
+      "inputs": [
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "link": 10}
+      ],
+      "outputs": [
+        {"name": "ranked_result", "type": "WORLD_LIFE_RESULT", "links": [11]}
+      ]
+    },
+    {
+      "id": 11,
+      "type": "AWPV2SuggestionMerge",
+      "pos": [1350, 200],
+      "size": [200, 120],
+      "title": "建议合并",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "history_recall_result", "type": "HISTORY_RECALL_RESULT", "link": 5},
+        {"name": "opportunity_result", "type": "OPPORTUNITY_RESULT", "link": 7},
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "link": 11}
+      ],
+      "outputs": [
+        {"name": "merge_result", "type": "SUGGESTION_MERGE_RESULT", "links": [12]}
+      ]
+    },
+    {
+      "id": 12,
+      "type": "AWPV2FinalTurnBrief",
+      "pos": [1600, 200],
+      "size": [200, 80],
+      "title": "最终回合简报",
+      "inputs": [
+        {"name": "merge_result", "type": "SUGGESTION_MERGE_RESULT", "link": 12}
+      ],
+      "outputs": [
+        {"name": "final_brief", "type": "FINAL_TURN_BRIEF", "links": [13]}
+      ]
+    },
+    {
+      "id": 13,
+      "type": "AWPV2WriterInputBundleV2",
+      "pos": [1850, 200],
+      "size": [200, 80],
+      "title": "Writer输入包",
+      "inputs": [
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "link": 1},
+        {"name": "final_brief", "type": "FINAL_TURN_BRIEF", "link": 13}
+      ],
+      "outputs": [
+        {"name": "bundle", "type": "WRITER_INPUT_BUNDLE", "links": [14]}
+      ]
+    },
+    {
+      "id": 14,
+      "type": "AWPV2WriterOutput",
+      "pos": [2100, 200],
+      "size": [200, 80],
+      "title": "Writer输出",
+      "inputs": [
+        {"name": "bundle", "type": "WRITER_INPUT_BUNDLE", "link": 14}
+      ],
+      "outputs": [
+        {"name": "draft", "type": "WRITER_DRAFT", "links": [15]}
+      ]
+    },
+    {
+      "id": 15,
+      "type": "AWPV2QualityPipeline",
+      "pos": [2350, 200],
+      "size": [200, 80],
+      "title": "质量检查",
+      "inputs": [
+        {"name": "draft", "type": "WRITER_DRAFT", "link": 15}
+      ],
+      "outputs": [
+        {"name": "decision", "type": "QUALITY_DECISION", "links": [16]}
+      ]
+    },
+    {
+      "id": 16,
+      "type": "AWPV2WorldLifeResult",
+      "pos": [1350, 600],
+      "size": [200, 80],
+      "title": "世界活性结果",
+      "inputs": [
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "link": 11}
+      ],
+      "outputs": [
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "links": []},
+        {"name": "status", "type": "STRING", "links": []},
+        {"name": "summary", "type": "STRING", "links": []}
+      ]
+    },
+    {
+      "id": 17,
+      "type": "AWPV2WorldLifeDiagnostics",
+      "pos": [1350, 750],
+      "size": [200, 80],
+      "title": "世界活性诊断",
+      "inputs": [
+        {"name": "world_life_result", "type": "WORLD_LIFE_RESULT", "link": 11}
+      ],
+      "outputs": [
+        {"name": "diagnostics", "type": "WORLD_LIFE_DIAGNOSTICS", "links": []},
+        {"name": "diagnostics_text", "type": "STRING", "links": []}
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "ROUND_SNAPSHOT"],
+    [2, 2, 0, 3, 1, "DIRECTOR_PLAN"],
+    [3, 3, 0, 4, 1, "HISTORY_TRIGGER_RESULT"],
+    [4, 4, 0, 5, 2, "HISTORY_RECALL_RESULT"],
+    [5, 4, 0, 11, 1, "HISTORY_RECALL_RESULT"],
+    [6, 5, 0, 6, 1, "OPPORTUNITY_TRIGGER_RESULT"],
+    [7, 6, 0, 7, 3, "OPPORTUNITY_RESULT"],
+    [8, 7, 0, 8, 1, "WORLD_LIFE_TRIGGER_RESULT"],
+    [9, 8, 0, 9, 0, "WORLD_LIFE_RESULT"],
+    [10, 9, 0, 10, 0, "WORLD_LIFE_RESULT"],
+    [11, 10, 0, 11, 3, "WORLD_LIFE_RESULT"],
+    [12, 11, 0, 12, 0, "SUGGESTION_MERGE_RESULT"],
+    [13, 12, 0, 13, 1, "FINAL_TURN_BRIEF"],
+    [14, 13, 0, 14, 0, "WRITER_INPUT_BUNDLE"],
+    [15, 14, 0, 15, 0, "WRITER_DRAFT"],
+    [16, 10, 0, 16, 0, "WORLD_LIFE_RESULT"],
+    [17, 10, 0, 17, 0, "WORLD_LIFE_RESULT"]
+  ],
+  "groups": [
+    {
+      "title": "Memory Recall → RoundSnapshot → DirectorPlan",
+      "bounding": [50, 50, 300, 300],
+      "color": "#3f789e"
+    },
+    {
+      "title": "History Recall Agent Pipeline",
+      "bounding": [300, 50, 550, 150],
+      "color": "#9e3f78"
+    },
+    {
+      "title": "Opportunity Agent Pipeline",
+      "bounding": [300, 250, 750, 200],
+      "color": "#a83232"
+    },
+    {
+      "title": "World-Life Agent Pipeline",
+      "bounding": [300, 450, 1050, 200],
+      "color": "#327832"
+    },
+    {
+      "title": "Merge → Brief → Writer → Quality",
+      "bounding": [1300, 150, 1100, 150],
+      "color": "#7832a8"
+    }
+  ],
+  "config": {},
+  "extra": {
+    "info": "AWP V2 Official World-Life Agent Workflow v1.0"
+  }
+}
