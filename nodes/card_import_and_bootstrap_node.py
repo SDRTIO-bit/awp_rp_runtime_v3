@@ -34,8 +34,8 @@ class AWPV2CardImportAndBootstrap:
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
-        # Never cache — always re-execute
-        return float("nan")
+        import time
+        return time.time()
 
     def execute(
         self,
