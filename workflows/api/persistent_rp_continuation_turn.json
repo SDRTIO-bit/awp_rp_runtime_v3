@@ -1,0 +1,38 @@
+{
+  "_comment": "=== 持久化 RP 管线 — 第三步：续写回合 === 第 2 回合起使用。仅需 session_id + player_input，所有上下文从 SQLite 恢复。",
+  "_usage": "修改 session_id 和 player_input。可无限复用，turn_id 自动去重。",
+  "_pipeline": "SessionRuntimeLoad → L1/L2/L3 Recall → RoundSnapshot → Director → D1-D5 → Writer → Quality → Commit → D6",
+  "1": {
+    "class_type": "AWPV2PersistentContinuationTurn",
+    "inputs": {
+      "session_id": "my-session-001",
+      "player_input": "继续对话。",
+      "workflow_run_id": "",
+      "trace_id": "",
+      "turn_id": "",
+      "attempt_id": "",
+      "request_id": "",
+      "run_id": "",
+      "director_profile_id": "deepseek-v4-flash-writer",
+      "writer_profile_id": "deepseek-v4-pro-director",
+      "writer_preset_path": "kedai_heavy_v1"
+    }
+  },
+  "2": {
+    "class_type": "AWPV2TurnResultProbe",
+    "inputs": {
+      "receipt": ["1", 0],
+      "diagnostics": ["1", 2],
+      "turn_record": ["1", 4],
+      "prompt_id": "",
+      "turn_kind": "continuation"
+    }
+  },
+  "3": {
+    "class_type": "AWPV2TraceDisplay",
+    "inputs": {
+      "data": ["1", 2],
+      "label": "Continuation Turn — Diagnostics (L1/L2/L3 recall, Agent triggers, Quality, D6)"
+    }
+  }
+}
