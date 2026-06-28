@@ -26,11 +26,11 @@ class AWPV2TurnResultProbe:
     def INPUT_TYPES(cls) -> dict[str, Any]:
         return {
             "required": {
-                "receipt": (["FIRST_TURN_RECEIPT", "JSON"],),
+                "receipt": ("JSON",),
             },
             "optional": {
-                "diagnostics": (["FIRST_TURN_DIAGNOSTICS", "JSON"],),
-                "turn_record": (["TURN_RECORD", "JSON"],),
+                "diagnostics": ("JSON",),
+                "turn_record": ("JSON",),
                 "prompt_id": ("STRING", {"default": ""}),
                 "turn_kind": ("STRING", {"default": "first"}),
             },

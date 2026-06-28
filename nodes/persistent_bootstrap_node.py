@@ -84,6 +84,48 @@ class _SqliteCardDefinitionStore(CardDefinitionStore):
             return None
         return CardDefinition.from_dict(json.loads(row["definition_json"]))
 
+    def get_latest(self, logical_card_id: str) -> CardDefinition | None:
+        import json
+        conn = self._db.connect()
+        row = conn.execute(
+            "SELECT definition_json FROM card_definitions WHERE card_id=? "
+            "ORDER BY card_version DESC LIMIT 1",
+            (logical_card_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return CardDefinition.from_dict(json.loads(row["definition_json"]))
+
+    def list_all(self, status: str = "") -> list:
+        import json
+        conn = self._db.connect()
+        if status:
+            rows = conn.execute(
+                "SELECT definition_json FROM card_definitions WHERE status=?",
+                (status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT definition_json FROM card_definitions",
+            ).fetchall()
+        return [CardDefinition.from_dict(json.loads(r["definition_json"])) for r in rows]
+
+    def update_status(self, logical_card_id: str, card_version: int, status: str) -> None:
+        conn = self._db.connect()
+        conn.execute(
+            "UPDATE card_definitions SET status=? WHERE card_id=? AND card_version=?",
+            (status, logical_card_id, card_version),
+        )
+        conn.commit()
+
+    def get_next_version(self, logical_card_id: str) -> int:
+        conn = self._db.connect()
+        row = conn.execute(
+            "SELECT MAX(card_version) as max_ver FROM card_definitions WHERE card_id=?",
+            (logical_card_id,),
+        ).fetchone()
+        return (row["max_ver"] or 0) + 1
+
 
 class AWPV2PersistentBootstrap:
     """Import card and bootstrap session using RuntimeStoreFactory + SQLite.
