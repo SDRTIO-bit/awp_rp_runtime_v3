@@ -168,6 +168,76 @@ Writer 使用标准文本生成。
 
 ---
 
+## 9.1 LLM 连接配置
+
+### 环境变量
+
+```powershell
+# 必须：DeepSeek API Key
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxx"
+
+# 可选：端点选择（默认 Anthropic）
+$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic"  # Anthropic 端点（推荐）
+# $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"          # OpenAI 端点
+
+# 可选：模型覆盖（默认 deepseek-v4-pro / deepseek-v4-flash）
+$env:AWP_DIRECTOR_MODEL = "deepseek-v4-pro"
+$env:AWP_WRITER_MODEL = "deepseek-v4-flash"
+```
+
+### 端点对比
+
+| 端点 | Base URL | SDK | 特点 |
+|------|----------|-----|------|
+| Anthropic | `https://api.deepseek.com/anthropic` | anthropic | tool_use 结构化输出，ThinkingBlock 分离，更稳定 |
+| OpenAI | `https://api.deepseek.com` | openai | function calling，兼容性更广 |
+
+适配器根据 `DEEPSEEK_BASE_URL` 自动选择 SDK，无需改代码。
+
+### 模型说明
+
+| 模型 | 用途 | 说明 |
+|------|------|------|
+| `deepseek-v4-pro` | Director | 推理能力强，用于叙事规划 |
+| `deepseek-v4-flash` | Writer | 速度快，用于文本生成 |
+| `deepseek-chat` | 兼容 | 2026/07/24 弃用，等同 deepseek-v4-flash |
+
+### ComfyUI 节点中使用
+
+持久化节点通过 `director_profile_id` / `writer_profile_id` 选择模型：
+
+```
+fake-director / fake-writer          → 测试用，不调用 API
+deepseek-v4-pro-director             → 真实 DeepSeek Director
+deepseek-v4-flash-writer             → 真实 DeepSeek Writer
+```
+
+未知 profileId 会 fail closed（拒绝执行）。
+
+### 快速验证
+
+```powershell
+# 1. 设置 API Key
+$env:DEEPSEEK_API_KEY = "sk-xxx"
+
+# 2. 测试连接
+python -c "
+import os, anthropic
+client = anthropic.Anthropic(
+    api_key=os.environ['DEEPSEEK_API_KEY'],
+    base_url='https://api.deepseek.com/anthropic',
+)
+msg = client.messages.create(
+    model='deepseek-v4-flash', max_tokens=50,
+    messages=[{'role': 'user', 'content': 'Say hello'}],
+)
+for b in msg.content:
+    if hasattr(b, 'text'): print(b.text)
+"
+```
+
+---
+
 ## 10. D1～D6 Agent 总览
 
 | Agent | 代号 | 职责 | 运行位置 |
