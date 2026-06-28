@@ -92,6 +92,7 @@ class AWPV2PersistentContinuationTurn:
                 "run_id": ("STRING", {"default": ""}),
                 "director_profile_id": ("STRING", {"default": "fake-director"}),
                 "writer_profile_id": ("STRING", {"default": "fake-writer"}),
+                "writer_preset_path": ("STRING", {"default": ""}),
             },
         }
 
@@ -123,6 +124,7 @@ class AWPV2PersistentContinuationTurn:
         run_id: str = "",
         director_profile_id: str = "fake-director",
         writer_profile_id: str = "fake-writer",
+        writer_preset_path: str = "",
     ) -> tuple:
         now = _now()
         seed = f"{session_id}:{now}:{run_id}"
@@ -282,6 +284,7 @@ class AWPV2PersistentContinuationTurn:
             director_profile_id=director_profile_id,
             writer_profile_id=writer_profile_id,
             turn_kind="continuation",
+            writer_preset_path=writer_preset_path,
         )
 
 

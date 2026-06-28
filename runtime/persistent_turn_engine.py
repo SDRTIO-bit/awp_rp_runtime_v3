@@ -101,6 +101,129 @@ class PersistentTurnEngine:
         self._registry = registry
         self._profile = profile
 
+    def _run_sub_agent_triggers(
+        self,
+        snapshot: Any,
+        director_plan: Any,
+        binding: Any,
+        turn_id: str,
+        trace_id: str,
+    ) -> tuple[list, list[str]]:
+        """Evaluate D1-D5 trigger policies and collect suggestions.
+
+        Runs deterministic trigger rules (no LLM calls). Returns
+        (agent_suggestions, triggered_agent_names).
+        """
+        import uuid as _uuid
+        from ..contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+
+        suggestions: list = []
+        triggered: list[str] = []
+
+        # ── D1: History Recall ─────────────────────────────────────────
+        try:
+            from ..runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy
+            hr_trigger = HistoryRecallTriggerPolicy().evaluate(snapshot, director_plan)
+            if hr_trigger.should_trigger:
+                triggered.append("d1_history_recall")
+                s = AgentSuggestion(
+                    suggestion_id=f"d1_{_uuid.uuid4().hex[:8]}",
+                    trace_id=trace_id,
+                    task_run_id=f"d1_{turn_id}",
+                    role="history_recall",
+                    kind=SuggestionKind.HISTORICAL_CONFLICT if hr_trigger.risk_level.value in ("high",) else SuggestionKind.IDENTITY_CLARIFICATION,
+                    priority=0.8,
+                    confidence=0.7,
+                    summary=f"[D1-History] {', '.join(hr_trigger.trigger_reasons[:3])}",
+                    recommendations=hr_trigger.suggested_recall_kinds,
+                    risk_flags=[hr_trigger.risk_level.value],
+                )
+                suggestions.append(s)
+        except ImportError:
+            pass
+
+        # ── D2: Opportunity ───────────────────────────────────────────
+        try:
+            from ..runtime.opportunity_trigger_policy import OpportunityTriggerPolicy
+            op_trigger = OpportunityTriggerPolicy().evaluate(snapshot, director_plan)
+            if op_trigger.should_trigger:
+                triggered.append("d2_opportunity")
+                s = AgentSuggestion(
+                    suggestion_id=f"d2_{_uuid.uuid4().hex[:8]}",
+                    trace_id=trace_id,
+                    task_run_id=f"d2_{turn_id}",
+                    role="opportunity",
+                    kind=SuggestionKind.NARRATIVE_OPPORTUNITY,
+                    priority=0.6,
+                    confidence=0.6,
+                    summary=f"[D2-Opportunity] {', '.join(op_trigger.trigger_reasons[:3])}",
+                )
+                suggestions.append(s)
+        except ImportError:
+            pass
+
+        # ── D3: World Life ────────────────────────────────────────────
+        try:
+            from ..runtime.world_life_trigger_policy import WorldLifeTriggerPolicy
+            wl_trigger = WorldLifeTriggerPolicy().evaluate(snapshot, director_plan)
+            if wl_trigger.should_trigger:
+                triggered.append("d3_world_life")
+                s = AgentSuggestion(
+                    suggestion_id=f"d3_{_uuid.uuid4().hex[:8]}",
+                    trace_id=trace_id,
+                    task_run_id=f"d3_{turn_id}",
+                    role="world_life",
+                    kind=SuggestionKind.WORLD_DETAIL,
+                    priority=0.5,
+                    confidence=0.5,
+                    summary=f"[D3-WorldLife] {', '.join(wl_trigger.trigger_reasons[:3])}",
+                )
+                suggestions.append(s)
+        except ImportError:
+            pass
+
+        # ── D4: Emotion Relationship ──────────────────────────────────
+        try:
+            from ..runtime.emotion_relationship_trigger_policy import EmotionRelationshipTriggerPolicy
+            er_trigger = EmotionRelationshipTriggerPolicy().evaluate(snapshot, director_plan)
+            if er_trigger.should_trigger:
+                triggered.append("d4_emotion_rel")
+                s = AgentSuggestion(
+                    suggestion_id=f"d4_{_uuid.uuid4().hex[:8]}",
+                    trace_id=trace_id,
+                    task_run_id=f"d4_{turn_id}",
+                    role="emotion_relationship",
+                    kind=SuggestionKind.RELATIONSHIP_SHIFT,
+                    priority=0.7,
+                    confidence=0.6,
+                    summary=f"[D4-Emotion] {', '.join(er_trigger.trigger_reasons[:3])}",
+                )
+                suggestions.append(s)
+        except ImportError:
+            pass
+
+        # ── D5: Continuity ────────────────────────────────────────────
+        try:
+            from ..runtime.continuity_trigger_policy import ContinuityTriggerPolicy
+            ct_trigger = ContinuityTriggerPolicy().evaluate(snapshot, director_plan)
+            if ct_trigger.should_trigger:
+                triggered.append("d5_continuity")
+                s = AgentSuggestion(
+                    suggestion_id=f"d5_{_uuid.uuid4().hex[:8]}",
+                    trace_id=trace_id,
+                    task_run_id=f"d5_{turn_id}",
+                    role="continuity",
+                    kind=SuggestionKind.CONTINUITY_FACT_CONSTRAINT,
+                    priority=0.9,
+                    confidence=0.8,
+                    summary=f"[D5-Continuity] {', '.join(ct_trigger.trigger_reasons[:3])}",
+                )
+                suggestions.append(s)
+        except ImportError:
+            pass
+
+        return suggestions, triggered
+
     def execute(
         self,
         *,
@@ -117,6 +240,7 @@ class PersistentTurnEngine:
         director_profile_id: str,
         writer_profile_id: str,
         turn_kind: str,
+        writer_preset_path: str = "",
     ) -> tuple[dict, dict, dict, dict, dict, dict]:
         import time
         now = _now()
@@ -223,9 +347,60 @@ class PersistentTurnEngine:
                                   "model": dir_outcome.model})
         diag.steps_completed.append("director")
 
+        # ── Sub-Agent Scheduling (D1-D5 trigger policies) ─────────────────
+        agent_suggestions: list = []
+        agent_triggers: list[str] = []
+        try:
+            agent_suggestions, agent_triggers = self._run_sub_agent_triggers(
+                snapshot, director_plan, binding, turn_id, trace_id
+            )
+        except Exception as e:
+            _add_trace_event(trace, "sub_agents", "trigger_policies",
+                             success=False, error=str(e)[:200])
+        if agent_triggers:
+            diag.steps_completed.append(f"agents:{','.join(agent_triggers)}")
+            _add_trace_event(trace, "sub_agents", "trigger_policies",
+                             success=True,
+                             details={"triggered": agent_triggers,
+                                      "suggestions": len(agent_suggestions)})
+
+        # Build merge result from agent suggestions
+        merge_result = None
+        if agent_suggestions:
+            from ..contracts.suggestion_merge_result import (
+                SuggestionMergeResult, MergeItem, MergeDecision,
+            )
+            merge_result = SuggestionMergeResult(
+                merge_id=_id("sm", turn_id),
+                trace_id=trace_id,
+                adopted=[MergeItem(suggestion_id=s.suggestion_id, task_id=s.task_id,
+                                   role=s.role, decision=MergeDecision.ADOPTED,
+                                   reason="trigger_policy", suggestion=s)
+                         for s in agent_suggestions],
+                ignored=[],
+                conflicts=[],
+                writer_guidance=[s.summary for s in agent_suggestions if s.summary],
+                state_proposal_hints=[],
+                memory_proposal_hints=[],
+            )
+
         # ── Writer ───────────────────────────────────────────────────────
         step_start = time.time()
-        wrt_adapter, wrt_outcome = WriterAdapterFactory.build(writer_profile_id)
+        # Load writer preset if specified
+        writer_preset_text = ""
+        if writer_preset_path:
+            try:
+                from ..presets.writer_preset_loader import load_writer_preset
+                preset_name = writer_preset_path
+                # Strip path prefix if given as full path
+                import os as _os
+                if _os.path.sep in preset_name:
+                    preset_name = _os.path.splitext(_os.path.basename(preset_name))[0]
+                writer_preset_text = load_writer_preset(preset_name)
+            except ImportError:
+                pass  # Preset loader not available — continue without preset
+
+        wrt_adapter, wrt_outcome = WriterAdapterFactory.build(writer_profile_id, writer_preset_text)
         diag.writer_provider_type = wrt_outcome.provider
         diag.writer_model = wrt_outcome.model
 
@@ -242,7 +417,7 @@ class PersistentTurnEngine:
             self._persist_trace(trace, diag)
             return self._failure_return(diag, trace, card_state, snapshot)
 
-        bundle = WriterInputBundleV2Builder().build(snapshot, brief)
+        bundle = WriterInputBundleV2Builder().build(snapshot, brief, merge_result)
         candidate_text, wrt_receipt = run_writer(
             wrt_adapter, wrt_outcome, bundle,
             workflow_run_id, trace_id, turn_id, attempt_id,
@@ -462,7 +637,40 @@ class PersistentTurnEngine:
             text=candidate_text,
         )
         pipeline = QualityPipelineRuntime()
-        return pipeline.check(draft, snapshot)
+        decision = pipeline.check(draft, snapshot)
+
+        # ── Word count gate: 1000 chars minimum ─────────────────────────
+        MIN_CHARS = 1000
+        text_len = len(candidate_text.strip()) if candidate_text else 0
+        decision.checks.append({
+            "check": "minimum_word_count",
+            "actual": text_len,
+            "required": MIN_CHARS,
+            "passed": text_len >= MIN_CHARS,
+        })
+
+        if text_len < MIN_CHARS:
+            # Diagnose the shortfall
+            if text_len < 100:
+                reason = "CRITICAL: near-empty output, likely generation failure"
+                decision.verdict = QualityVerdict.REJECTED
+                decision.blocking_reasons.append(reason)
+            elif text_len < 500:
+                reason = f"SEVERE: {text_len} chars — model returned early stop or truncated"
+                decision.verdict = QualityVerdict.REVISE
+                decision.blocking_reasons.append(reason)
+            elif text_len < 800:
+                reason = f"MODERATE: {text_len} chars — preset word count (1200-1600) not followed"
+                decision.warnings.append(reason)
+            else:
+                reason = f"CLOSE: {text_len} chars — near 1000 minimum, preset target is 1200-1600"
+                decision.warnings.append(reason)
+
+            decision.acceptance_notes.append(
+                f"word_count_gate: {text_len}/{MIN_CHARS} — {reason}"
+            )
+
+        return decision
 
     # ── D6 memory curator → Active/RAG commit ───────────────────────────
     def _run_d6(

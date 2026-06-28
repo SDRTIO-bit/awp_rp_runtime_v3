@@ -23,7 +23,8 @@
       "request_id": "{{request_id}}",
       "run_id": "{{run_id}}",
       "director_profile_id": "{{director_profile_id}}",
-      "writer_profile_id": "{{writer_profile_id}}"
+      "writer_profile_id": "{{writer_profile_id}}",
+      "writer_preset_path": "{{writer_preset_path}}"
     }
   },
   "3": {

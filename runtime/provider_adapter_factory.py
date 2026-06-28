@@ -113,7 +113,7 @@ class WriterAdapterFactory:
     """Builds a Writer adapter from a profile id."""
 
     @staticmethod
-    def build(profile_id: str) -> tuple[Any, AdapterOutcome]:
+    def build(profile_id: str, preset_text: str = "") -> tuple[Any, AdapterOutcome]:
         profile = ModelProfileRegistry.resolve(profile_id)
 
         if profile.provider == "fake":
@@ -127,7 +127,7 @@ class WriterAdapterFactory:
         if not outcome.built:
             return None, outcome
         from ..adapters.llm.real_writer_adapter import RealWriterV2Adapter
-        return RealWriterV2Adapter(ds, model=profile.model), outcome
+        return RealWriterV2Adapter(ds, model=profile.model, preset_text=preset_text), outcome
 
 
 def run_director(
