@@ -1,4 +1,4 @@
-"""ComfyUI nodes for RP Runtime V2 — P1 + P2 + C1 + D + P-CardImport + P-CardSession."""
+"""ComfyUI nodes for RP Runtime V2 — P1 + P2 + C1 + D + P-CardImport + P-CardSession + P-FirstTurn."""
 
 from .card_state_init_node import AWPV2CardStateInit
 from .round_snapshot_node import AWPV2RoundSnapshot
@@ -107,6 +107,16 @@ from .card_session_bootstrap_diagnostics_node import AWPV2CardSessionBootstrapDi
 from .card_import_and_bootstrap_node import AWPV2CardImportAndBootstrap
 from .card_definition_fixture_load_node import AWPV2CardDefinitionFixtureLoad
 
+# P-FirstTurn: First Turn Execution nodes
+from .first_turn_request_node import AWPV2FirstTurnRequest
+from .session_ready_validator_node import AWPV2SessionReadyValidator
+from .opening_context_loader_node import AWPV2OpeningContextLoader
+from .session_bound_worldbook_retriever_node import AWPV2SessionBoundWorldbookRetriever
+from .first_turn_context_assembler_node import AWPV2FirstTurnContextAssembler
+from .first_turn_receipt_node import AWPV2FirstTurnReceipt
+from .first_turn_diagnostics_node import AWPV2FirstTurnDiagnostics
+from .first_turn_execution_node import AWPV2FirstTurnExecution
+
 # Observability: trace display output node
 from .trace_display_node import AWPV2TraceDisplay
 
@@ -208,6 +218,15 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2CardSessionBootstrapDiagnostics": AWPV2CardSessionBootstrapDiagnostics,
     "AWPV2CardImportAndBootstrap": AWPV2CardImportAndBootstrap,
     "AWPV2CardDefinitionFixtureLoad": AWPV2CardDefinitionFixtureLoad,
+    # P-FirstTurn
+    "AWPV2FirstTurnRequest": AWPV2FirstTurnRequest,
+    "AWPV2SessionReadyValidator": AWPV2SessionReadyValidator,
+    "AWPV2OpeningContextLoader": AWPV2OpeningContextLoader,
+    "AWPV2SessionBoundWorldbookRetriever": AWPV2SessionBoundWorldbookRetriever,
+    "AWPV2FirstTurnContextAssembler": AWPV2FirstTurnContextAssembler,
+    "AWPV2FirstTurnReceipt": AWPV2FirstTurnReceipt,
+    "AWPV2FirstTurnDiagnostics": AWPV2FirstTurnDiagnostics,
+    "AWPV2FirstTurnExecution": AWPV2FirstTurnExecution,
     # Observability
     "AWPV2TraceDisplay": AWPV2TraceDisplay,
 }
@@ -310,6 +329,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2CardSessionBootstrapDiagnostics": "AWP V2 会话启动诊断",
     "AWPV2CardImportAndBootstrap": "AWP V2 角色卡导入并启动",
     "AWPV2CardDefinitionFixtureLoad": "AWP V2 角色卡Fixture加载",
+    # P-FirstTurn
+    "AWPV2FirstTurnRequest": "AWP V2 首回合请求",
+    "AWPV2SessionReadyValidator": "AWP V2 会话就绪校验",
+    "AWPV2OpeningContextLoader": "AWP V2 开场上文加载",
+    "AWPV2SessionBoundWorldbookRetriever": "AWP V2 会话绑定世界书检索",
+    "AWPV2FirstTurnContextAssembler": "AWP V2 首回合上下文装配",
+    "AWPV2FirstTurnReceipt": "AWP V2 首回合收据",
+    "AWPV2FirstTurnDiagnostics": "AWP V2 首回合诊断",
+    "AWPV2FirstTurnExecution": "AWP V2 首回合执行",
     # Observability
     "AWPV2TraceDisplay": "AWP V2 追踪显示",
 }

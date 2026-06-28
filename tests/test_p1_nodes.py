@@ -72,10 +72,16 @@ class TestNodeRegistration:
             "AWPV2CardSessionBindingCommit", "AWPV2CardSessionBootstrapDiagnostics",
             "AWPV2CardImportAndBootstrap", "AWPV2CardDefinitionFixtureLoad",
         }
+        first_turn_expected = {
+            "AWPV2FirstTurnRequest", "AWPV2SessionReadyValidator",
+            "AWPV2OpeningContextLoader", "AWPV2SessionBoundWorldbookRetriever",
+            "AWPV2FirstTurnContextAssembler", "AWPV2FirstTurnReceipt",
+            "AWPV2FirstTurnDiagnostics", "AWPV2FirstTurnExecution",
+        }
         observability_expected = {
             "AWPV2TraceDisplay",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | observability_expected
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 

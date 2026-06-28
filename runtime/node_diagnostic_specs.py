@@ -442,6 +442,190 @@ _register(NodeDiagnosticSpec(
 ))
 
 
+# P-FirstTurn nodes
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2FirstTurnRequest",
+    role="Create FirstTurnRequest contract for first formal RP turn",
+    diagnostic_version="1",
+    success_invariants=[
+        "request_id is not empty",
+        "session_id is not empty",
+        "player_input is not empty",
+        "expected_logical_card_id is not empty",
+        "expected_card_version >= 1",
+        "expected_source_hash is not empty",
+    ],
+    normal_noop_reasons=[],
+    must_expose=[
+        "request_id", "session_id", "turn_id", "attempt_id",
+        "expected_logical_card_id", "expected_card_version",
+    ],
+    redaction_rules={"player_input": "hash_only"},
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2SessionReadyValidator",
+    role="Validate Session readiness for first turn execution",
+    diagnostic_version="1",
+    success_invariants=[
+        "request validates without errors",
+        "session binding exists and is ready",
+        "logicalCardId matches request",
+        "cardVersion matches request",
+        "sourceHash matches request",
+    ],
+    normal_noop_reasons=[],
+    must_expose=[
+        "session_id", "session_status", "binding_card_version",
+        "validation_errors",
+    ],
+    redaction_rules={},
+    enforced_checks=[
+        {"id": "session_ready", "name": "Session status is ready",
+         "invariant": "session_binding.status == ready"},
+        {"id": "card_identity_match", "name": "Card identity matches binding",
+         "invariant": "binding.logical_card_id == request.expected_logical_card_id"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2OpeningContextLoader",
+    role="Load OpeningContext from bootstrapped Session OpeningRecord",
+    diagnostic_version="1",
+    success_invariants=[
+        "opening_record_id is not empty",
+        "greeting_id is not empty",
+        "safe_display_content is not empty",
+    ],
+    normal_noop_reasons=[],
+    must_expose=[
+        "opening_record_id", "greeting_id", "safe_display_content",
+    ],
+    redaction_rules={"safe_display_content": "hash_only"},
+    observational_checks=[
+        {"id": "not_turn_record", "name": "OpeningContext is not a TurnRecord",
+         "invariant": "OpeningContext has no turn_id or accepted_text fields"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2SessionBoundWorldbookRetriever",
+    role="Retrieve worldbook entries from Session-bound WorldbookBinding",
+    diagnostic_version="1",
+    success_invariants=[
+        "only reads from current session binding",
+        "disabled entries are excluded",
+        "deferred entries are not activated",
+        "constant entries respect budget",
+        "activated_content is explainable",
+    ],
+    normal_noop_reasons=["no bound entries in worldbook binding"],
+    must_expose=[
+        "candidate_entry_ids", "activated_entry_ids",
+        "rejected_entry_ids_with_reasons", "deferred_entry_ids",
+        "disabled_entry_ids", "budget_dropped_entry_ids",
+        "total_budget_used", "max_budget",
+    ],
+    redaction_rules={"activated_content": "summary_only"},
+    enforced_checks=[
+        {"id": "session_scoped", "name": "Retrieval is session-scoped",
+         "invariant": "only reads from worldbook_binding.entries, never global catalog"},
+        {"id": "budget_enforced", "name": "Budget is enforced",
+         "invariant": "total_budget_used <= max_budget"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2FirstTurnContextAssembler",
+    role="Assemble FirstTurnContext for Director/Writer consumption",
+    diagnostic_version="1",
+    success_invariants=[
+        "is_first_turn is true",
+        "recent_accepted_turn_count is 0",
+        "active_memory_count is 0",
+        "rag_recall_count is 0",
+        "opening_context is populated (not a TurnRecord)",
+    ],
+    normal_noop_reasons=[],
+    must_expose=[
+        "session_id", "logical_card_id", "card_version", "source_hash",
+        "is_first_turn", "recent_accepted_turn_count",
+        "active_memory_count", "rag_recall_count",
+    ],
+    redaction_rules={"player_input": "hash_only", "opening_context": "summary_only"},
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2FirstTurnReceipt",
+    role="Produce FirstTurnReceipt after successful first turn execution",
+    diagnostic_version="1",
+    success_invariants=[
+        "receipt_id is not empty",
+        "quality_verdict is accept",
+        "card_state_commit_status is committed",
+        "turn_record_commit_status is committed",
+    ],
+    normal_noop_reasons=["memory curation may be no-op on first turn"],
+    must_expose=[
+        "receipt_id", "session_id", "turn_id", "quality_verdict",
+        "base_card_state_revision", "result_card_state_revision",
+        "card_state_commit_status", "turn_record_commit_status",
+        "memory_curation_status", "idempotency_status",
+    ],
+    redaction_rules={"accepted_text": "hash_only"},
+    enforced_checks=[
+        {"id": "quality_accepted", "name": "Quality gate accepted",
+         "invariant": "quality_verdict == accept"},
+        {"id": "state_committed", "name": "CardState committed",
+         "invariant": "card_state_commit_status == committed"},
+        {"id": "turn_committed", "name": "TurnRecord committed",
+         "invariant": "turn_record_commit_status == committed"},
+    ],
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2FirstTurnDiagnostics",
+    role="Output diagnostics for first turn execution",
+    diagnostic_version="1",
+    success_invariants=[
+        "diagnostics_id is not empty",
+        "outcome is one of success/failure/quality_rejected/incomplete",
+    ],
+    normal_noop_reasons=[],
+    must_expose=[
+        "session_id", "outcome", "steps_completed", "steps_failed",
+        "quality_verdict", "memory_curation_status",
+    ],
+    redaction_rules={},
+))
+
+_register(NodeDiagnosticSpec(
+    node_class="AWPV2FirstTurnExecution",
+    role="Execute complete first formal RP turn pipeline",
+    diagnostic_version="1",
+    success_invariants=[
+        "session binding exists and is ready",
+        "opening record exists",
+        "worldbook binding exists",
+        "quality gate accepts or rejects",
+        "on accept: CardState committed, TurnRecord committed",
+        "on reject: zero side effects",
+    ],
+    normal_noop_reasons=["memory curation may be no-op on first turn"],
+    must_expose=[
+        "receipt_id", "session_id", "turn_id", "quality_verdict",
+        "outcome", "memory_curation_status",
+    ],
+    redaction_rules={"player_input": "hash_only", "accepted_text": "hash_only"},
+    enforced_checks=[
+        {"id": "session_ready", "name": "Session is ready",
+         "invariant": "session_binding.status == ready"},
+        {"id": "reject_zero_side_effect", "name": "Reject means zero writes",
+         "invariant": "quality_verdict == reject implies card_state_commit_status is empty"},
+    ],
+))
+
+
 def get_diagnostic_spec(node_class: str) -> NodeDiagnosticSpec | None:
     """Get the diagnostic spec for a node class, or None if not registered."""
     return NODE_DIAGNOSTIC_SPECS.get(node_class)

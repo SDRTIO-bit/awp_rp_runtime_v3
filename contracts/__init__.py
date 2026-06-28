@@ -84,6 +84,12 @@ from .memory_curation_evidence import MemoryCurationEvidence
 from .memory_curation_result import MemoryCurationResult
 from .memory_curation_trigger_diagnostics import MemoryCurationTriggerDiagnostics
 
+# P-FirstTurn: First Turn Execution contracts
+from .first_turn_request import FirstTurnRequest
+from .first_turn_context import FirstTurnContext, OpeningContext, SessionBoundWorldbookRetrievalResult
+from .first_turn_receipt import FirstTurnReceipt, FirstTurnFailure, FirstTurnFailureCode
+from .first_turn_diagnostics import FirstTurnDiagnostics
+
 # P-CardImport
 from .card_source_snapshot import CardSourceSnapshot
 from .card_import_request import CardImportRequest

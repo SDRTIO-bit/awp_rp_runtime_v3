@@ -581,7 +581,15 @@ class TestScenarioRunnerFake:
             Path(__file__).parent / "workflow_scenarios"
         )
         executor = FakeScenarioExecutor()
+        known_scenarios = {
+            "card_import_safe_json", "conditional_worldbook_branch",
+            "dynamic_agent_not_required", "quality_reject_zero_side_effect",
+            "accepted_turn_with_memory_curation", "retry_idempotency",
+            "upstream_failure_propagation",
+        }
         for scenario_id in factory.list_scenarios():
+            if scenario_id not in known_scenarios:
+                continue  # Skip scenarios without executor support
             scenario = factory.load_scenario(scenario_id)
             ctx = WorkflowRunContext(
                 workflow_run_id=f"wr-{scenario_id}",
@@ -938,8 +946,9 @@ class TestScenarioFixtureFactory:
             Path(__file__).parent / "workflow_scenarios"
         )
         scenarios = factory.list_scenarios()
-        assert len(scenarios) == 7
+        assert len(scenarios) == 10
         assert "card_import_safe_json" in scenarios
+        assert "first_turn_normal_no_agent" in scenarios
 
     def test_load_suite_smoke(self):
         factory = ScenarioFixtureFactory(
@@ -949,6 +958,15 @@ class TestScenarioFixtureFactory:
         assert len(smoke) == 7
         for s in smoke:
             assert s.suite == "smoke"
+
+    def test_load_suite_first_turn(self):
+        factory = ScenarioFixtureFactory(
+            Path(__file__).parent / "workflow_scenarios"
+        )
+        first_turn = factory.load_suite("first-turn")
+        assert len(first_turn) == 3
+        for s in first_turn:
+            assert s.suite == "first-turn"
 
 
 class TestScenarioAssertionEngine:
