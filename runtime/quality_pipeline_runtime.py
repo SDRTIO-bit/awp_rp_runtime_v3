@@ -138,15 +138,19 @@ class FormatGate:
         issues = []
         text = draft.text
 
-        # Check for JSON leaks
-        if "{" in text and "}" in text and ":" in text:
+        # Check for JSON leaks — look for actual JSON object patterns,
+        # not just any brace+colon (which triggers on {{user}}, XML tags, etc.)
+        import re as _re
+        _json_like = _re.compile(r'\{\s*"[^"]+"\s*:\s*["\d\[{]')
+        _m = _json_like.search(text)
+        if _m:
             issues.append(QualityIssue(
                 issue_id=f"qi_{uuid.uuid4().hex[:8]}",
                 gate_name="format",
                 category=IssueCategory.CONTENT_LEAK,
                 severity=IssueSeverity.ERROR,
                 description="Text contains JSON-like content",
-                evidence=text[max(0, text.index("{")-20):text.index("}")+20] if "{" in text else "",
+                evidence=text[max(0, _m.start()-20):_m.end()+20],
                 fixable=True,
                 fix_guidance="Remove all JSON, debug info, and system statements",
             ))

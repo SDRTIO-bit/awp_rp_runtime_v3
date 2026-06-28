@@ -23,10 +23,10 @@ def _now() -> str:
 
 @dataclass(frozen=True)
 class ResolverBudget:
-    max_constant_entries: int = 2
-    max_selective_entries: int = 3
-    max_entry_chars: int = 400
-    max_total_chars: int = 1800
+    max_constant_entries: int = 8
+    max_selective_entries: int = 5
+    max_entry_chars: int = 500
+    max_total_chars: int = 4000
 
 
 class VersionLockedWorldbookResolver:
@@ -108,10 +108,8 @@ class VersionLockedWorldbookResolver:
                 rejected[entry_id] = "disabled"
                 continue
 
-            if raw_binding_entry.get("activation_status") == "deferred":
-                deferred_ids.append(entry_id)
-                rejected[entry_id] = "deferred"
-                continue
+            # deferred = "等待回合时求值", 不是 "永久拒绝".
+            # Resolver 的职责就是求值这些条目。不跳过。
 
             unsupported_reason = self._unsupported_reason(entry)
             if unsupported_reason:
@@ -265,10 +263,12 @@ class VersionLockedWorldbookResolver:
         activation_raw = entry.get("activation_raw", {})
         if not isinstance(activation_raw, dict):
             return ""
+        # position is a standard SillyTavern field (before_char/after_char)
+        # that controls insertion order — NOT an activation condition.
+        # It is safely ignored (content order determined by budget_rank).
         unsupported_fields = [
             key
             for key in (
-                "position",
                 "probability",
                 "useProbability",
                 "recursive",
@@ -285,6 +285,9 @@ class VersionLockedWorldbookResolver:
         ]
         if unsupported_fields:
             return "ignored_with_reason:unsupported_activation_fields:" + ",".join(unsupported_fields)
-        if entry.get("selective") and not entry.get("keys"):
+        # Constant entries always activate — no keyword requirement.
+        # Only purely selective (not constant) entries need keywords.
+        is_constant = entry.get("constant", False)
+        if entry.get("selective") and not is_constant and not entry.get("keys"):
             return "ignored_with_reason:no_primary_keyword_match"
         return ""

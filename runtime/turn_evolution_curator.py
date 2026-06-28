@@ -130,12 +130,28 @@ class TurnEvolutionCurator:
     # ── LLM-backed curation ─────────────────────────────────────────────
 
     def _curate_with_llm(self, request: CuratorRequest) -> TurnEvolutionProposal:
-        """Run curation with a real LLM adapter."""
+        """Run curation with a real LLM adapter.
+
+        Uses generate_text (not generate_structured, which hardcodes Director schema).
+        Parses JSON response manually with fallback.
+        """
         prompt = self._build_curator_prompt(request)
-        schema = self._build_output_schema()
 
         try:
-            parsed = self._llm.generate_structured(prompt, schema)
+            raw = self._llm.generate_text(prompt, provider_role="curator")
+            # generate_text returns (text, receipt) tuple
+            if isinstance(raw, tuple):
+                text = raw[0] if raw[0] else ""
+            else:
+                text = str(raw)
+
+            # Parse JSON from response (handle markdown code blocks)
+            text = text.strip()
+            if text.startswith("```"):
+                # Remove markdown code block
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            parsed = json.loads(text)
         except Exception as e:
             # LLM failure → no_state_change (fail safe)
             return TurnEvolutionProposal(
@@ -192,41 +208,40 @@ class TurnEvolutionCurator:
         turn_goal = str(brief.get("turn_goal", ""))[:200]
 
         prompt = (
-            "You are the Turn Evolution Curator for a roleplay session.\n"
-            "Your job: analyze the accepted writer output and determine what, "
-            "if anything, changed in the world state, and what memories to save.\n\n"
-            "=== RULES ===\n"
-            "- Only propose state changes that are clearly evidenced in the text.\n"
-            "- If nothing meaningful changed, return is_no_state_change=true.\n"
-            "- Do NOT propose changes that contradict current CardState.\n"
-            "- Only use these op types: set, increment, set_flag, set_scene_field\n"
-            "- paths must follow the pattern: variables.KEY, event_flags.KEY, "
-            "scene_state.FIELD\n"
-            "- Memory content must be 30-80 chars of high-value plot attention.\n"
-            "- Be conservative: only save truly important promises, conflicts, "
-            "secrets, relationship shifts, goals.\n\n"
-            "=== CURRENT STATE ===\n"
-            f"Revision: {current_revision}\n"
-            f"Variables: {json.dumps(variables, ensure_ascii=False)[:500]}\n"
-            f"Event flags: {json.dumps(event_flags, ensure_ascii=False)[:300]}\n"
-            f"Scene: {json.dumps(scene, ensure_ascii=False)[:300]}\n\n"
-            "=== TURN GOAL ===\n"
+            "你是一个角色扮演会话的状态策展器(Curator)。\n"
+            "分析已接受的 Writer 输出，判断世界状态发生了什么变化，以及需要保存什么记忆。\n\n"
+            "=== 规则 ===\n"
+            "- 只提议文本中明确证据支持的状态变化。\n"
+            "- 如果没有有意义的变化，返回 is_no_state_change=true。\n"
+            "- 不要提议与当前 CardState 矛盾的变化。\n"
+            "- operations 中每项必须有 op 和 path 字段。\n"
+            "- op 只能是: set, increment, set_flag, set_scene_field\n"
+            "- path 格式: variables.KEY, event_flags.KEY, scene_state.FIELD\n"
+            "  例如: {\"op\": \"increment\", \"path\": \"variables.trust\", \"value\": 1}\n"
+            "- memory_candidates 中 content 必须 30-80 字。\n"
+            "- 只保存真正重要的承诺、冲突、秘密、关系变化、目标。\n\n"
+            "=== 当前状态 ===\n"
+            f"revision: {current_revision}\n"
+            f"variables: {json.dumps(variables, ensure_ascii=False)[:500]}\n"
+            f"event_flags: {json.dumps(event_flags, ensure_ascii=False)[:300]}\n"
+            f"scene: {json.dumps(scene, ensure_ascii=False)[:300]}\n\n"
+            "=== 回合目标 ===\n"
             f"{turn_goal}\n\n"
-            "=== RECENT TURNS ===\n"
-            + ("\n".join(recent_lines) if recent_lines else "(none)") + "\n\n"
-            "=== PLAYER INPUT ===\n"
+            "=== 最近回合 ===\n"
+            + ("\n".join(recent_lines) if recent_lines else "(无)") + "\n\n"
+            "=== 玩家输入 ===\n"
             f"{request.player_input[:500]}\n\n"
-            "=== ACCEPTED WRITER OUTPUT ===\n"
+            "=== 已接受 Writer 输出 ===\n"
             f"{request.accepted_writer_output[:2000]}\n\n"
-            "=== ACTIVE MEMORY ===\n"
-            + ("\n".join(mem_lines) if mem_lines else "(none)") + "\n\n"
-            "=== WORLDBOOK CONTEXT ===\n"
-            + ("\n".join(wb_lines) if wb_lines else "(none)") + "\n\n"
-            "=== AGENT SUGGESTIONS ===\n"
-            + ("\n".join(sug_lines) if sug_lines else "(none)") + "\n\n"
-            "Produce a JSON response following the schema. "
-            "If no state changes are warranted, set is_no_state_change=true "
-            "and return empty operations."
+            "=== 活跃记忆 ===\n"
+            + ("\n".join(mem_lines) if mem_lines else "(无)") + "\n\n"
+            "=== 世界书上下文 ===\n"
+            + ("\n".join(wb_lines) if wb_lines else "(无)") + "\n\n"
+            "=== Agent 建议 ===\n"
+            + ("\n".join(sug_lines) if sug_lines else "(无)") + "\n\n"
+            "用 JSON 回答。如果不需要状态变化，设 is_no_state_change=true。\n"
+            "如果需要变化，在 state_update_proposal.operations 中列出。\n"
+            "每项 operation 格式: {\"op\": \"...\", \"path\": \"...\", \"value\": ..., \"reason\": \"...\"}"
         )
 
         return prompt
@@ -353,14 +368,34 @@ class TurnEvolutionCurator:
         raw_proposal = parsed.get("state_update_proposal", {})
         operations = []
         for op in raw_proposal.get("operations", []):
-            op_type = op.get("op", "")
+            # Normalize field names: LLM may return type/key instead of op/path
+            op_type = op.get("op", "") or op.get("type", "")
+            path = op.get("path", "") or op.get("key", "")
+            value = op.get("value")
+            reason = op.get("reason", "")
+
+            # Normalize op names from Chinese/alternative formats
+            op_map = {
+                "set_variable": "set", "increment_variable": "increment",
+                "set_event_flag": "set_flag", "set_scene": "set_scene_field",
+            }
+            op_type = op_map.get(op_type, op_type)
+
+            # Normalize path: if it doesn't have a prefix, try to infer
+            if path and "." not in path:
+                # If the path looks like a variable name, prefix with variables.
+                if op_type in ("set", "increment"):
+                    path = f"variables.{path}"
+                elif op_type == "set_flag":
+                    path = f"event_flags.{path}"
+
             if op_type not in CURATOR_ALLOWED_OPS:
                 continue  # Skip disallowed ops silently
             operations.append({
                 "op": op_type,
-                "path": op.get("path", ""),
-                "value": op.get("value"),
-                "reason": op.get("reason", ""),
+                "path": path,
+                "value": value,
+                "reason": reason,
             })
 
         state_proposal = StateUpdateProposalV2(
