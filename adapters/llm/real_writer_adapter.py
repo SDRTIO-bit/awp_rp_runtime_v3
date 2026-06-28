@@ -20,8 +20,9 @@ class RealWriterV2Adapter:
     Generates narrative RP text from WriterInputBundle.
     """
 
-    def __init__(self, deepseek: DeepSeekAdapter):
+    def __init__(self, deepseek: DeepSeekAdapter, model: str = ""):
         self._llm = deepseek
+        self._model = model
 
     def generate(
         self,
@@ -39,6 +40,7 @@ class RealWriterV2Adapter:
             provider_role="writer",
             workflow_run_id=workflow_run_id,
             trace_id=trace_id,
+            model=self._model,
             turn_id=turn_id,
             attempt_id=attempt_id,
         )

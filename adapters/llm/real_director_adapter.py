@@ -23,8 +23,9 @@ class RealDirectorV2Adapter:
     Generates DirectorPlan, ToolPlan, and DelegationPlan from RoundSnapshot.
     """
 
-    def __init__(self, deepseek: DeepSeekAdapter):
+    def __init__(self, deepseek: DeepSeekAdapter, model: str = ""):
         self._llm = deepseek
+        self._model = model
 
     def generate_plan(
         self,
@@ -56,6 +57,7 @@ class RealDirectorV2Adapter:
             workflow_run_id=workflow_run_id,
             trace_id=trace_id,
             turn_id=turn_id,
+            model=self._model,
             attempt_id=attempt_id,
         )
 

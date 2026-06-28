@@ -86,6 +86,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
         trace_id: str = "",
         turn_id: str = "",
         attempt_id: str = "",
+        model: str = "",
     ) -> tuple[str, ProviderAttemptReceipt]:
         """Generate text from a prompt.
 
@@ -94,6 +95,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
         """
         if not max_tokens:
             max_tokens = self._default_max_tokens
+        use_model = model or self._model
 
         request_id = _id("preq", f"{turn_id}:{attempt_id}:{self._call_count}")
         started_at = _now()
@@ -107,7 +109,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
 
                 # Build request payload (OpenAI-compatible format)
                 payload = {
-                    "model": self._model,
+                    "model": use_model,
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": max_tokens,
                     "temperature": 0.8,
@@ -157,7 +159,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
                     prompt_tokens=usage_data.get("prompt_tokens", 0),
                     completion_tokens=usage_data.get("completion_tokens", 0),
                     total_tokens=usage_data.get("total_tokens", 0),
-                    model=self._model,
+                    model=use_model,
                 )
                 self._total_tokens += usage.total_tokens
 
@@ -165,7 +167,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
                     receipt_id=_id("prrec", request_id),
                     provider_role=provider_role,
                     provider_request_id=request_id,
-                    model=self._model,
+                    model=use_model,
                     workflow_run_id=workflow_run_id,
                     trace_id=trace_id,
                     turn_id=turn_id,
@@ -246,7 +248,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
             receipt_id=_id("prrec", request_id),
             provider_role=provider_role,
             provider_request_id=request_id,
-            model=self._model,
+            model=use_model,
             workflow_run_id=workflow_run_id,
             trace_id=trace_id,
             turn_id=turn_id,
@@ -271,6 +273,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
         trace_id: str = "",
         turn_id: str = "",
         attempt_id: str = "",
+        model: str = "",
     ) -> tuple[dict[str, Any], ProviderAttemptReceipt]:
         """Generate structured JSON from a prompt.
 
@@ -279,6 +282,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
         """
         if not max_tokens:
             max_tokens = self._default_max_tokens
+        use_model = model or self._model
 
         request_id = _id("preq", f"{turn_id}:{attempt_id}:{self._call_count}")
         started_at = _now()
@@ -298,7 +302,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
                 base_url = get_deepseek_base_url()
 
                 payload = {
-                    "model": self._model,
+                    "model": use_model,
                     "messages": [{"role": "user", "content": full_prompt}],
                     "max_tokens": max_tokens,
                     "temperature": 0.3,  # Lower temp for structured output
@@ -383,7 +387,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
                     prompt_tokens=usage_data.get("prompt_tokens", 0),
                     completion_tokens=usage_data.get("completion_tokens", 0),
                     total_tokens=usage_data.get("total_tokens", 0),
-                    model=self._model,
+                    model=use_model,
                 )
                 self._total_tokens += usage.total_tokens
 
@@ -391,7 +395,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
                     receipt_id=_id("prrec", request_id),
                     provider_role=provider_role,
                     provider_request_id=request_id,
-                    model=self._model,
+                    model=use_model,
                     workflow_run_id=workflow_run_id,
                     trace_id=trace_id,
                     turn_id=turn_id,
@@ -465,7 +469,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
             receipt_id=_id("prrec", request_id),
             provider_role=provider_role,
             provider_request_id=request_id,
-            model=self._model,
+            model=use_model,
             workflow_run_id=workflow_run_id,
             trace_id=trace_id,
             turn_id=turn_id,

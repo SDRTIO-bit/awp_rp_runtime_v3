@@ -337,11 +337,15 @@ def run_multiturn_acceptance(
     config = require_real_provider_env()
 
     # Print summary (no secrets)
+    director_model = os.environ.get("AWP_DIRECTOR_MODEL", "deepseek-v4-pro")
+    writer_model = os.environ.get("AWP_WRITER_MODEL", "deepseek-v4-flash")
+
     print("=" * 60)
-    print("Real Provider Multi-Turn Acceptance")
+    print("Real Provider Multi-Turn Acceptance (Dual Model)")
     print("=" * 60)
     print(f"  Card path: {config.card_path}")
-    print(f"  Model: {config.model}")
+    print(f"  Director model: {director_model}")
+    print(f"  Writer model: {writer_model}")
     print(f"  Max turns: {turns}")
     print(f"  Max provider calls: {max_provider_calls}")
     print(f"  Max output tokens: {max_output_tokens}")
@@ -478,6 +482,11 @@ def run_multiturn_acceptance(
                     inputs["workflow_run_id"] = workflow_run_id
                 if "trace_id" in inputs:
                     inputs["trace_id"] = _id("trc", workflow_run_id)
+                # Dual model support
+                if "director_model" in inputs:
+                    inputs["director_model"] = os.environ.get("AWP_DIRECTOR_MODEL", "deepseek-v4-pro")
+                if "writer_model" in inputs:
+                    inputs["writer_model"] = os.environ.get("AWP_WRITER_MODEL", "deepseek-v4-flash")
                 if "request_id" in inputs:
                     inputs["request_id"] = _id("req", f"{turn_id}:{attempt_id}")
                 if "run_id" in inputs:
@@ -488,6 +497,14 @@ def run_multiturn_acceptance(
                     inputs["source_path"] = card_path
                 if "fixture_path" in inputs:
                     inputs["fixture_path"] = card_path
+                # Patch card_definition with minimal dict if placeholder
+                if "card_definition" in inputs and isinstance(inputs["card_definition"], str):
+                    inputs["card_definition"] = {
+                        "logical_card_id": logical_card_id or "card_001",
+                        "card_version": 1,
+                        "source_hash": source_hash or "",
+                        "status": "ready",
+                    }
 
                 # Patch card identity
                 if "logical_card_id" in inputs and logical_card_id:
@@ -517,30 +534,67 @@ def run_multiturn_acceptance(
             else:
                 turn_result["status"] = "success"
 
-                # Extract outputs
+                # Extract outputs (multiple formats)
                 outputs = history_entry.get("outputs", {})
+                extracted_text = ""
                 for node_id, node_output in outputs.items():
-                    if isinstance(node_output, dict):
-                        # Check for text outputs
-                        for output_key in ["text", "string_value"]:
-                            if output_key in node_output:
-                                val = node_output[output_key]
-                                if isinstance(val, list):
-                                    val = val[0] if val else ""
-                                if isinstance(val, str) and len(val) > 10:
-                                    turn_result["output_text_length"] = len(val)
-                                    # Narrative regression check
-                                    ncheck = narrative_checker.check(val, turn_num)
-                                    narrative_reports.append(ncheck)
-                                    if ncheck["status"] != "pass":
-                                        turn_result["narrative_status"] = ncheck["status"]
-                                        turn_result["narrative_issues"] = ncheck["issues"]
+                    if not isinstance(node_output, dict):
+                        continue
+                    # Format 1: direct text/string_value
+                    for output_key in ["text", "string_value"]:
+                        if output_key in node_output:
+                            val = node_output[output_key]
+                            if isinstance(val, list):
+                                val = val[0] if val else ""
+                            if isinstance(val, str) and len(val) > len(extracted_text):
+                                extracted_text = val
+                    # Format 2: TraceDisplay ui.text
+                    if "ui" in node_output:
+                        ui = node_output["ui"]
+                        if isinstance(ui, dict) and "text" in ui:
+                            ui_texts = ui["text"]
+                            if isinstance(ui_texts, list) and ui_texts:
+                                for t in ui_texts:
+                                    if isinstance(t, str) and len(t) > len(extracted_text):
+                                        extracted_text = t
 
-                                    # Save private transcript if enabled
-                                    if private_dir:
-                                        (private_dir / f"turn_{turn_num}_output.txt").write_text(
-                                            val, encoding="utf-8"
-                                        )
+                if extracted_text and len(extracted_text) > 10:
+                    turn_result["output_text_length"] = len(extracted_text)
+                    turn_result["output_preview"] = extracted_text[:200]
+                    # Narrative regression check
+                    ncheck = narrative_checker.check(extracted_text, turn_num)
+                    narrative_reports.append(ncheck)
+                    if ncheck["status"] != "pass":
+                        turn_result["narrative_status"] = ncheck["status"]
+                        turn_result["narrative_issues"] = ncheck["issues"]
+
+                    # Save private transcript if enabled
+                    if private_dir:
+                        (private_dir / f"turn_{turn_num}_output.txt").write_text(
+                            extracted_text, encoding="utf-8"
+                        )
+
+                # Also check file-based output from node
+                output_file = Path("artifacts/real-provider-outputs") / f"turn_{turn_id[:16]}.json"
+                if output_file.exists():
+                    try:
+                        output_data = json.loads(output_file.read_text(encoding="utf-8"))
+                        file_text = output_data.get("accepted_text", "")
+                        if file_text and len(file_text) > len(extracted_text):
+                            turn_result["output_text_length"] = len(file_text)
+                            turn_result["output_preview"] = file_text[:200]
+                            turn_result["quality_verdict"] = output_data.get("quality_verdict", "")
+                            ncheck = narrative_checker.check(file_text, turn_num)
+                            narrative_reports.append(ncheck)
+                            if ncheck["status"] != "pass":
+                                turn_result["narrative_status"] = ncheck["status"]
+                                turn_result["narrative_issues"] = ncheck["issues"]
+                            if private_dir:
+                                (private_dir / f"turn_{turn_num}_output.txt").write_text(
+                                    file_text, encoding="utf-8"
+                                )
+                    except Exception:
+                        pass
 
             # Estimate provider calls (rough: 2 per turn for director+writer)
             turn_result["provider_calls"] = 2 if mode == "full_pipeline" else 1
