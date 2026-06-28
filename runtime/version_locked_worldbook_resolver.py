@@ -23,10 +23,15 @@ def _now() -> str:
 
 @dataclass(frozen=True)
 class ResolverBudget:
-    max_constant_entries: int = 8
-    max_selective_entries: int = 5
+    """Worldbook budget constraints.
+
+    NOTE: max_constant_entries and max_selective_entries have been removed.
+    All enabled worldbook entries are loaded without count limits.
+    Only max_entry_chars (per-entry) and max_total_chars (total) remain
+    as safety limits to prevent context overflow.
+    """
     max_entry_chars: int = 500
-    max_total_chars: int = 4000
+    max_total_chars: int = 8000
 
 
 class VersionLockedWorldbookResolver:
@@ -67,8 +72,6 @@ class VersionLockedWorldbookResolver:
         catalog_by_id = {entry.get("entry_id", ""): entry for entry in catalog}
         content_seen: set[tuple[str, int, str]] = set()
         total_budget = 0
-        constant_count = 0
-        selective_count = 0
 
         # Build state context for condition evaluation
         state_ctx = dict(card_state_context) if card_state_context else {}
@@ -146,16 +149,6 @@ class VersionLockedWorldbookResolver:
                     continue
                 activation_reason = "matched_primary_keywords"
 
-            if entry_kind == "constant" and constant_count >= self._budget.max_constant_entries:
-                budget_dropped.append(entry_id)
-                rejected[entry_id] = "budget_constant_cap"
-                continue
-
-            if entry_kind == "selective" and selective_count >= self._budget.max_selective_entries:
-                budget_dropped.append(entry_id)
-                rejected[entry_id] = "budget_selective_cap"
-                continue
-
             excerpt, used_chunks = self._build_excerpt(entry, chunks)
             excerpt = excerpt[: self._budget.max_entry_chars]
             projected_total = total_budget + len(excerpt)
@@ -176,10 +169,6 @@ class VersionLockedWorldbookResolver:
 
             activated_entry_ids.append(entry_id)
             total_budget = projected_total
-            if entry_kind == "constant":
-                constant_count += 1
-            else:
-                selective_count += 1
 
             if used_chunks:
                 chunk_parent_ids.append(entry_id)

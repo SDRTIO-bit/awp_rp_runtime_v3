@@ -63,6 +63,13 @@ class SqliteCardSessionBindingStore(CardSessionBindingStore):
         ).fetchone()
         return row is not None
 
+    def list_all(self) -> list[CardSessionBinding]:
+        conn = self._db.connect()
+        rows = conn.execute(
+            "SELECT binding_json FROM card_session_bindings ORDER BY created_at DESC"
+        ).fetchall()
+        return [CardSessionBinding.from_dict(json.loads(r["binding_json"])) for r in rows]
+
 
 class SqliteOpeningRecordStore(OpeningRecordStore):
 

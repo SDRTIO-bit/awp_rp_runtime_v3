@@ -195,6 +195,17 @@ class WorldLifeTriggerPolicy:
         # Deduplicate domains
         domains = list(dict.fromkeys(domains))
 
+        # Always trigger if there are active worldbook entries or NPCs
+        if hasattr(snapshot, 'active_worldbook_entries') and len(snapshot.active_worldbook_entries) > 0:
+            if "worldbook" not in domains:
+                reasons.append("主动世界书已激活，需要世界在场感分析")
+                domains.append("worldbook")
+        if hasattr(snapshot.card_state, 'scene_state') and snapshot.card_state.scene_state:
+            npc_count = len(getattr(snapshot.card_state.scene_state, 'active_npcs', []))
+            if npc_count >= 1 and "npc_pressure" not in domains:
+                reasons.append(f"场景中存在 {npc_count} 个 NPC，需要世界背景支持")
+                domains.append("npc_pressure")
+
         should_trigger = len(reasons) > 0
 
         return WorldLifeTriggerResult(

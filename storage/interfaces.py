@@ -90,6 +90,11 @@ class TurnRecordStore(ABC):
         """Get the next turn index for this card+session."""
         ...
 
+    @abstractmethod
+    def list_by_session(self, session_id: str) -> list[TurnRecord]:
+        """List all turns for a session, ordered by turn_index ascending."""
+        ...
+
 
 class RoundSnapshotStore(ABC):
     """Interface for RoundSnapshot persistence."""

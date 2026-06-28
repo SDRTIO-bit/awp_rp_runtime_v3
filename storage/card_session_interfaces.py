@@ -28,6 +28,11 @@ class CardSessionBindingStore(ABC):
     def exists(self, session_id: str) -> bool:
         ...
 
+    @abstractmethod
+    def list_all(self) -> list[CardSessionBinding]:
+        """List all session bindings, newest first."""
+        ...
+
 
 class OpeningRecordStore(ABC):
     """Interface for OpeningRecord persistence."""

@@ -1,7 +1,7 @@
 """Persistent turn engine — shared execution core for the persistent nodes.
 
 P1 canonical path:
-  Director → DynamicSubAgentPool (0-2) → FinalTurnBrief → Writer
+  Director → SubAgent Triggers (D1-D5, rule-based) → FinalTurnBrief → Writer
   → QualityGate → TurnEvolutionCurator (real LLM) → CardState patch
   → CardStateCommit → TurnRecordCommit → MemoryCommit (active + RAG)
 
@@ -10,7 +10,7 @@ Replaces P0's fake D6 (empty patches + deterministic fake memory) with:
     and memory candidates
   - Real state patches with actual operations (no more empty operations=[])
   - Curator-driven memory (no more FakeMemoryCandidateGenerator)
-  - DynamicSubAgentPool integration (Director can delegate 0-2 tasks)
+  - Sub-agent rule triggers (D1-D5, deterministic, merged into Writer guidance)
 """
 
 from __future__ import annotations
@@ -55,11 +55,7 @@ from .writer_input_bundle_v2_builder import WriterInputBundleV2Builder
 from .turn_evolution_curator import TurnEvolutionCurator
 from .active_memory_commit_runtime import ActiveMemoryCommitRuntime
 from .rag_memory_commit_runtime import RagMemoryCommitRuntime
-from .dynamic_subagent_pool import DynamicSubAgentPool
-from .agent_runtime_registry import AgentRuntimeRegistry
-from .task_envelope_builder import TaskEnvelopeBuilder
-from .tool_permission_runtime import ToolPermissionRuntime
-from .suggestion_merger import SuggestionMerger
+# (no additional imports needed for sub-agent merge — inline SuggestionMergeResult used)
 
 
 def _now() -> str:
@@ -386,12 +382,12 @@ class PersistentTurnEngine:
                                   "model": dir_outcome.model})
         diag.steps_completed.append("director")
 
-        # ── Dynamic SubAgent Pool (Director-driven, 0-2 agents) ──────────
+        # ── Sub-Agent rule triggers (D1-D5, deterministic) ───────────────
         agent_suggestions: list = []
         agent_triggers: list[str] = []
-        delegation_plan = getattr(director_plan, 'delegation_plan_ref', None)
 
-        # Build delegation from trigger policies (D1-D5)
+        # Evaluate D1-D5 trigger policies — these are pure rules, no LLM calls.
+        # Produced AgentSuggestion.summary is merged into Writer guidance below.
         try:
             agent_suggestions, agent_triggers = self._run_sub_agent_triggers(
                 snapshot, director_plan, binding, turn_id, trace_id
@@ -400,7 +396,44 @@ class PersistentTurnEngine:
             _add_trace_event(trace, "sub_agents", "trigger_policies",
                              success=False, error=str(e)[:200])
 
-        # Execute sub-agents via DynamicSubAgentPool if triggered
+        # ── Deepen triggered sub-agent summaries with cheap LLM calls ─────
+        # Each triggered agent gets one DeepSeek Flash call (thinking disabled)
+        # to produce concrete, context-specific analysis.
+        if agent_suggestions and dir_outcome.is_real:
+            try:
+                from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
+                from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+                from .sub_agent_llm_runner import run_sub_agent_llm
+                import os as _os
+
+                # Build a flash-adapter for sub-agent LLM calls
+                flash_model = "deepseek-v4-flash"
+                try:
+                    flash_profile = ModelProfileRegistry.resolve("deepseek-v4-flash-writer")
+                    api_key_env = flash_profile.api_key_env or "DEEPSEEK_API_KEY"
+                    if _os.environ.get(api_key_env, ""):
+                        flash_adapter = DeepSeekAdapter(
+                            model=flash_model,
+                            default_max_tokens=500,
+                            timeout_seconds=60,
+                            max_retries=2,
+                        )
+                        for sug in agent_suggestions:
+                            role = getattr(sug, "role", "") or ""
+                            llm_text = run_sub_agent_llm(
+                                role, snapshot, flash_adapter,
+                                trace_id=trace_id, turn_id=turn_id,
+                                attempt_id=attempt_id,
+                            )
+                            if llm_text:
+                                sug.summary = f"[{role}] {llm_text}"
+                except Exception:
+                    # If flash adapter fails, keep the rule-generated summary
+                    pass
+            except ImportError:
+                pass
+
+        # Record triggered sub-agents in effects and trace
         if agent_suggestions:
             effects["delegation"]["executed"] = agent_triggers
             effects["delegation"]["requested"] = agent_triggers
@@ -814,34 +847,37 @@ class PersistentTurnEngine:
         pipeline = QualityPipelineRuntime()
         decision = pipeline.check(draft, snapshot)
 
-        # ── Word count gate: 1000 chars minimum ─────────────────────────
+        # ── Word count diagnostic gate (diagnostic only, NEVER blocks turn) ──
         MIN_CHARS = 1000
         text_len = len(candidate_text.strip()) if candidate_text else 0
+        word_count_passed = text_len >= MIN_CHARS
+        word_count_grade = "pass" if word_count_passed else (
+            "fail" if text_len < 500 else "marginal"
+        )
         decision.checks.append({
-            "check": "minimum_word_count",
+            "check": "word_count",
             "actual": text_len,
             "required": MIN_CHARS,
-            "passed": text_len >= MIN_CHARS,
+            "passed": word_count_passed,
+            "grade": word_count_grade,
         })
 
         if text_len < MIN_CHARS:
             if text_len < 100:
-                reason = "CRITICAL: near-empty output, likely generation failure"
-                decision.verdict = QualityVerdict.REJECTED
-                decision.blocking_reasons.append(reason)
+                reason = f"CRITICAL: {text_len} chars — near-empty output"
+                decision.warnings.append(reason)
             elif text_len < 500:
-                reason = f"SEVERE: {text_len} chars — model returned early stop or truncated"
-                decision.verdict = QualityVerdict.REVISE
-                decision.blocking_reasons.append(reason)
+                reason = f"SEVERE: {text_len} chars — model returned short output"
+                decision.warnings.append(reason)
             elif text_len < 800:
-                reason = f"MODERATE: {text_len} chars — preset word count (1200-1600) not followed"
+                reason = f"MODERATE: {text_len} chars — below 1000-char target"
                 decision.warnings.append(reason)
             else:
-                reason = f"CLOSE: {text_len} chars — near 1000 minimum, preset target is 1200-1600"
+                reason = f"CLOSE: {text_len} chars — near 1000 minimum"
                 decision.warnings.append(reason)
 
             decision.acceptance_notes.append(
-                f"word_count_gate: {text_len}/{MIN_CHARS} — {reason}"
+                f"word_count_diagnostic: {text_len}/{MIN_CHARS} grade={word_count_grade} — {reason}"
             )
 
         return decision

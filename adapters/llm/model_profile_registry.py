@@ -51,6 +51,33 @@ def _register(profile: ModelProfile) -> None:
 
 
 # DeepSeek production profiles
+# NOTE: Director uses Flash (fast, thinking-enabled) for cheap planning.
+# Writer uses Pro (capable, thinking-disabled) for quality narrative.
+_register(ModelProfile(
+    profile_id="deepseek-v4-flash-director",
+    provider="deepseek",
+    model="deepseek-v4-flash",
+    base_url="https://api.deepseek.com",
+    timeout_seconds=120,
+    default_max_tokens=4000,
+    max_retries=2,
+    api_key_env="DEEPSEEK_API_KEY",
+    token_hard_limit=50_000,
+))
+
+_register(ModelProfile(
+    profile_id="deepseek-v4-pro-writer",
+    provider="deepseek",
+    model="deepseek-v4-pro",
+    base_url="https://api.deepseek.com",
+    timeout_seconds=120,
+    default_max_tokens=4000,
+    max_retries=2,
+    api_key_env="DEEPSEEK_API_KEY",
+    token_hard_limit=50_000,
+))
+
+# Legacy profiles (kept for backward compatibility)
 _register(ModelProfile(
     profile_id="deepseek-v4-pro-director",
     provider="deepseek",

@@ -63,3 +63,12 @@ class SqliteTurnRecordStore(TurnRecordStore):
             (card_id, session_id),
         ).fetchone()
         return (row["max_idx"] or 0) + 1
+
+    def list_by_session(self, session_id: str) -> list[TurnRecord]:
+        conn = self.db.connect()
+        rows = conn.execute(
+            "SELECT record_json FROM turn_records "
+            "WHERE session_id=? ORDER BY turn_index ASC",
+            (session_id,),
+        ).fetchall()
+        return [TurnRecord.from_dict(json.loads(r["record_json"])) for r in rows]

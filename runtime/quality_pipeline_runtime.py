@@ -86,9 +86,15 @@ class SceneGate:
 
 
 class LengthGate:
-    """Checks minimum and maximum text length."""
+    """Checks minimum and maximum text length.
 
-    def __init__(self, min_length: int = 100, max_length: int = 10000):
+    NOTE: This is a DIAGNOSTIC gate — it flags short text as a warning,
+    NOT an error, so it never blocks the turn from completing.
+    The Writer-specific 1000-char check is handled separately
+    in PersistentTurnEngine._quality_check.
+    """
+
+    def __init__(self, min_length: int = 250, max_length: int = 10000):
         self.min_length = min_length
         self.max_length = max_length
 
@@ -101,7 +107,7 @@ class LengthGate:
                 issue_id=f"qi_{uuid.uuid4().hex[:8]}",
                 gate_name="length",
                 category=IssueCategory.LENGTH,
-                severity=IssueSeverity.ERROR,
+                severity=IssueSeverity.WARNING,
                 description=f"Text length {length} below minimum {self.min_length}",
                 fixable=True,
                 fix_guidance=f"Expand the text to at least {self.min_length} characters",
@@ -240,12 +246,13 @@ class QualityPipelineRuntime:
             all_issues.extend(result.issues)
 
         # Determine verdict
+        # NOTE: Only ERROR-level issues block the turn. WARNING-level issues
+        # are diagnostic — they are recorded but do NOT trigger REVISE.
+        # This ensures the turn can complete even if the Writer's output
+        # doesn't mention every active NPC or scene location.
         has_errors = any(i.severity == IssueSeverity.ERROR for i in all_issues)
-        has_warnings = any(i.severity == IssueSeverity.WARNING for i in all_issues)
 
         if has_errors:
-            verdict = QualityVerdict.REVISE
-        elif has_warnings:
             verdict = QualityVerdict.REVISE
         else:
             verdict = QualityVerdict.ACCEPTED
@@ -276,7 +283,7 @@ class QualityPipelineRuntime:
             blocking_reasons=blocking_reasons,
             warnings=warnings,
             checks=checks,
-            overall_score=1.0 if not has_errors and not has_warnings else (0.5 if not has_errors else 0.0),
+            overall_score=1.0 if not has_errors else 0.0,
             retry_allowed=True,
             max_retries=1,
         )

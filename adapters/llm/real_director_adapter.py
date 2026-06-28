@@ -185,22 +185,58 @@ class RealDirectorV2Adapter:
     def _build_plan_prompt(self, snapshot: RoundSnapshot) -> str:
         """Build prompt for Director plan generation.
 
-        Contains only safe summary data, never full card text.
+        Includes truncated worldbook/recent-turn/memory content
+        (not full card text) to improve planning quality.
         """
-        player_input = snapshot.player_input[:500]  # Truncate
+        player_input = snapshot.player_input[:500]
         scene_location = ""
         if hasattr(snapshot.card_state, 'scene_state'):
             scene_location = getattr(snapshot.card_state.scene_state, 'location', '')
 
         recent_turn_count = len(snapshot.recent_turn_records)
 
+        # ── Worldbook context (top 5, truncated) ────────────────────────
+        wb_lines = []
+        for entry in (snapshot.active_worldbook_entries or [])[:5]:
+            if not isinstance(entry, dict):
+                continue
+            title = str(entry.get("title", "") or entry.get("entry_id", "Untitled"))
+            content = str(entry.get("content_excerpt", "") or "")[:120]
+            wb_lines.append(f"- {title}: {content}")
+        wb_block = "\n".join(wb_lines) if wb_lines else "(none)"
+
+        # ── Recent turns (last 2-3, truncated) ──────────────────────────
+        turn_lines = []
+        for turn in (snapshot.recent_turn_records or [])[-3:]:
+            idx = getattr(turn, 'turn_index', '?')
+            p = str(getattr(turn, 'player_input', '') or '')[:200]
+            w = str(getattr(turn, 'writer_output', '') or '')[:200]
+            turn_lines.append(f"Turn {idx} Player: {p}")
+            turn_lines.append(f"Turn {idx} Writer: {w}")
+        recent_turns_block = "\n".join(turn_lines) if turn_lines else "(none)"
+
+        # ── Active memories (top 5, truncated) ──────────────────────────
+        mem_lines = []
+        for entry in (snapshot.active_memories or [])[:5]:
+            if isinstance(entry, dict):
+                summary = str(entry.get("summary", "") or entry.get("content", "") or "")[:120]
+                if summary:
+                    mem_lines.append(f"- {summary}")
+        mem_block = "\n".join(mem_lines) if mem_lines else "(none)"
+
         return (
             f"You are a narrative director for a roleplay session.\n\n"
             f"Current scene: {scene_location}\n"
             f"Player input: {player_input}\n"
-            f"Recent turns: {recent_turn_count}\n"
+            f"Recent turns count: {recent_turn_count}\n"
             f"Active worldbook entries: {len(snapshot.active_worldbook_entries)}\n"
             f"Active memories: {len(snapshot.active_memories)}\n\n"
+            f"=== Active Worldbook Context ===\n"
+            f"{wb_block}\n\n"
+            f"=== Recent Turns ===\n"
+            f"{recent_turns_block}\n\n"
+            f"=== Active Memories ===\n"
+            f"{mem_block}\n\n"
             f"Please generate a plan for the next turn. "
             f"Respond with JSON containing: turn_goal, scene_focus, "
             f"must_preserve_facts, must_not_do, narrative_opportunities, "
