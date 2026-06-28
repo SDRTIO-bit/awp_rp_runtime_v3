@@ -224,9 +224,15 @@ def _filter_active(records, request: MemoryRecallRequest):
                 excluded.append({"memory_id": r.memory_id, "reason": "entity filter miss"})
                 continue
         if request.query:
-            if request.query.lower() not in r.summary.lower():
-                excluded.append({"memory_id": r.memory_id, "reason": "query miss"})
-                continue
+            # Soft match: check if any word from query appears in summary
+            # (substring match is too strict for narrative summaries)
+            query_lower = request.query.lower().strip()
+            if query_lower and query_lower not in r.summary.lower():
+                # Also try word-level matching
+                query_words = [w for w in query_lower.split() if len(w) >= 2]
+                if not query_words or not any(w in r.summary.lower() for w in query_words):
+                    excluded.append({"memory_id": r.memory_id, "reason": "query miss"})
+                    continue
         hits.append(r)
     return hits, excluded
 
