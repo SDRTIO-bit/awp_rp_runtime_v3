@@ -38,7 +38,14 @@
       "class_type": "AWPV2TraceDisplay",
       "inputs": {
         "data": ["2", 2],
-        "label": "Multi-Turn Diagnostics"
+        "label": "Turn Diagnostics"
+      }
+    },
+    "4": {
+      "class_type": "AWPV2TraceDisplay",
+      "inputs": {
+        "data": ["2", 1],
+        "label": "First Turn Context"
       }
     }
   }
