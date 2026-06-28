@@ -1,15 +1,9 @@
 {
   "prompt": {
     "1": {
-      "class_type": "AWPV2CardDefinitionFixtureLoad",
-      "inputs": {
-        "fixture_path": "test_fixtures/ready_card_definition.json"
-      }
-    },
-    "2": {
       "class_type": "AWPV2CardImportAndBootstrap",
       "inputs": {
-        "source_path": "test_fixtures/ready_card_definition.json",
+        "source_path": "{{card_path}}",
         "session_id": "{{session_id}}",
         "greeting_id": "g0",
         "request_id": "{{request_id}}_bootstrap",
@@ -19,7 +13,7 @@
         "initial_state_seed": "{}"
       }
     },
-    "3": {
+    "2": {
       "class_type": "AWPV2CardStateInit",
       "inputs": {
         "card_id": "{{logical_card_id}}",
@@ -27,7 +21,13 @@
         "greeting": ""
       }
     },
-    "10": {
+    "3": {
+      "class_type": "AWPV2CardDefinitionFixtureLoad",
+      "inputs": {
+        "fixture_path": "test_fixtures/ready_card_definition.json"
+      }
+    },
+    "4": {
       "class_type": "AWPV2FirstTurnExecution",
       "inputs": {
         "session_id": "{{session_id}}",
@@ -35,32 +35,27 @@
         "logical_card_id": "{{logical_card_id}}",
         "card_version": 1,
         "source_hash": "{{source_hash}}",
-        "card_state": ["3", 0],
-        "card_session_binding": ["2", 0],
-        "opening_record": ["2", 1],
-        "worldbook_binding": ["2", 2],
-        "card_definition": ["1", 0],
+        "card_state": ["2", 0],
+        "card_session_binding": ["1", 0],
+        "opening_record": ["1", 1],
+        "worldbook_binding": ["1", 2],
+        "card_definition": ["3", 0],
         "workflow_run_id": "{{workflow_run_id}}",
         "trace_id": "{{trace_id}}",
         "turn_id": "{{turn_id}}",
         "attempt_id": "{{attempt_id}}",
         "request_id": "{{request_id}}",
-        "run_id": "{{run_id}}"
+        "run_id": "{{run_id}}",
+        "director_model": "{{director_model}}",
+        "writer_model": "{{writer_model}}"
       }
     },
-    "20": {
-      "class_type": "AWPV2TraceDisplay",
-      "inputs": {
-        "data": ["10", 2],
-        "label": "First Turn Diagnostics"
-      }
-    },
-    "21": {
+    "5": {
       "class_type": "AWPV2TurnResultProbe",
       "inputs": {
-        "receipt": ["10", 0],
-        "diagnostics": ["10", 2],
-        "turn_record": ["10", 4],
+        "receipt": ["4", 0],
+        "diagnostics": ["4", 2],
+        "turn_record": ["4", 4],
         "prompt_id": "{{prompt_id}}",
         "turn_kind": "first"
       }

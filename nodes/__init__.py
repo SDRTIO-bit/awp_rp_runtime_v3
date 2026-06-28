@@ -120,6 +120,16 @@ from .first_turn_execution_node import AWPV2FirstTurnExecution
 # Observability: trace display output node
 from .trace_display_node import AWPV2TraceDisplay
 
+# P-Canonical: Turn Result Probe + Continuation Turn
+from .turn_result_probe_node import AWPV2TurnResultProbe
+from .continuation_turn_execution_node import AWPV2ContinuationTurnExecution
+
+# P-Persistent: Session Runtime Load + Persistent Bootstrap/First/Continuation
+from .session_runtime_load_node import AWPV2SessionRuntimeLoad
+from .persistent_bootstrap_node import AWPV2PersistentBootstrap
+from .persistent_first_turn_node import AWPV2PersistentFirstTurn
+from .persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -229,6 +239,14 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2FirstTurnExecution": AWPV2FirstTurnExecution,
     # Observability
     "AWPV2TraceDisplay": AWPV2TraceDisplay,
+    # P-Canonical
+    "AWPV2TurnResultProbe": AWPV2TurnResultProbe,
+    "AWPV2ContinuationTurnExecution": AWPV2ContinuationTurnExecution,
+    # P-Persistent
+    "AWPV2SessionRuntimeLoad": AWPV2SessionRuntimeLoad,
+    "AWPV2PersistentBootstrap": AWPV2PersistentBootstrap,
+    "AWPV2PersistentFirstTurn": AWPV2PersistentFirstTurn,
+    "AWPV2PersistentContinuationTurn": AWPV2PersistentContinuationTurn,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -340,6 +358,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2FirstTurnExecution": "AWP V2 首回合执行",
     # Observability
     "AWPV2TraceDisplay": "AWP V2 追踪显示",
+    # P-Canonical
+    "AWPV2TurnResultProbe": "AWP V2 Turn Result Probe",
+    "AWPV2ContinuationTurnExecution": "AWP V2 Continuation Turn Execution",
+    # P-Persistent
+    "AWPV2SessionRuntimeLoad": "AWP V2 Session Runtime Load",
+    "AWPV2PersistentBootstrap": "AWP V2 Persistent Bootstrap",
+    "AWPV2PersistentFirstTurn": "AWP V2 Persistent First Turn",
+    "AWPV2PersistentContinuationTurn": "AWP V2 Persistent Continuation Turn",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

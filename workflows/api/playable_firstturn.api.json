@@ -1,0 +1,26 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "AWPV2PersistentFirstTurn",
+      "inputs": {
+        "session_id": "play-session-001",
+        "player_input": "你好，我想了解一下这个地方。",
+        "turn_id": "turn-001",
+        "request_id": "req-turn-001",
+        "workflow_run_id": "wfr-turn-001",
+        "trace_id": "trc-turn-001",
+        "director_profile_id": "fake-director",
+        "writer_profile_id": "fake-writer"
+      }
+    },
+    "2": {
+      "class_type": "AWPV2TurnResultProbe",
+      "inputs": {
+        "receipt": ["1", 0],
+        "diagnostics": ["1", 2],
+        "turn_record": ["1", 4],
+        "turn_kind": "first"
+      }
+    }
+  }
+}

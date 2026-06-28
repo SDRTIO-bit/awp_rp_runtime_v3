@@ -6,6 +6,7 @@ first formal RP turn pipeline in a single execution.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
@@ -131,6 +132,8 @@ class AWPV2FirstTurnExecution:
                 "trace_id": ("STRING", {"default": ""}),
                 "turn_id": ("STRING", {"default": ""}),
                 "attempt_id": ("STRING", {"default": ""}),
+                "director_model": ("STRING", {"default": ""}),
+                "writer_model": ("STRING", {"default": ""}),
                 "request_id": ("STRING", {"default": ""}),
                 "run_id": ("STRING", {"default": ""}),
             },
@@ -170,6 +173,8 @@ class AWPV2FirstTurnExecution:
         attempt_id: str = "",
         request_id: str = "",
         run_id: str = "",
+        director_model: str = "",
+        writer_model: str = "",
     ) -> tuple:
         import hashlib
         from datetime import datetime, timezone
@@ -247,7 +252,50 @@ class AWPV2FirstTurnExecution:
         snapshot_store = FakeRoundSnapshotStore()
         trace_store = FakeTraceStore()
 
-        # Create pipeline with fake adapters
+        # Create adapters -- use real if model specified, fake otherwise
+        if director_model or writer_model:
+            from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
+            from ..adapters.llm.real_director_adapter import RealDirectorV2Adapter
+            from ..adapters.llm.real_writer_adapter import RealWriterV2Adapter
+
+            # Create separate adapters for director and writer with different models
+            director_llm = DeepSeekAdapter(model=director_model or "deepseek-chat")
+            writer_llm = DeepSeekAdapter(model=writer_model or "deepseek-chat")
+
+            class _DirectorBridge:
+                """Bridge RealDirectorV2Adapter to FirstTurnPipeline protocol."""
+                def __init__(self, adapter):
+                    self._adapter = adapter
+                def plan(self, snapshot):
+                    plan, receipt = self._adapter.generate_plan(
+                        snapshot, workflow_run_id=workflow_run_id,
+                        trace_id=trace_id, turn_id=turn_id, attempt_id=attempt_id,
+                    )
+                    return plan, {}, {}
+
+            class _WriterBridge:
+                """Bridge RealWriterV2Adapter to FirstTurnPipeline protocol."""
+                def __init__(self, adapter):
+                    self._adapter = adapter
+                def write(self, brief, snapshot):
+                    from ..contracts.writer_input_bundle import WriterInputBundle
+                    bundle = WriterInputBundle(
+                        round_snapshot=snapshot, final_turn_brief=brief,
+                    )
+                    text, receipt = self._adapter.generate(
+                        bundle, workflow_run_id=workflow_run_id,
+                        trace_id=trace_id, turn_id=turn_id, attempt_id=attempt_id,
+                    )
+                    from ..contracts.writer_draft import WriterDraft
+                    return WriterDraft(draft_id="real_draft", text=text)
+
+            dir_adapter = _DirectorBridge(RealDirectorV2Adapter(director_llm, model=director_model))
+            wrt_adapter = _WriterBridge(RealWriterV2Adapter(writer_llm, model=writer_model))
+        else:
+            dir_adapter = _FakeDirectorAdapter()
+            wrt_adapter = _FakeWriterAdapter()
+
+        # Create pipeline with adapters
         pipeline = FirstTurnPipeline(
             card_state_store=card_state_store,
             turn_record_store=turn_store,
@@ -256,8 +304,8 @@ class AWPV2FirstTurnExecution:
             binding_store=binding_store,
             opening_store=opening_store,
             worldbook_store=worldbook_store,
-            director_adapter=_FakeDirectorAdapter(),
-            writer_adapter=_FakeWriterAdapter(),
+            director_adapter=dir_adapter,
+            writer_adapter=wrt_adapter,
             quality_adapter=_FakeQualityAdapter(),
             state_proposal_adapter=_FakeStateProposalAdapter(),
         )
@@ -267,6 +315,26 @@ class AWPV2FirstTurnExecution:
         # Build outputs
         receipt_dict = receipt.to_dict() if receipt else {}
         diag_dict = diag.to_dict()
+
+        # Extract accepted text and receipt JSON
+        accepted_text = receipt_dict.get("accepted_text", "")
+        receipt_json_str = json.dumps(receipt_dict, ensure_ascii=False) if receipt_dict else "{}"
+
+        # Write output to file for runner extraction
+        try:
+            from pathlib import Path
+            output_dir = Path("artifacts/real-provider-outputs")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_file = output_dir / f"turn_{turn_id[:16]}.json"
+            output_file.write_text(json.dumps({
+                "turn_id": turn_id,
+                "accepted_text": accepted_text,
+                "quality_verdict": receipt_dict.get("quality_verdict", ""),
+                "receipt": receipt_dict,
+                "diagnostics": diag_dict,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass  # Never fail the node due to output writing
 
         # Load committed state and turn record
         committed_state = card_state_store.load(logical_card_id, session_id)

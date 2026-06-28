@@ -132,9 +132,21 @@ class SqliteActiveMemoryStore(ActiveMemoryStore):
         limited = ordered[: request.limit]
         for h in limited:
             self.touch_recall(card_id, session_id, h.memory_id)
+        # Wrap ActiveMemoryRecord → RecallHit for assembler compatibility
+        hit_objs = [
+            RecallHit(
+                memory_id=r.memory_id, layer="active",
+                score=r.importance, hit_reasons=["active_recall"],
+                source_refs=list(r.source_turn_ids), provenance="",
+                importance=r.importance, confidence=r.confidence,
+                status=r.status, summary=r.summary, content=r.summary,
+                entity_refs=list(r.entity_refs),
+            )
+            for r in limited
+        ]
         return MemoryRecallResult(
             request=request,
-            hits=limited,
+            hits=hit_objs,
             excluded=excluded,
             ordered_by="importance DESC, confidence DESC, recall_count DESC",
             total_available=len(hits),

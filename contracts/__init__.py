@@ -84,6 +84,13 @@ from .memory_curation_evidence import MemoryCurationEvidence
 from .memory_curation_result import MemoryCurationResult
 from .memory_curation_trigger_diagnostics import MemoryCurationTriggerDiagnostics
 
+# P-RealProvider: Provider boundary contracts
+from .provider_request import (
+    ProviderUsage, ProviderFailure, ProviderAttemptReceipt,
+    ProviderResponse, ProviderRole, ProviderMode, FailureCode,
+)
+from .provider_guardrail_config import ProviderGuardrailConfig
+
 # P-FirstTurn: First Turn Execution contracts
 from .first_turn_request import FirstTurnRequest
 from .first_turn_context import FirstTurnContext, OpeningContext, SessionBoundWorldbookRetrievalResult
@@ -172,6 +179,10 @@ __all__ = [
     "AgentExecutionReport", "AgentExecutionOutcome",
     "TurnAgentBudgetReport",
     "IntegratedTurnTrace",
+    # P-RealProvider
+    "ProviderUsage", "ProviderFailure", "ProviderAttemptReceipt",
+    "ProviderResponse", "ProviderRole", "ProviderMode", "FailureCode",
+    "ProviderGuardrailConfig",
     # P-CardImport
     "CardSourceSnapshot", "CardImportRequest", "CardImportReport", "CardImportIssue",
     "CardDefinition", "CardDefinitionStatus", "CardProfile", "CardGreeting",
