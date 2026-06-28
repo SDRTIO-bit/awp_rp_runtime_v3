@@ -81,7 +81,11 @@ class TestNodeRegistration:
         observability_expected = {
             "AWPV2TraceDisplay",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected
+        canonical_expected = {
+            "AWPV2TurnResultProbe",
+            "AWPV2ContinuationTurnExecution",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected | canonical_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 

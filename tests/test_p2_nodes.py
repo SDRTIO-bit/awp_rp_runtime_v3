@@ -17,8 +17,8 @@ class TestP2NodeRegistration:
 
     def test_all_nodes_p1_plus_p2(self):
         from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
-        # 8 P1 + 6 P2 + 8 M1 + 11 C1 + 6 D1 + 7 D2 + 7 D3 + 7 D4 + 7 D5 + 9 P-CardImport + 10 P-CardSession + 8 P-FirstTurn + 1 Observability
-        assert len(NODE_CLASS_MAPPINGS) == 95
+        # 8 P1 + 6 P2 + 8 M1 + 11 C1 + 6 D1 + 7 D2 + 7 D3 + 7 D4 + 7 D5 + 9 P-CardImport + 10 P-CardSession + 8 P-FirstTurn + 1 Observability + 2 Canonical
+        assert len(NODE_CLASS_MAPPINGS) == 97
 
     def test_display_names_chinese(self):
         from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS

@@ -398,11 +398,9 @@ def run_multiturn_acceptance(
     narrative_reports: list[dict[str, Any]] = []
     all_passed = True
 
-    # Prepare private transcript directory if needed
-    private_dir = None
-    if save_private_transcript:
-        private_dir = Path("artifacts/private-real-llm") / run_id
-        private_dir.mkdir(parents=True, exist_ok=True)
+    # Prepare private transcript collector
+    from awp_rp_runtime_v2.testing.private_transcript_collector import PrivateTranscriptCollector
+    transcript_collector = PrivateTranscriptCollector(run_id)
 
     # Load workflow
     workflow_path = Path(__file__).parent.parent / "workflows" / "api" / "real_provider_multiturn_v1.api.json"
@@ -417,6 +415,10 @@ def run_multiturn_acceptance(
     logical_card_id = ""
     source_hash = ""
     card_version = 1
+    # Track previous turn records for continuation path
+    previous_turn_records: list[dict[str, Any]] = []
+    # Track turn results for lifecycle audit
+    turn_audit_data: list[dict[str, Any]] = []
 
     print(f"\n  Session ID: {session_id}")
     print(f"  Run ID: {run_id}")
@@ -463,11 +465,21 @@ def run_multiturn_acceptance(
             import copy
             workflow = copy.deepcopy(workflow_template.get("prompt", {}))
 
+            # Determine turn kind and execution node
+            is_first_turn = (turn_num == 1)
+            turn_kind = "first" if is_first_turn else "continuation"
+            execution_node_class = "AWPV2FirstTurnExecution" if is_first_turn else "AWPV2ContinuationTurnExecution"
+
             # Patch workflow inputs
             for node_id, node in workflow.items():
                 if not isinstance(node, dict):
                     continue
                 inputs = node.get("inputs", {})
+                class_type = node.get("class_type", "")
+
+                # Patch the turn execution node class_type
+                if class_type == "{{turn_execution_node}}" or "turn_execution_node" in str(inputs):
+                    pass  # Handled below
 
                 # Patch common inputs
                 if "session_id" in inputs:
@@ -492,6 +504,18 @@ def run_multiturn_acceptance(
                 if "run_id" in inputs:
                     inputs["run_id"] = _id("run", f"{turn_id}:{attempt_id}")
 
+                # Continuation-specific inputs
+                if "previous_turn_records" in inputs:
+                    inputs["previous_turn_records"] = json.dumps(previous_turn_records, ensure_ascii=False)
+                if "turn_index" in inputs:
+                    inputs["turn_index"] = turn_num
+
+                # Probe-specific inputs
+                if "prompt_id" in inputs:
+                    inputs["prompt_id"] = ""  # Will be set after queue
+                if "turn_kind" in inputs:
+                    inputs["turn_kind"] = turn_kind
+
                 # Patch card path
                 if "source_path" in inputs:
                     inputs["source_path"] = card_path
@@ -514,10 +538,24 @@ def run_multiturn_acceptance(
                 if "card_version" in inputs:
                     inputs["card_version"] = card_version
 
+            # Fix class_type for turn execution node
+            for node_id, node in workflow.items():
+                if not isinstance(node, dict):
+                    continue
+                if node.get("class_type") in ("{{turn_execution_node}}", "AWPV2FirstTurnExecution", "AWPV2ContinuationTurnExecution"):
+                    node["class_type"] = execution_node_class
+
             # Submit workflow
             result = comfy.queue_prompt(workflow)
             prompt_id = result.get("prompt_id", "")
             turn_result["prompt_id"] = prompt_id
+
+            # Patch prompt_id into probe node for /history correlation
+            for node_id, node in workflow.items():
+                if not isinstance(node, dict):
+                    continue
+                if node.get("class_type") == "AWPV2TurnResultProbe":
+                    node["inputs"]["prompt_id"] = prompt_id
 
             # Wait for completion
             history_entry = comfy.wait_for_completion(prompt_id, timeout=120)
@@ -537,6 +575,8 @@ def run_multiturn_acceptance(
                 # Extract outputs (multiple formats)
                 outputs = history_entry.get("outputs", {})
                 extracted_text = ""
+                probe_projection = None
+
                 for node_id, node_output in outputs.items():
                     if not isinstance(node_output, dict):
                         continue
@@ -557,6 +597,18 @@ def run_multiturn_acceptance(
                                 for t in ui_texts:
                                     if isinstance(t, str) and len(t) > len(extracted_text):
                                         extracted_text = t
+                    # Format 3: TurnResultProbe ui.awp_turn_result_json
+                    if "ui" in node_output:
+                        ui = node_output["ui"]
+                        if isinstance(ui, dict) and "awp_turn_result_json" in ui:
+                            probe_texts = ui["awp_turn_result_json"]
+                            if isinstance(probe_texts, list) and probe_texts:
+                                try:
+                                    probe_projection = json.loads(probe_texts[0])
+                                    turn_result["probe_projection"] = probe_projection
+                                    turn_result["has_probe_output"] = True
+                                except (json.JSONDecodeError, IndexError):
+                                    pass
 
                 if extracted_text and len(extracted_text) > 10:
                     turn_result["output_text_length"] = len(extracted_text)
@@ -567,12 +619,6 @@ def run_multiturn_acceptance(
                     if ncheck["status"] != "pass":
                         turn_result["narrative_status"] = ncheck["status"]
                         turn_result["narrative_issues"] = ncheck["issues"]
-
-                    # Save private transcript if enabled
-                    if private_dir:
-                        (private_dir / f"turn_{turn_num}_output.txt").write_text(
-                            extracted_text, encoding="utf-8"
-                        )
 
                 # Also check file-based output from node
                 output_file = Path("artifacts/real-provider-outputs") / f"turn_{turn_id[:16]}.json"
@@ -589,22 +635,66 @@ def run_multiturn_acceptance(
                             if ncheck["status"] != "pass":
                                 turn_result["narrative_status"] = ncheck["status"]
                                 turn_result["narrative_issues"] = ncheck["issues"]
-                            if private_dir:
-                                (private_dir / f"turn_{turn_num}_output.txt").write_text(
-                                    file_text, encoding="utf-8"
-                                )
                     except Exception:
                         pass
+
+                # Collect private transcript (only from accepted TurnRecords)
+                if probe_projection and probe_projection.get("quality_status") == "accepted":
+                    accepted_text_for_transcript = ""
+                    # Try to get from file output (contains full text)
+                    if output_file.exists():
+                        try:
+                            output_data = json.loads(output_file.read_text(encoding="utf-8"))
+                            accepted_text_for_transcript = output_data.get("accepted_text", "")
+                        except Exception:
+                            pass
+                    transcript_collector.collect(
+                        turn_index=turn_num,
+                        turn_id=turn_id,
+                        turn_record_id=probe_projection.get("turn_record_id", ""),
+                        accepted_text=accepted_text_for_transcript,
+                        quality_status=probe_projection.get("quality_status", ""),
+                    )
+
+                # Track turn data for lifecycle audit
+                audit_entry = {
+                    "turn_index": turn_num,
+                    "turn_kind": turn_kind,
+                    "turn_id": turn_id,
+                    "quality_status": probe_projection.get("quality_status", "unknown") if probe_projection else "unknown",
+                    "receipt_status": probe_projection.get("receipt_status", "unknown") if probe_projection else "unknown",
+                    "turn_record_id": probe_projection.get("turn_record_id", "") if probe_projection else "",
+                    "accepted_text_hash": probe_projection.get("accepted_text_hash", "") if probe_projection else "",
+                    "accepted_text_length": probe_projection.get("accepted_text_length", 0) if probe_projection else 0,
+                    "card_state_revision_before": probe_projection.get("card_state_revision_before", 0) if probe_projection else 0,
+                    "card_state_revision_after": probe_projection.get("card_state_revision_after", 0) if probe_projection else 0,
+                    "memory_disposition": probe_projection.get("memory_disposition", "") if probe_projection else "",
+                    "diagnostic_status": probe_projection.get("diagnostic_status", "") if probe_projection else "",
+                    "has_opening_context": is_first_turn,
+                    "has_probe_output": bool(probe_projection),
+                }
+                turn_audit_data.append(audit_entry)
+
+                # Track previous turn records for continuation
+                if probe_projection and probe_projection.get("quality_status") == "accepted":
+                    previous_turn_records.append({
+                        "turn_id": turn_id,
+                        "turn_index": turn_num,
+                        "card_id": logical_card_id or "card_001",
+                        "session_id": session_id,
+                        "player_input": player_input,
+                        "writer_output": extracted_text[:500] if extracted_text else "",
+                        "mode": "normal",
+                        "base_card_state_revision": probe_projection.get("card_state_revision_before", 0),
+                        "result_card_state_revision": probe_projection.get("card_state_revision_after", 0),
+                        "created_at": turn_result.get("timestamp", ""),
+                    })
 
             # Estimate provider calls (rough: 2 per turn for director+writer)
             turn_result["provider_calls"] = 2 if mode == "full_pipeline" else 1
             total_provider_calls += turn_result["provider_calls"]
 
-            # Save private input if enabled
-            if private_dir:
-                (private_dir / f"turn_{turn_num}_input.txt").write_text(
-                    player_input, encoding="utf-8"
-                )
+            # Private transcript collected via collector above (no direct file writes)
 
         except TimeoutError as e:
             turn_result["status"] = "timeout"
@@ -622,6 +712,18 @@ def run_multiturn_acceptance(
         status_icon = "OK" if turn_result["status"] == "success" else "FAIL"
         print(f"  {status_icon} [{turn_result['status']}] {turn_result.get('latency_ms', 0)}ms")
 
+    # ── Lifecycle Audit ─────────────────────────────────────────────────
+    from awp_rp_runtime_v2.testing.multiturn_lifecycle_audit import MultiTurnLifecycleAudit
+    lifecycle_audit = MultiTurnLifecycleAudit()
+    audit_report = lifecycle_audit.audit(turn_audit_data)
+
+    # ── Flush Private Transcript ────────────────────────────────────────
+    transcript_dir = transcript_collector.flush()
+    if transcript_dir:
+        print(f"\n  Private transcript saved to: {transcript_dir}")
+    elif save_private_transcript:
+        print(f"\n  Private transcript: no accepted turns to save")
+
     # ── Write Reports ────────────────────────────────────────────────────
     run_data = {
         "run_id": run_id,
@@ -635,6 +737,8 @@ def run_multiturn_acceptance(
         "status": "pass" if all_passed else "fail",
         "started_at": _now(),
         "guardrails": guardrails.to_safe_summary(),
+        "lifecycle_audit": audit_report.to_dict(),
+        "probe_capture_rate": sum(1 for t in turn_audit_data if t.get("has_probe_output")) / max(len(turn_audit_data), 1),
     }
 
     run_dir = report_writer.write_run(run_id, run_data)
@@ -644,6 +748,10 @@ def run_multiturn_acceptance(
         "overall_status": "pass" if all(not r.get("narrative_issues") for r in narrative_reports) else "warning",
         "checks": narrative_reports,
     })
+    # Write lifecycle audit report
+    (run_dir / "lifecycle-audit.json").write_text(
+        json.dumps(audit_report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     # Generate markdown report
     report_lines = [
@@ -656,17 +764,33 @@ def run_multiturn_acceptance(
         f"**Turns:** {len(turn_results)}",
         f"**Provider Calls:** {total_provider_calls}",
         f"**Status:** {'PASS' if all_passed else 'FAIL'}",
+        f"**Lifecycle Audit:** {audit_report.overall_status}",
+        f"**Probe Capture Rate:** {run_data.get('probe_capture_rate', 0):.0%}",
         f"",
         f"## Turn Results",
         f"",
-        f"| # | Name | Status | Latency | Narrative |",
-        f"|---|------|--------|---------|-----------|",
+        f"| # | Name | Status | Latency | Probe | Narrative |",
+        f"|---|------|--------|---------|-------|-----------|",
     ]
     for tr in turn_results:
         nstatus = tr.get("narrative_status", "-")
+        probe = "YES" if tr.get("has_probe_output") else "NO"
         report_lines.append(
-            f"| {tr['turn']} | {tr['name']} | {tr['status']} | {tr.get('latency_ms', 0)}ms | {nstatus} |"
+            f"| {tr['turn']} | {tr['name']} | {tr['status']} | {tr.get('latency_ms', 0)}ms | {probe} | {nstatus} |"
         )
+
+    # Lifecycle audit section
+    if audit_report.findings:
+        report_lines.extend(["", "## Lifecycle Audit", ""])
+        report_lines.append(f"**Total checks:** {audit_report.total_checks}")
+        report_lines.append(f"**Passed:** {audit_report.passed}")
+        report_lines.append(f"**Failed:** {audit_report.failed}")
+        report_lines.append(f"**Warnings:** {audit_report.warnings}")
+        if audit_report.failed > 0:
+            report_lines.extend(["", "### Failed Checks", ""])
+            for f in audit_report.findings:
+                if f.status == "fail":
+                    report_lines.append(f"- Turn {f.turn_index}: {f.check_name} — {f.message}")
 
     if any(r.get("narrative_issues") for r in narrative_reports):
         report_lines.extend(["", "## Narrative Issues", ""])
@@ -681,6 +805,9 @@ def run_multiturn_acceptance(
     print(f"Result: {'PASS' if all_passed else 'FAIL'}")
     print(f"Turns: {len(turn_results)}")
     print(f"Provider calls: {total_provider_calls}")
+    print(f"Lifecycle Audit: {audit_report.overall_status}")
+    print(f"Probe Capture Rate: {run_data.get('probe_capture_rate', 0):.0%}")
+    print(f"Private Transcript: {transcript_collector.collected_count} entries")
     print(f"Report: {run_dir}")
     print("=" * 60)
 

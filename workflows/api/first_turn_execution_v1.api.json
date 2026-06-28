@@ -54,6 +54,16 @@
         "data": ["10", 2],
         "label": "First Turn Diagnostics"
       }
+    },
+    "21": {
+      "class_type": "AWPV2TurnResultProbe",
+      "inputs": {
+        "receipt": ["10", 0],
+        "diagnostics": ["10", 2],
+        "turn_record": ["10", 4],
+        "prompt_id": "{{prompt_id}}",
+        "turn_kind": "first"
+      }
     }
   }
 }

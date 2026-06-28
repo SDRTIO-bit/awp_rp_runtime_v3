@@ -28,7 +28,7 @@
       }
     },
     "4": {
-      "class_type": "AWPV2FirstTurnExecution",
+      "class_type": "{{turn_execution_node}}",
       "inputs": {
         "session_id": "{{session_id}}",
         "player_input": "{{player_input}}",
@@ -47,7 +47,19 @@
         "request_id": "{{request_id}}",
         "run_id": "{{run_id}}",
         "director_model": "{{director_model}}",
-        "writer_model": "{{writer_model}}"
+        "writer_model": "{{writer_model}}",
+        "previous_turn_records": "{{previous_turn_records}}",
+        "turn_index": "{{turn_index}}"
+      }
+    },
+    "5": {
+      "class_type": "AWPV2TurnResultProbe",
+      "inputs": {
+        "receipt": ["4", 0],
+        "diagnostics": ["4", 2],
+        "turn_record": ["4", 4],
+        "prompt_id": "{{prompt_id}}",
+        "turn_kind": "{{turn_kind}}"
       }
     }
   }
