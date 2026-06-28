@@ -124,6 +124,10 @@ from .trace_display_node import AWPV2TraceDisplay
 from .turn_result_probe_node import AWPV2TurnResultProbe
 from .continuation_turn_execution_node import AWPV2ContinuationTurnExecution
 
+# P-Persistent: Session Runtime Load + Persistent Continuation
+from .session_runtime_load_node import AWPV2SessionRuntimeLoad
+from .persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -236,6 +240,9 @@ NODE_CLASS_MAPPINGS = {
     # P-Canonical
     "AWPV2TurnResultProbe": AWPV2TurnResultProbe,
     "AWPV2ContinuationTurnExecution": AWPV2ContinuationTurnExecution,
+    # P-Persistent
+    "AWPV2SessionRuntimeLoad": AWPV2SessionRuntimeLoad,
+    "AWPV2PersistentContinuationTurn": AWPV2PersistentContinuationTurn,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -350,6 +357,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     # P-Canonical
     "AWPV2TurnResultProbe": "AWP V2 Turn Result Probe",
     "AWPV2ContinuationTurnExecution": "AWP V2 Continuation Turn Execution",
+    # P-Persistent
+    "AWPV2SessionRuntimeLoad": "AWP V2 Session Runtime Load",
+    "AWPV2PersistentContinuationTurn": "AWP V2 Persistent Continuation Turn",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

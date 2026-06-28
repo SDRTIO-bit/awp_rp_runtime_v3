@@ -298,6 +298,58 @@ CREATE TABLE IF NOT EXISTS card_quarantine_records (
 CREATE INDEX IF NOT EXISTS idx_quarantine_card ON card_quarantine_records(card_id, card_version);
 """,
     ),
+    (
+        4,
+        "Session bootstrap persistence: bindings, openings, worldbook bindings, bootstrap receipts",
+        """
+CREATE TABLE IF NOT EXISTS card_session_bindings (
+    session_id TEXT PRIMARY KEY,
+    logical_card_id TEXT NOT NULL,
+    card_version INTEGER NOT NULL DEFAULT 0,
+    source_hash TEXT NOT NULL DEFAULT '',
+    binding_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_session_bindings_card
+    ON card_session_bindings(logical_card_id, status);
+
+CREATE TABLE IF NOT EXISTS opening_records (
+    opening_record_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    logical_card_id TEXT NOT NULL DEFAULT '',
+    greeting_id TEXT NOT NULL DEFAULT '',
+    record_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_opening_records_session
+    ON opening_records(session_id);
+
+CREATE TABLE IF NOT EXISTS worldbook_bindings (
+    worldbook_binding_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    logical_card_id TEXT NOT NULL DEFAULT '',
+    source_hash TEXT NOT NULL DEFAULT '',
+    binding_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_worldbook_bindings_session
+    ON worldbook_bindings(session_id);
+
+CREATE TABLE IF NOT EXISTS bootstrap_receipts (
+    receipt_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL,
+    logical_card_id TEXT NOT NULL DEFAULT '',
+    receipt_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bootstrap_receipts_request
+    ON bootstrap_receipts(request_id);
+CREATE INDEX IF NOT EXISTS idx_bootstrap_receipts_session
+    ON bootstrap_receipts(session_id);
+""",
+    ),
 ]
 
 
