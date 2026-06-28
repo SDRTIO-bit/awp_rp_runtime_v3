@@ -202,11 +202,11 @@ class TestDeepSeekAdapter:
 
     def test_timeout_produces_failure(self):
         """Test 4: Provider timeout -> zero side effects."""
-        import anthropic
+        from openai import APITimeoutError
         adapter = DeepSeekAdapter(timeout_seconds=1, max_retries=0)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
             mock_client = MagicMock()
-            mock_client.messages.create.side_effect = anthropic.APITimeoutError(request=MagicMock())
+            mock_client.chat.completions.create.side_effect = APITimeoutError(request=MagicMock())
             adapter._client = mock_client
             text, receipt = adapter.generate_text("test prompt", turn_id="t1", attempt_id="a1")
             assert text == ""
@@ -215,13 +215,13 @@ class TestDeepSeekAdapter:
 
     def test_server_error_retry_then_fail(self):
         """Test 5: Provider 5xx -> failure."""
-        import anthropic
+        from openai import APIStatusError
         adapter = DeepSeekAdapter(max_retries=1)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
             mock_client = MagicMock()
             mock_response = MagicMock()
             mock_response.status_code = 500
-            mock_client.messages.create.side_effect = anthropic.APIStatusError(
+            mock_client.chat.completions.create.side_effect = APIStatusError(
                 message="Server Error", response=mock_response, body=None
             )
             adapter._client = mock_client
@@ -230,17 +230,16 @@ class TestDeepSeekAdapter:
             assert receipt.success is False
             assert receipt.failure["failure_code"] == FailureCode.SERVER_ERROR
 
-    def test_structured_tool_use_success(self):
-        """Test 6: Director structured output via tool_use."""
+    def test_structured_json_success(self):
+        """Test 6: Director structured output via JSON."""
         adapter = DeepSeekAdapter(max_retries=1)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
             mock_client = MagicMock()
-            mock_block = MagicMock()
-            mock_block.type = "tool_use"
-            mock_block.input = {"turn_goal": "test", "scene_focus": "scene"}
-            mock_usage = MagicMock(input_tokens=10, output_tokens=5)
-            mock_message = MagicMock(content=[mock_block], usage=mock_usage)
-            mock_client.messages.create.return_value = mock_message
+            mock_choice = MagicMock()
+            mock_choice.message.content = '{"turn_goal": "test", "scene_focus": "scene"}'
+            mock_usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+            mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
+            mock_client.chat.completions.create.return_value = mock_resp
             adapter._client = mock_client
             parsed, receipt = adapter.generate_structured(
                 "test", {"required": ["turn_goal"]}, turn_id="t1", attempt_id="a1"
@@ -253,12 +252,11 @@ class TestDeepSeekAdapter:
         adapter = DeepSeekAdapter(max_retries=0)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
             mock_client = MagicMock()
-            mock_block = MagicMock()
-            mock_block.text = ""
-            del mock_block.type  # No type attribute
-            mock_usage = MagicMock(input_tokens=10, output_tokens=5)
-            mock_message = MagicMock(content=[mock_block], usage=mock_usage)
-            mock_client.messages.create.return_value = mock_message
+            mock_choice = MagicMock()
+            mock_choice.message.content = ""
+            mock_usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+            mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
+            mock_client.chat.completions.create.return_value = mock_resp
             adapter._client = mock_client
             parsed, receipt = adapter.generate_structured(
                 "test", {"required": ["turn_goal"]}, turn_id="t1", attempt_id="a1"

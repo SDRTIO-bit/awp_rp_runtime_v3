@@ -1,10 +1,9 @@
-"""DeepSeek Provider Adapter via Anthropic API format.
+"""DeepSeek Provider Adapter -- real LLM calls via OpenAI-compatible API.
 
-Uses the official anthropic SDK targeting DeepSeek's Anthropic-compatible
-endpoint (https://api.deepseek.com/anthropic).
-
-Director uses tool_use for reliable structured output.
-Writer uses standard text generation.
+Uses the official openai SDK for reliable HTTP handling (connection pooling,
+automatic retries, proper timeout management).
+Target: https://api.deepseek.com (OpenAI-compatible endpoint).
+Models: deepseek-v4-pro (director), deepseek-v4-flash (writer).
 NEVER logs or stores the API key in traces/reports.
 """
 
@@ -12,7 +11,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -33,47 +31,10 @@ def _id(prefix: str, seed: str) -> str:
     return f"{prefix}_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
 
-# Director tool schema — forces structured JSON output via tool_use
-DIRECTOR_TOOL = {
-    "name": "submit_director_plan",
-    "description": "Submit the narrative director plan for this turn",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "turn_goal": {
-                "type": "string",
-                "description": "What should happen in this turn"
-            },
-            "scene_focus": {
-                "type": "string",
-                "description": "Current scene focus"
-            },
-            "writer_constraints": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Constraints for the writer"
-            },
-            "narrative_opportunities": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Narrative opportunities to explore"
-            },
-            "risk_flags": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Risk flags to avoid"
-            }
-        },
-        "required": ["turn_goal", "scene_focus"]
-    }
-}
-
-
 class DeepSeekAdapter(BaseLlmAdapter):
-    """Real DeepSeek provider adapter via Anthropic API.
+    """Real DeepSeek provider adapter via OpenAI-compatible API.
 
-    Uses anthropic SDK for reliable HTTP handling.
-    Director uses tool_use for guaranteed structured output.
+    Uses openai SDK for reliable HTTP handling.
     Requires DEEPSEEK_API_KEY environment variable.
     """
 
@@ -82,7 +43,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
         model: str = "deepseek-v4-pro",
         default_max_tokens: int = 2000,
         timeout_seconds: int = 120,
-        max_retries: int = 2,
+        max_retries: int = 3,
     ):
         self._model = model
         self._default_max_tokens = default_max_tokens
@@ -94,16 +55,12 @@ class DeepSeekAdapter(BaseLlmAdapter):
         self._client = None
 
     def _get_client(self):
-        """Lazy-initialize the Anthropic client for DeepSeek."""
+        """Lazy-initialize the OpenAI client."""
         if self._client is None:
-            import anthropic
+            from openai import OpenAI
             api_key = get_deepseek_api_key()
-            # DeepSeek Anthropic endpoint
-            base_url = os.environ.get(
-                "DEEPSEEK_BASE_URL",
-                "https://api.deepseek.com/anthropic"
-            )
-            self._client = anthropic.Anthropic(
+            base_url = get_deepseek_base_url()
+            self._client = OpenAI(
                 api_key=api_key,
                 base_url=base_url,
                 timeout=self._timeout,
@@ -161,30 +118,27 @@ class DeepSeekAdapter(BaseLlmAdapter):
 
         try:
             client = self._get_client()
-            message = client.messages.create(
+            response = client.chat.completions.create(
                 model=use_model,
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=0.8,
-                messages=[{"role": "user", "content": prompt}],
             )
 
             self._call_count += 1
             latency_ms = int((time.time() - start_time) * 1000)
 
-            # Extract text from content blocks
             text = ""
-            for block in message.content:
-                if hasattr(block, "text"):
-                    text += block.text
+            finish_reason = "stop"
+            if response.choices:
+                text = response.choices[0].message.content or ""
+                finish_reason = response.choices[0].finish_reason or "stop"
 
-            # Extract usage
+            usage_data = response.usage
             usage = ProviderUsage(
-                prompt_tokens=message.usage.input_tokens if message.usage else 0,
-                completion_tokens=message.usage.output_tokens if message.usage else 0,
-                total_tokens=(
-                    (message.usage.input_tokens + message.usage.output_tokens)
-                    if message.usage else 0
-                ),
+                prompt_tokens=usage_data.prompt_tokens if usage_data else 0,
+                completion_tokens=usage_data.completion_tokens if usage_data else 0,
+                total_tokens=usage_data.total_tokens if usage_data else 0,
                 model=use_model,
             )
             self._total_tokens += usage.total_tokens
@@ -194,7 +148,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
             if not success:
                 failure = ProviderFailure(
                     failure_code=FailureCode.EMPTY_RESPONSE,
-                    failure_message="Empty content in response",
+                    failure_message=f"Empty content (finish_reason={finish_reason})",
                     retry_count=0,
                 )
 
@@ -264,10 +218,8 @@ class DeepSeekAdapter(BaseLlmAdapter):
         attempt_id: str = "",
         model: str = "",
     ) -> tuple[dict[str, Any], ProviderAttemptReceipt]:
-        """Generate structured JSON via tool_use.
+        """Generate structured JSON from a prompt.
 
-        Uses Anthropic's tool_use feature to guarantee structured output.
-        The model MUST call submit_director_plan with the required schema.
         Returns (parsed_data, receipt).
         On failure, returns ({}, receipt_with_failure).
         """
@@ -279,63 +231,58 @@ class DeepSeekAdapter(BaseLlmAdapter):
         started_at = _now()
         start_time = time.time()
 
+        json_instruction = (
+            "\n\nPlease respond with valid JSON only. "
+            "Do not include any text before or after the JSON object."
+        )
+        full_prompt = prompt + json_instruction
+
         try:
             client = self._get_client()
-            message = client.messages.create(
+            response = client.chat.completions.create(
                 model=use_model,
+                messages=[{"role": "user", "content": full_prompt}],
                 max_tokens=max_tokens,
                 temperature=0.3,
-                system="You are a narrative director for an interactive role-play session. "
-                       "Analyze the scene and call the submit_director_plan tool with your plan.",
-                messages=[{"role": "user", "content": prompt}],
-                tools=[DIRECTOR_TOOL],
-                tool_choice={"type": "tool", "name": "submit_director_plan"},
             )
 
             self._call_count += 1
             latency_ms = int((time.time() - start_time) * 1000)
 
-            # Extract tool_use result
-            parsed = {}
-            for block in message.content:
-                if hasattr(block, "type") and block.type == "tool_use":
-                    parsed = block.input
-                    break
+            raw_text = ""
+            if response.choices:
+                raw_text = response.choices[0].message.content or ""
 
-            # Fallback: try text content as JSON
-            if not parsed:
-                for block in message.content:
-                    if hasattr(block, "text") and block.text.strip():
-                        try:
-                            cleaned = block.text.strip()
-                            if cleaned.startswith("```"):
-                                lines = cleaned.split("\n")
-                                cleaned = "\n".join(lines[1:])
-                                if cleaned.endswith("```"):
-                                    cleaned = cleaned[:-3]
-                                cleaned = cleaned.strip()
-                            parsed = json.loads(cleaned)
-                        except json.JSONDecodeError:
-                            pass
-                        break
-
+            usage_data = response.usage
             usage = ProviderUsage(
-                prompt_tokens=message.usage.input_tokens if message.usage else 0,
-                completion_tokens=message.usage.output_tokens if message.usage else 0,
-                total_tokens=(
-                    (message.usage.input_tokens + message.usage.output_tokens)
-                    if message.usage else 0
-                ),
+                prompt_tokens=usage_data.prompt_tokens if usage_data else 0,
+                completion_tokens=usage_data.completion_tokens if usage_data else 0,
+                total_tokens=usage_data.total_tokens if usage_data else 0,
                 model=use_model,
             )
             self._total_tokens += usage.total_tokens
 
-            success = bool(parsed)
+            parsed = {}
+            parse_error = None
+            if raw_text.strip():
+                try:
+                    cleaned = raw_text.strip()
+                    if cleaned.startswith("```"):
+                        lines = cleaned.split("\n")
+                        cleaned = "\n".join(lines[1:])
+                        if cleaned.endswith("```"):
+                            cleaned = cleaned[:-3]
+                        cleaned = cleaned.strip()
+                    parsed = json.loads(cleaned)
+                except json.JSONDecodeError:
+                    parse_error = "Response is not valid JSON"
+
+            success = bool(parsed) and parse_error is None
             failure = None
             if not success:
                 failure = ProviderFailure(
-                    failure_code=FailureCode.EMPTY_RESPONSE,
-                    failure_message="No tool_use or valid JSON in response",
+                    failure_code=FailureCode.INVALID_JSON if parse_error else FailureCode.EMPTY_RESPONSE,
+                    failure_message=parse_error or "Empty or invalid structured response",
                     retry_count=0,
                 )
 
@@ -395,18 +342,21 @@ class DeepSeekAdapter(BaseLlmAdapter):
 
     @staticmethod
     def _map_exception(e: Exception) -> tuple[str, str]:
-        """Map anthropic SDK exceptions to FailureCode."""
-        import anthropic
+        """Map openai SDK exceptions to FailureCode."""
+        from openai import (
+            APIConnectionError, APITimeoutError, RateLimitError,
+            APIStatusError, BadRequestError,
+        )
 
-        if isinstance(e, anthropic.APITimeoutError):
+        if isinstance(e, APITimeoutError):
             return FailureCode.NETWORK_TIMEOUT, "Request timed out"
-        elif isinstance(e, anthropic.APIConnectionError):
+        elif isinstance(e, APIConnectionError):
             return FailureCode.CONNECTION_ERROR, str(e)[:200]
-        elif isinstance(e, anthropic.RateLimitError):
+        elif isinstance(e, RateLimitError):
             return FailureCode.RATE_LIMITED, "Rate limited"
-        elif isinstance(e, anthropic.APIStatusError):
+        elif isinstance(e, APIStatusError):
             return FailureCode.SERVER_ERROR, f"HTTP {e.status_code}"
-        elif isinstance(e, anthropic.BadRequestError):
+        elif isinstance(e, BadRequestError):
             return FailureCode.INVALID_JSON, str(e)[:200]
         else:
             return FailureCode.CANCELLED, f"{type(e).__name__}: {str(e)[:150]}"
