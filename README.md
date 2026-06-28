@@ -1,6 +1,6 @@
 # AWP RP Runtime V2
 
-ComfyUI RP Runtime V2：双主 Agent + 受控动态子 Agent + 确定性 CardState + 三层记忆
+ComfyUI RP Runtime V2：持久化会话 + 双主 Agent + 受控动态子 Agent + 确定性 CardState + 三层记忆
 
 ---
 
@@ -21,33 +21,27 @@ ComfyUI RP Runtime V2：双主 Agent + 受控动态子 Agent + 确定性 CardSta
 
 ---
 
-## 2. 当前 Alpha 状态
+## 2. 当前状态
 
-**版本：** `v0.1.0-alpha`
+**版本：** `playable-rp-runtime-persistent-v1`
 
-这是一个 **ComfyUI RP Runtime V2 的 Alpha 架构实现**。
+这是一个**可玩的持久化 RP Runtime**。
 
-### 已完成
+### 已验证
 
-- 确定性 CardState（SQLite + 事务提交 + revision + patchId + 幂等）
-- 三层记忆系统（L1 近忆窗口 + L2 活跃记忆 + L3 RAG）
-- 双主 Agent 的职责边界（Director / Writer）
-- D1～D5 Writer 前受控动态 Agent（Wave A / Wave B）
-- D6 accepted-turn 后记忆治理
-- 动态 Agent 调度、预算、冲突治理、降级、Trace
-- ComfyUI 节点与官方 workflow JSON
-- Fake Adapter 集成测试（566 测试全部通过）
+- 持久化全链路：Bootstrap → Turn 1 → Turn 2+ → Replay，SQLite 持久化
+- 会话恢复：ComfyUI 重启后仅凭 `sessionId` 恢复 L0/L1/L2/L3
+- 幂等重放：同 `turnId` 重发返回 `replayed` receipt，零 Provider 调用
+- 模型配置受控：白名单 profile（deepseek-v4-pro/flash, fake-*）
+- 真实 DeepSeek：8/8 回合通过（Anthropic 端点）
+- ComfyUI 实机：Bootstrap → 5 回合 → Replay 全部通过
+- 852 个测试全部通过
 
-### 尚未承诺
+### 尚待验证
 
-- 生产级真实模型接入体验
-- 一键安装即玩的完整 RP 产品
-- 完整前端 UI
-- 自动世界事件系统
-- 无限制多 Agent 自主协作
-- 稳定的第三方插件生态兼容性
-
-> 当前版本使用 Fake Adapter 进行测试，真实 LLM 调用属于未来接入能力。
+- 真实 DeepSeek 在持久化节点链上连续运行
+- 真实 D6 在真实模型输出下产生 MemoryCommitPlan
+- 真实角色卡的叙事质量、角色一致性、世界书命中质量
 
 ---
 
@@ -64,14 +58,35 @@ ComfyUI RP Runtime V2：双主 Agent + 受控动态子 Agent + 确定性 CardSta
 
 ---
 
-## 4. 完整回合生命周期
+## 4. 持久化架构
+
+```
+RuntimeStoreFactory (profile + namespace → SQLite)
+  ↓
+SessionRuntimeStoreRegistry (10 stores, 1 connection)
+  ├── CardSessionBindingStore     (L0)
+  ├── OpeningRecordStore          (L0)
+  ├── WorldbookBindingStore       (L0)
+  ├── BootstrapReceiptStore       (L0)
+  ├── CardStateStore              (L0+L1)
+  ├── TurnRecordStore             (L1)
+  ├── RoundSnapshotStore          (snapshot)
+  ├── TraceStore                  (trace)
+  ├── ActiveMemoryStore           (L2)
+  └── RagMemoryStore              (L3)
+```
+
+所有持久化节点通过 `RuntimeStoreFactory.from_env()` 获取 store，不接受 `dbPath` 输入。
+
+---
+
+## 5. 完整回合生命周期
 
 ```
 Player Input
-→ CardState / Memory / Worldbook Context
-→ RoundSnapshot
-→ DirectorPlan
-→ DelegationPlan
+→ SessionRuntimeLoad (从 SQLite 恢复 L0/L1/L2/L3)
+→ RoundSnapshotBuilder
+→ DirectorPlan (tool_use / function calling)
 → Dynamic Agent Scheduler
 → Wave A (D1～D4 并发)
 → Continuity Barrier
@@ -82,16 +97,78 @@ Player Input
 → Writer / Reviser
 → Quality Gate
 → State Proposal
-→ CardState Commit
-→ TurnRecord Commit
+→ CardState Commit (SQLite)
+→ TurnRecord Commit (SQLite)
 → D6 Memory Curator
-→ Deterministic Memory Commit
+→ Deterministic Memory Commit (SQLite)
 → Completed Turn
 ```
 
 ---
 
-## 5. D1～D6 Agent 总览
+## 6. 持久化节点
+
+| 节点 | 功能 | 输入 |
+|------|------|------|
+| `AWPV2PersistentBootstrap` | 导入卡片 + 创建会话 | source_path, session_id, greeting_id |
+| `AWPV2PersistentFirstTurn` | 首回合执行 | session_id, player_input, profile_id |
+| `AWPV2PersistentContinuationTurn` | 连续回合 + 幂等重放 | session_id, player_input, turn_id |
+| `AWPV2SessionRuntimeLoad` | 加载会话状态 | session_id, player_input |
+| `AWPV2TurnResultProbe` | history-safe 输出 | receipt, diagnostics |
+
+所有持久化节点不接受 `dbPath`、`history`、`memory`、`CardState` 输入。
+
+---
+
+## 7. 幂等重放
+
+同 `sessionId + turnId + requestId` 重发时：
+
+```
+TurnRecordStore.load(turn_id)
+  ├── 存在 → 返回 replayed receipt (idempotency_status="replayed")
+  │          不调用 Provider，不写 State，不写 Memory
+  └── 不存在 → 正常执行
+```
+
+`idempotency_status` 值：
+- `fresh`：正常执行
+- `replayed`：返回既有结果
+- `conflict`：session 不匹配
+- `recovery_required`：未完成且不可恢复
+
+---
+
+## 8. 模型配置
+
+受控白名单，未知 profileId → fail closed。
+
+| Profile | Provider | Model |
+|---------|----------|-------|
+| `deepseek-v4-pro-director` | deepseek | deepseek-v4-pro |
+| `deepseek-v4-flash-writer` | deepseek | deepseek-v4-flash |
+| `fake-director` | fake | fake_director_v1 |
+| `fake-writer` | fake | fake_writer_v1 |
+
+API workflow 不可覆盖 api_key、base_url、token_hard_limit。
+
+---
+
+## 9. DeepSeek Provider
+
+支持双端点自动检测：
+
+| 端点 | SDK | 特点 |
+|------|-----|------|
+| `api.deepseek.com/anthropic` | anthropic | tool_use 结构化输出，ThinkingBlock 分离 |
+| `api.deepseek.com` | openai | function calling 结构化输出 |
+
+Director 使用 tool_use/function calling 保证结构化输出。
+Writer 使用标准文本生成。
+
+---
+
+## 10. D1～D6 Agent 总览
 
 | Agent | 代号 | 职责 | 运行位置 |
 |-------|------|------|----------|
@@ -102,260 +179,104 @@ Player Input
 | D5 Continuity | continuity | 连续性约束 | Wave B（Continuity Barrier 后） |
 | D6 Memory Curator | memory-curator | accepted-turn 后记忆治理 | Post-Commit（Writer 后） |
 
-所有 Agent 只读、不可委托、不可写状态/记忆。产出标准化为建议（Suggestion），不是既成事实。
-
 ---
 
-## 6. 执行拓扑：Wave A / Continuity Barrier / D6
-
-```
-Wave A (并发):
-  D1 History / Recall
-  D2 Opportunity
-  D3 World-Life
-  D4 Emotion / Relationship
-        ↓
-  Normalized Candidate Suggestion Set
-        ↓
-  Continuity Barrier
-        ↓
-  Wave B:
-  D5 Continuity Agent
-        ↓
-  Conflict Governance (SuggestionConflictGovernor)
-        ↓
-  Director Suggestion Resolution
-        ↓
-  FinalTurnBrief → Writer
-
-  ... Writer 产出正文 ...
-
-QualityGate(ACCEPT) → CardStateCommit → TurnRecordCommit
-        ↓
-  D6 Memory Curator (Post-Commit)
-        ↓
-  ActiveMemoryCommit + RagMemoryCommit
-        ↓
-  Completed Turn
-```
-
----
-
-## 7. 卡状态与三层记忆
-
-### CardState
-
-世界变量、事件标志、场景状态的唯一真实来源。
-
-- 只有 `CardStateCommitRuntime` 可以写入
-- 所有写入需要：Gate 通过 + Revision 匹配 + 唯一 patchId + 事务原子性
-
-### 三层记忆
+## 11. 三层记忆
 
 | 层级 | 内容 | 上限 | 描述 |
 |------|------|------|------|
-| L1 近忆窗口 | 最近 accepted TurnRecord | 5 条 | 完整回合记录，永不截断 |
-| L2 活跃记忆 | 剧情注意力卡片 | 15 条 | 30-80 字符，高优先级优先保留 |
-| L3 RAG 记忆 | 长期可搜索记忆 | 每轮 ≤10 条 | FTS5 + LIKE fallback |
-
-优先级顺序（硬约束）：CardState > accepted Turn > ActiveMemory > RAG > 世界书
+| L1 近忆窗口 | 最近 accepted TurnRecord | 5 条 | 完整回合记录 |
+| L2 活跃记忆 | 剧情注意力卡片 | 15 条 | 30-80 字符 |
+| L3 RAG 记忆 | 长期可搜索记忆 | 每轮 ≤10 条 | FTS5 + LIKE |
 
 ---
 
-## 8. 安全边界与不可越权规则
+## 12. 测试
 
-- **Agent 不直接写 CardState**
-- **Agent 不直接写记忆**
-- **Writer 不用工具、不直接写状态**
-- **Director 不输出玩家正文**
-- **D6 不参与 Writer 前 SuggestionMerge**
-- **只有 Commit Runtime 可以产生副作用**
-- **玩家代理权约束不能被 Agent 覆盖**
-- **World-Life / Opportunity / Emotion 的建议不能自动变成既成事实**
+```bash
+# 全部测试
+python -m pytest tests/ -q
+# 852 passed in 10s
 
----
+# 实机 E2E (需要 ComfyUI 运行)
+python -m awp_rp_runtime_v2.testing.playable_e2e_test --turns 8
 
-## 9. 当前实现范围
+# 持久化验收
+python -m awp_rp_runtime_v2.testing.real_comfy_persistence_acceptance --restart-after-turn --turns 3
 
-### 核心架构
-
-- 确定性 CardState（SQLite + 事务提交）
-- 三层记忆系统（L1 + L2 + L3）
-- 双主 Agent 职责边界
-- 合同驱动架构（所有数据结构带 schema_id + schema_version）
-
-### 动态 Agent 系统
-
-- D1～D6 六个受控动态子 Agent
-- Dynamic Agent Scheduler（Wave A / Wave B）
-- Continuity Barrier
-- Suggestion Conflict Governor
-- Director Suggestion Resolution
-- 预算策略（Simple / Normal / Complex 三档）
-
-### ComfyUI 节点
-
-- 80+ ComfyUI 节点
-- 11 个官方 workflow JSON
-- 中英文节点显示名称
-
-### 测试
-
-- 566 个测试全部通过
-- 覆盖：合同、策略、存储、运行时、集成、端到端
-- Fake Adapter 用于所有测试
+# 真实 DeepSeek (需要 DEEPSEEK_API_KEY)
+$env:AWP_REAL_LLM_E2E = "1"
+$env:AWP_ALLOW_EXTERNAL_CARD_CONTENT = "1"
+$env:AWP_REAL_CARD_PATH = "<path>"
+python -m awp_rp_runtime_v2.testing.real_provider_multiturn_acceptance --card-path $env:AWP_REAL_CARD_PATH --turns 8
+```
 
 ---
 
-## 10. 尚未实现或未承诺能力
-
-- 真实 LLM 调用（OpenAICompatibleAdapter 仅检查 API key，实际调用抛出 NotImplementedError）
-- 一键安装即玩的完整 RP 产品
-- 完整前端 UI（Agent 执行状态观察、记忆管理、冲突确认）
-- 自动世界事件系统
-- 无限制多 Agent 自主协作
-- 稳定的第三方插件生态兼容性
-- 多会话并发支持
-- 持久化会话管理
-
----
-
-## 11. 项目结构
+## 13. 项目结构
 
 ```
 awp_rp_runtime_v2/
-├─ contracts/          # 数据合同（dataclasses，带 schema_id + schema_version）
-├─ policies/           # 纯策略（无 I/O）
+├─ contracts/          # 数据合同 (schema_id + schema_version)
+├─ policies/           # 纯策略 (无 I/O)
 ├─ storage/            # 存储接口 + SQLite 实现
-├─ runtime/            # 运行时编排逻辑
-├─ nodes/              # ComfyUI 节点实现
-├─ adapters/           # 外部系统接口（LLM、角色卡、世界书）
-├─ services/           # 服务协调
-├─ testing/            # Fake Adapter 与测试 fixtures
-├─ tests/              # 测试套件
-├─ workflows/          # 官方 ComfyUI workflow JSON
+├─ runtime/            # 运行时编排 (RuntimeStoreFactory, SessionRuntimeLoad)
+├─ nodes/              # ComfyUI 节点 (101 个)
+├─ adapters/           # 外部接口 (DeepSeek Anthropic/OpenAI 双端点)
+├─ testing/            # 验收测试 + E2E
+├─ tests/              # 单元测试 (852 个)
+├─ workflows/api/      # API 工作流 JSON
 └─ docs/               # 文档
-   ├─ architecture/    # 架构文档
    ├─ handoffs/        # 阶段验收报告
-   ├─ reference/       # 原始架构记录
-   └─ decisions/       # 架构决策记录
+   └─ architecture/    # 架构文档
 ```
 
 ---
 
-## 12. 环境要求
+## 14. 环境要求
 
 - Python ≥ 3.10
 - pydantic ≥ 2.0
-- pytest ≥ 7.0（开发）
-- pytest-asyncio ≥ 0.21（开发）
-
-不需要 API Key，不需要网络连接，不需要外部服务。
+- openai ≥ 1.0 (DeepSeek OpenAI 端点)
+- anthropic ≥ 0.100 (DeepSeek Anthropic 端点)
+- pytest ≥ 7.0 (开发)
 
 ---
 
-## 13. 安装与测试
-
-### 安装
+## 15. 安装
 
 ```bash
-# 克隆仓库
 git clone https://github.com/SDRTIO-bit/comfyui_awp_rp-v2.git
 cd comfyui_awp_rp-v2
-
-# 安装依赖（可选，用于开发）
 pip install -e ".[dev]"
 ```
 
-### 测试
-
-```bash
-# 运行全部测试
-python -m pytest tests/ -q
-
-# 运行详细测试
-python -m pytest tests/ -v
-
-# 运行特定测试
-python -m pytest tests/test_d_integration.py -v
-```
-
-当前测试结果：**566 passed in 2.10s**
-
-### 作为 ComfyUI 插件
-
-将仓库克隆或链接到 ComfyUI 的 `custom_nodes/` 目录：
+作为 ComfyUI 插件：
 
 ```bash
 cd /path/to/ComfyUI/custom_nodes/
 ln -s /path/to/comfyui_awp_rp-v2 awp_rp_runtime_v2
 ```
 
-重启 ComfyUI 后，节点将出现在工作流编辑器中。
-
-> **注意：** 当前版本为 Alpha 架构实现，节点需要配合 Fake Adapter 使用。真实 LLM 调用属于未来接入能力。
-
----
-
-## 14. 官方 Workflow
-
-| 文件 | 用途 | 类型 |
-|------|------|------|
-| `official_stateful_turn_v2.json` | 完整有状态回合流程 | 示例工作流 |
-| `official_director_delegation_v2.json` | Director 委派流程 | 示例工作流 |
-| `official_memory_runtime_v2.json` | 记忆运行时流程 | 示例工作流 |
-| `official_dual_main_tool_gateway_v2.json` | 双主 Agent + 工具网关 | 示例工作流 |
-| `official_history_recall_agent_v2.json` | D1 历史回查 Agent | 观察工作流 |
-| `official_opportunity_agent_v2.json` | D2 戏剧机会 Agent | 观察工作流 |
-| `official_world_life_agent_v2.json` | D3 世界活性 Agent | 观察工作流 |
-| `official_continuity_agent_v2.json` | D5 连续性 Agent | 观察工作流 |
-| `official_emotion_relationship_agent_v2.json` | D4 情绪关系 Agent | 观察工作流 |
-| `official_memory_curator_agent_v2.json` | D6 记忆治理 Agent | 观察工作流 |
-| `official_dynamic_agent_integration_v1.json` | 完整动态 Agent 集成 | 观察工作流 |
-
-> **说明：** 这些工作流 JSON 已完成结构校验，但普通用户尚不能一键打开并获得真实模型 RP 体验。当前需要配合 Fake Adapter 使用，真实模型接入属于未来能力。
-
----
-
-## 15. 开发与贡献说明
-
-请参阅 [docs/contributing.md](docs/contributing.md)。
-
-核心要求：
-
-1. 创建分支
-2. 运行测试（所有测试必须通过）
-3. 保持合同 schema 版本兼容
-4. 新增 Agent 时必须声明权限
-5. 新增副作用时必须通过 Commit Runtime
-6. 新增 workflow 时必须补 JSON 校验
-7. 提交前不得包含密钥、数据库、日志、缓存
-
 ---
 
 ## 16. 路线图
 
-### 当前：v0.1.0-alpha
+### 当前：playable-rp-runtime-persistent-v1
 
-- ✅ 核心架构（CardState、三层记忆、双主 Agent）
-- ✅ 动态 Agent 系统（D1～D6）
-- ✅ 调度与治理（Wave A/B、冲突治理、预算、降级）
-- ✅ ComfyUI 节点与官方 workflow
-- ✅ Fake Adapter 集成测试
+- ✅ 持久化全链路 (SQLite L0-L3)
+- ✅ 幂等重放
+- ✅ 模型配置白名单
+- ✅ 真实 DeepSeek (Anthropic 端点 8/8)
+- ✅ ComfyUI 实机 E2E
+- ✅ 852 测试通过
 
-### 下一阶段候选
+### 下一阶段
 
-- 真实 LLM Adapter 接入
-- ComfyUI 安装验证
-- 前端可观测性
-- Wave A 并发执行
-- 产品化集成
-
----
-
-## 17. License 状态
-
-License 尚未确定；除非另有明确授权，代码版权归项目作者所有。
+- 真实 DeepSeek 持久化节点链
+- 真实 D6 MemoryCommitPlan
+- Chat Surface / Playable RP UI
+- 叙事质量与角色一致性
 
 ---
 
@@ -363,13 +284,6 @@ License 尚未确定；除非另有明确授权，代码版权归项目作者所
 
 | 文档 | 内容 |
 |------|------|
-| [docs/architecture/overview-v1.md](docs/architecture/overview-v1.md) | 架构总览 |
-| [docs/architecture/turn-lifecycle-v1.md](docs/architecture/turn-lifecycle-v1.md) | 完整回合生命周期 |
-| [docs/architecture/agent-boundaries-v1.md](docs/architecture/agent-boundaries-v1.md) | Agent 权限边界 |
-| [docs/architecture/memory-governance-v1.md](docs/architecture/memory-governance-v1.md) | 记忆治理架构 |
-| [docs/architecture/conflict-governance-v1.md](docs/architecture/conflict-governance-v1.md) | 冲突治理架构 |
-| [docs/alpha-status-v0.1.md](docs/alpha-status-v0.1.md) | Alpha 状态报告 |
-| [docs/contributing.md](docs/contributing.md) | 贡献指南 |
-| [docs/security.md](docs/security.md) | 安全政策 |
-| [docs/reference/](docs/reference/) | 原始架构记录 |
-| [docs/handoffs/](docs/handoffs/) | 阶段验收报告 |
+| [docs/handoffs/playable-rp-runtime-persistent-v1.md](docs/handoffs/playable-rp-runtime-persistent-v1.md) | 当前里程碑验收 |
+| [docs/handoffs/](docs/handoffs/) | 全部阶段验收报告 |
+| [docs/architecture/](docs/architecture/) | 架构文档 |
