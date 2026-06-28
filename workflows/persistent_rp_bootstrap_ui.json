@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "state": {},
+  "last_node_id": 1,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "AWPV2PersistentBootstrap",
+      "pos": [300, 200],
+      "size": [300, 260],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "session_binding", "type": "CARD_SESSION_BINDING", "links": null},
+        {"name": "opening_record", "type": "OPENING_RECORD", "links": null},
+        {"name": "worldbook_binding", "type": "WORLDBOOK_BINDING", "links": null},
+        {"name": "bootstrap_receipt", "type": "BOOTSTRAP_RECEIPT", "links": null},
+        {"name": "diagnostics", "type": "DIAGNOSTICS", "links": null}
+      ],
+      "widgets_values": [
+        "C:/Users/zhao/Downloads/角色卡.json",
+        "my-session-001",
+        "g2",
+        "req-bootstrap-001",
+        "run-001"
+      ],
+      "properties": {
+        "Node name for S&R": "AWPV2PersistentBootstrap"
+      }
+    }
+  ],
+  "links": [],
+  "groups": [],
+  "config": {},
+  "extra": {}
+}

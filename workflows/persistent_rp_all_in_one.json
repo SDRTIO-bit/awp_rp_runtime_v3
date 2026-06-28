@@ -1,0 +1,179 @@
+{
+  "last_node_id": 6,
+  "last_link_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "AWPV2PersistentBootstrap",
+      "pos": [50, 50],
+      "size": [280, 200],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "session_binding", "type": "CARD_SESSION_BINDING", "links": null},
+        {"name": "opening_record", "type": "OPENING_RECORD", "links": null},
+        {"name": "worldbook_binding", "type": "WORLDBOOK_BINDING", "links": null},
+        {"name": "bootstrap_receipt", "type": "BOOTSTRAP_RECEIPT", "links": null},
+        {"name": "diagnostics", "type": "DIAGNOSTICS", "links": null}
+      ],
+      "widgets_values": [
+        "C:/Users/zhao/Downloads/角色卡.json",
+        "my-session-001",
+        "g2",
+        "req-bootstrap-001",
+        "run-001",
+        "",
+        "",
+        "{}"
+      ],
+      "title": "1. Bootstrap — 导入角色卡，建立 Session",
+      "color": "#2a4d6e",
+      "bgcolor": "#1a2a3a"
+    },
+    {
+      "id": 2,
+      "type": "AWPV2PersistentFirstTurn",
+      "pos": [50, 350],
+      "size": [320, 240],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "receipt", "type": "FIRST_TURN_RECEIPT", "links": [1]},
+        {"name": "first_turn_context", "type": "JSON", "links": null},
+        {"name": "diagnostics", "type": "FIRST_TURN_DIAGNOSTICS", "links": [2, 4]},
+        {"name": "card_state", "type": "CARD_STATE", "links": null},
+        {"name": "turn_record", "type": "TURN_RECORD", "links": [3]},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "links": null}
+      ],
+      "widgets_values": [
+        "my-session-001",
+        "你好，请描述当前场景。",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "deepseek-v4-flash-writer",
+        "deepseek-v4-pro-director",
+        "kedai_heavy_v1"
+      ],
+      "title": "2. First Turn — Director + Writer + D1-D5 + D6",
+      "color": "#3f789e",
+      "bgcolor": "#1a2a3a"
+    },
+    {
+      "id": 3,
+      "type": "AWPV2TurnResultProbe",
+      "pos": [450, 350],
+      "size": [260, 140],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "receipt", "type": "JSON", "link": 1},
+        {"name": "diagnostics", "type": "JSON", "link": 2},
+        {"name": "turn_record", "type": "JSON", "link": 3}
+      ],
+      "outputs": [],
+      "widgets_values": [
+        "",
+        "first"
+      ],
+      "title": "3. TurnResultProbe — 安全投影到 /history",
+      "color": "#4a9e3f",
+      "bgcolor": "#1a2a3a"
+    },
+    {
+      "id": 4,
+      "type": "AWPV2TraceDisplay",
+      "pos": [450, 530],
+      "size": [300, 100],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "data", "type": "JSON", "link": 4}
+      ],
+      "outputs": [
+        {"name": "text", "type": "STRING", "links": null}
+      ],
+      "widgets_values": [
+        "📊 First Turn — Director / Agent / Writer / Quality / D6 Diagnostics"
+      ],
+      "title": "4. TraceDisplay — 查看诊断信息",
+      "color": "#9e6a3f",
+      "bgcolor": "#1a2a3a"
+    },
+    {
+      "id": 5,
+      "type": "AWPV2PersistentContinuationTurn",
+      "pos": [50, 700],
+      "size": [320, 240],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "receipt", "type": "FIRST_TURN_RECEIPT", "links": [5]},
+        {"name": "continuation_context", "type": "JSON", "links": null},
+        {"name": "diagnostics", "type": "FIRST_TURN_DIAGNOSTICS", "links": null},
+        {"name": "card_state", "type": "CARD_STATE", "links": null},
+        {"name": "turn_record", "type": "TURN_RECORD", "links": null},
+        {"name": "round_snapshot", "type": "ROUND_SNAPSHOT", "links": null}
+      ],
+      "widgets_values": [
+        "my-session-001",
+        "继续对话。",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "deepseek-v4-flash-writer",
+        "deepseek-v4-pro-director",
+        "kedai_heavy_v1"
+      ],
+      "title": "5. Continuation Turn — 第 2+ 回合（无限复用）",
+      "color": "#3f789e",
+      "bgcolor": "#1a2a3a"
+    },
+    {
+      "id": 6,
+      "type": "Note",
+      "pos": [50, -30],
+      "size": [700, 60],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "widgets_values": [
+        "=== 持久化 RP 完整管线 ===\n\nStep 1: Bootstrap（导入角色卡→SQLite，只执行一次，然后 Mute/跳过节点 1）\nStep 2: First Turn（Director Pro→D1-D5→Writer Flash→Quality→D6，修改 player_input 后 Queue）\nStep 3: Continuation Turn（第2回合起，修改 player_input 后重复 Queue，可无限复用）\n\n所有状态持久化在 SQLite 中，ComfyUI 重启后可用相同 session_id 恢复。\n\n模型: Director=Flash(400B)规划, Writer=Pro(1.6T)出文, Preset=kedai_heavy_v1"
+      ],
+      "title": "📋 使用说明",
+      "color": "#8a8a8a",
+      "bgcolor": "#2a2a2a"
+    }
+  ],
+  "links": [
+    {"id": 1, "origin_id": 2, "origin_slot": 0, "target_id": 3, "target_slot": 0, "type": "FIRST_TURN_RECEIPT"},
+    {"id": 2, "origin_id": 2, "origin_slot": 2, "target_id": 3, "target_slot": 1, "type": "FIRST_TURN_DIAGNOSTICS"},
+    {"id": 3, "origin_id": 2, "origin_slot": 4, "target_id": 3, "target_slot": 2, "type": "TURN_RECORD"},
+    {"id": 4, "origin_id": 2, "origin_slot": 2, "target_id": 4, "target_slot": 0, "type": "FIRST_TURN_DIAGNOSTICS"}
+  ],
+  "groups": [
+    {"title": "⚙ Bootstrap (只执行一次)", "bounding": [40, 30, 750, 240], "color": "#2a4d6e", "font_size": 14},
+    {"title": "💬 First Turn — 完整管线", "bounding": [40, 330, 750, 310], "color": "#3f789e", "font_size": 14},
+    {"title": "📊 诊断输出", "bounding": [440, 510, 330, 140], "color": "#9e6a3f", "font_size": 12},
+    {"title": "🔄 Continuation Turn (第2回合起复用)", "bounding": [40, 680, 750, 280], "color": "#3f789e", "font_size": 14}
+  ],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
