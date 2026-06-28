@@ -403,16 +403,41 @@ class CardSessionBootstrapPipeline:
             constant = e_data.get("constant", False)
             selective = e_data.get("selective", False)
             has_chunks = e_data.get("has_chunks", False)
+            has_primary_keys = bool(e_data.get("keys", []))
+            has_secondary_keys = bool(e_data.get("secondary_keys", []))
+            activation_raw = e_data.get("activation_raw", {})
+            if not isinstance(activation_raw, dict):
+                activation_raw = {}
+            unsupported_activation = any(
+                key in activation_raw
+                for key in (
+                    "position",
+                    "probability",
+                    "useProbability",
+                    "recursive",
+                    "delayUntilRecursion",
+                    "group",
+                    "groupOverride",
+                    "groupWeight",
+                    "preventGroupRecursion",
+                    "sticky",
+                    "cooldown",
+                    "delay",
+                )
+            )
 
             if not enabled:
                 disabled_ids.append(entry_id)
                 status = "disabled"
             elif selective:
-                # Selective entries require conditional evaluation
-                # If we have a safe condition parser, they're candidates
-                # Otherwise deferred
-                deferred_ids.append(entry_id)
-                status = "deferred"
+                if has_primary_keys and not has_secondary_keys and not unsupported_activation:
+                    bound_ids.append(entry_id)
+                    status = "candidate"
+                else:
+                    deferred_ids.append(entry_id)
+                    status = "deferred"
+                    if has_secondary_keys or unsupported_activation or not has_primary_keys:
+                        unsupported_ids.append(entry_id)
             elif constant:
                 bound_ids.append(entry_id)
                 status = "candidate"

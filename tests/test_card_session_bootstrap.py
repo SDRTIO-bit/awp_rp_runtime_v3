@@ -446,6 +446,24 @@ def test_20_selective_entries_deferred(tmp_path):
 
 # ── 21. Unsupported activation → deferred/unsupported ────────────────────
 
+def test_20b_safe_selective_entries_become_candidates(tmp_path):
+    defs = FakeCardDefinitionStore()
+    card = _make_ready_card(worldbook_catalog=[{
+        "schema_id": "awp.rp.card-worldbook-entry.v1", "schema_version": 1,
+        "entry_id": "wb_safe", "source_uid": 33, "content": "Selective.",
+        "selective": True, "keys": ["quest"], "secondary_keys": [],
+        "activation_raw": {},
+    }])
+    defs.save(card)
+    pl, _, _, _, wbs, _ = _pipeline(defs)
+    req = _make_request()
+    receipt, failure, diag = pl.bootstrap(req)
+    assert receipt is not None
+    wb = wbs.load(receipt.worldbook_binding_id)
+    assert "wb_safe" in wb.bound_entry_ids
+    assert "wb_safe" not in wb.deferred_entry_ids
+
+
 def test_21_unsupported_activation_deferred(tmp_path):
     """Entries with unsupported activation are marked deferred."""
     defs = FakeCardDefinitionStore()

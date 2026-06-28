@@ -55,6 +55,15 @@ class WriterInputBundle:
     accepted_guidance: list[str] = field(default_factory=list)
     writer_constraints: list[str] = field(default_factory=list)
 
+    # P0 canonical persistent formal context
+    player_input: str = ""
+    opening_context: dict[str, Any] = field(default_factory=dict)
+    worldbook_context: list[dict[str, Any]] = field(default_factory=list)
+    recent_turns_context: list[dict[str, Any]] = field(default_factory=list)
+    card_state_context: dict[str, Any] = field(default_factory=dict)
+    active_memory_context: list[dict[str, Any]] = field(default_factory=list)
+    rag_memory_context: list[dict[str, Any]] = field(default_factory=list)
+
     # Style and format contracts (C1)
     style_contract: dict[str, Any] = field(default_factory=dict)
     format_contract: dict[str, Any] = field(default_factory=dict)
@@ -87,6 +96,13 @@ class WriterInputBundle:
             "final_turn_brief": self.final_turn_brief,
             "accepted_guidance": self.accepted_guidance,
             "writer_constraints": self.writer_constraints,
+            "player_input": self.player_input,
+            "opening_context": self.opening_context,
+            "worldbook_context": self.worldbook_context,
+            "recent_turns_context": self.recent_turns_context,
+            "card_state_context": self.card_state_context,
+            "active_memory_context": self.active_memory_context,
+            "rag_memory_context": self.rag_memory_context,
             "style_contract": self.style_contract,
             "format_contract": self.format_contract,
             "budget_contract": self.budget_contract,
@@ -119,6 +135,13 @@ class WriterInputBundle:
             final_turn_brief=data.get("final_turn_brief", {}),
             accepted_guidance=data.get("accepted_guidance", []),
             writer_constraints=data.get("writer_constraints", []),
+            player_input=data.get("player_input", ""),
+            opening_context=data.get("opening_context", {}),
+            worldbook_context=data.get("worldbook_context", []),
+            recent_turns_context=data.get("recent_turns_context", []),
+            card_state_context=data.get("card_state_context", {}),
+            active_memory_context=data.get("active_memory_context", []),
+            rag_memory_context=data.get("rag_memory_context", []),
             style_contract=data.get("style_contract", {}),
             format_contract=data.get("format_contract", {}),
             budget_contract=data.get("budget_contract", {}),

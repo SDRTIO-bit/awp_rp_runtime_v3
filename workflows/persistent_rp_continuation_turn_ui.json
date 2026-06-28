@@ -1,8 +1,8 @@
 {
   "version": 1,
   "state": {},
-  "last_node_id": 3,
-  "last_link_id": 3,
+  "last_node_id": 4,
+  "last_link_id": 5,
   "nodes": [
     {
       "id": 1,
@@ -63,7 +63,7 @@
     {
       "id": 3,
       "type": "AWPV2TraceDisplay",
-      "pos": [650, 420],
+      "pos": [650, 560],
       "size": [300, 100],
       "flags": {},
       "order": 2,
@@ -80,13 +80,31 @@
       "properties": {
         "Node name for S&R": "AWPV2TraceDisplay"
       }
+    },
+    {
+      "id": 4,
+      "type": "AWPV2AcceptedTextOutput",
+      "pos": [650, 380],
+      "size": [280, 100],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "turn_record", "type": "TURN_RECORD", "link": 4}
+      ],
+      "outputs": [],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "AWPV2AcceptedTextOutput"
+      }
     }
   ],
   "links": [
     {"id": 1, "origin_id": 1, "origin_slot": 0, "target_id": 2, "target_slot": 0, "type": "FIRST_TURN_RECEIPT"},
     {"id": 2, "origin_id": 1, "origin_slot": 2, "target_id": 2, "target_slot": 1, "type": "FIRST_TURN_DIAGNOSTICS"},
     {"id": 3, "origin_id": 1, "origin_slot": 4, "target_id": 2, "target_slot": 2, "type": "TURN_RECORD"},
-    {"id": 4, "origin_id": 1, "origin_slot": 2, "target_id": 3, "target_slot": 0, "type": "FIRST_TURN_DIAGNOSTICS"}
+    {"id": 4, "origin_id": 1, "origin_slot": 4, "target_id": 4, "target_slot": 0, "type": "TURN_RECORD"},
+    {"id": 5, "origin_id": 1, "origin_slot": 2, "target_id": 3, "target_slot": 0, "type": "FIRST_TURN_DIAGNOSTICS"}
   ],
   "groups": [
     {

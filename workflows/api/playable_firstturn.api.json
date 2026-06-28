@@ -14,6 +14,12 @@
       }
     },
     "2": {
+      "class_type": "AWPV2AcceptedTextOutput",
+      "inputs": {
+        "turn_record": ["1", 4]
+      }
+    },
+    "3": {
       "class_type": "AWPV2TurnResultProbe",
       "inputs": {
         "receipt": ["1", 0],

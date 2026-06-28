@@ -121,6 +121,7 @@ from .first_turn_execution_node import AWPV2FirstTurnExecution
 from .trace_display_node import AWPV2TraceDisplay
 
 # P-Canonical: Turn Result Probe + Continuation Turn
+from .accepted_text_output_node import AWPV2AcceptedTextOutput
 from .turn_result_probe_node import AWPV2TurnResultProbe
 from .continuation_turn_execution_node import AWPV2ContinuationTurnExecution
 
@@ -240,6 +241,7 @@ NODE_CLASS_MAPPINGS = {
     # Observability
     "AWPV2TraceDisplay": AWPV2TraceDisplay,
     # P-Canonical
+    "AWPV2AcceptedTextOutput": AWPV2AcceptedTextOutput,
     "AWPV2TurnResultProbe": AWPV2TurnResultProbe,
     "AWPV2ContinuationTurnExecution": AWPV2ContinuationTurnExecution,
     # P-Persistent
@@ -359,6 +361,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     # Observability
     "AWPV2TraceDisplay": "AWP V2 追踪显示",
     # P-Canonical
+    "AWPV2AcceptedTextOutput": "AWP V2 Accepted Text Output",
     "AWPV2TurnResultProbe": "AWP V2 Turn Result Probe",
     "AWPV2ContinuationTurnExecution": "AWP V2 Continuation Turn Execution",
     # P-Persistent

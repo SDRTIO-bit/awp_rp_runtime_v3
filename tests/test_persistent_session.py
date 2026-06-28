@@ -28,6 +28,7 @@ from typing import Any
 import pytest
 
 from ..contracts.card_state import CardState
+from ..contracts.card_definition import CardDefinition, CardDefinitionStatus
 from ..contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
 from ..contracts.card_state_patch import CardStatePatch
 from ..contracts.turn_record import TurnRecord, TurnMode
@@ -49,6 +50,7 @@ from ..storage.sqlite.session_stores import (
     SqliteOpeningRecordStore,
     SqliteWorldbookBindingStore,
 )
+from ..storage.sqlite.card_definition_store import SqliteCardDefinitionStore
 
 from ..runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from ..runtime.session_runtime_load import SessionRuntimeLoad
@@ -85,6 +87,30 @@ def _seed_session(
     source_hash: str = "abc123",
 ) -> None:
     """Seed a complete session bootstrap into persistent stores."""
+    SqliteCardDefinitionStore(registry.db).save(CardDefinition(
+        logical_card_id=card_id,
+        card_version=card_version,
+        source_id=f"src_{card_id}_{card_version}",
+        source_hash=source_hash,
+        name="Seed Card",
+        display_name="Seed Card",
+        status=CardDefinitionStatus.READY,
+        greetings=[{
+            "schema_id": "awp.rp.card-greeting.v1",
+            "schema_version": 1,
+            "greeting_id": "g0",
+            "index": 0,
+            "label": "Default",
+            "safe_display_content": "Hello, traveler.",
+            "content_hash": f"gh_{card_version}",
+            "is_default": True,
+            "source_path": "data.first_mes",
+        }],
+        worldbook_catalog=[],
+        worldbook_chunks=[],
+        created_at=_now(),
+        updated_at=_now(),
+    ))
     binding = CardSessionBinding(
         session_id=session_id,
         logical_card_id=card_id,
@@ -105,6 +131,7 @@ def _seed_session(
         card_version=card_version,
         greeting_id="g0",
         safe_display_content="Hello, traveler.",
+        source_greeting_ref=f"{card_id}/v{card_version}/greetings/g0",
         created_at=_now(),
     )
     registry.opening_record_store.save(opening)

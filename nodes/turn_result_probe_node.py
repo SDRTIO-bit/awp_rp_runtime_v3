@@ -26,11 +26,11 @@ class AWPV2TurnResultProbe:
     def INPUT_TYPES(cls) -> dict[str, Any]:
         return {
             "required": {
-                "receipt": ("JSON",),
+                "receipt": ("FIRST_TURN_RECEIPT",),
             },
             "optional": {
-                "diagnostics": ("JSON",),
-                "turn_record": ("JSON",),
+                "diagnostics": ("FIRST_TURN_DIAGNOSTICS",),
+                "turn_record": ("TURN_RECORD",),
                 "prompt_id": ("STRING", {"default": ""}),
                 "turn_kind": ("STRING", {"default": "first"}),
             },
@@ -53,10 +53,12 @@ class AWPV2TurnResultProbe:
         diag = diagnostics or {}
         tr = turn_record or {}
 
-        # Extract accepted text for hash only (never include in projection)
-        accepted_text = receipt.get("accepted_text", "")
-        if not accepted_text and tr:
-            accepted_text = tr.get("writer_output", "")
+        # Extract accepted text for hash/length only (never include in projection).
+        # Prefer turn_record.writer_output (full text) over receipt.accepted_text
+        # (which is only a 200-char preview from FirstTurnReceipt).
+        accepted_text = tr.get("writer_output", "") if tr else ""
+        if not accepted_text:
+            accepted_text = receipt.get("accepted_text", "")
         text_hash = hashlib.sha256(accepted_text.encode("utf-8")).hexdigest() if accepted_text else ""
 
         # Build history-safe projection

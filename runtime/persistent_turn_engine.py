@@ -241,6 +241,8 @@ class PersistentTurnEngine:
         writer_profile_id: str,
         turn_kind: str,
         writer_preset_path: str = "",
+        opening_context: dict[str, Any] | None = None,
+        worldbook_context: list[dict[str, Any]] | None = None,
     ) -> tuple[dict, dict, dict, dict, dict, dict]:
         import time
         now = _now()
@@ -273,6 +275,8 @@ class PersistentTurnEngine:
             if e.get("entry_id") or e.get("id")
         ]
         diag.worldbook_entry_ids_activated = list(diag.worldbook_entry_ids_considered)
+        diag.worldbook_candidate_count = len(worldbook_context or snapshot.active_worldbook_entries)
+        diag.worldbook_activated_count = len(snapshot.active_worldbook_entries)
         diag.card_state_revision_before = card_state.revision
 
         _add_trace_event(trace, "round_snapshot", "round_snapshot_builder",
@@ -417,7 +421,13 @@ class PersistentTurnEngine:
             self._persist_trace(trace, diag)
             return self._failure_return(diag, trace, card_state, snapshot)
 
-        bundle = WriterInputBundleV2Builder().build(snapshot, brief, merge_result)
+        bundle = WriterInputBundleV2Builder().build(
+            snapshot,
+            brief,
+            merge_result,
+            opening_context=opening_context,
+            worldbook_context=worldbook_context,
+        )
         candidate_text, wrt_receipt = run_writer(
             wrt_adapter, wrt_outcome, bundle,
             workflow_run_id, trace_id, turn_id, attempt_id,

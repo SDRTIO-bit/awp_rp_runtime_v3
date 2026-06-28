@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 from ..contracts.card_state import CardState, SceneState
+from ..contracts.card_definition import CardDefinition, CardDefinitionStatus
 from ..contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
 from ..contracts.card_state_patch import CardStatePatch
 from ..contracts.turn_record import TurnRecord, TurnMode
@@ -47,6 +48,7 @@ from ..storage.sqlite.session_stores import (
     SqliteOpeningRecordStore,
     SqliteWorldbookBindingStore,
 )
+from ..storage.sqlite.card_definition_store import SqliteCardDefinitionStore
 
 from ..runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from ..runtime.round_snapshot_builder import RoundSnapshotBuilder
@@ -78,6 +80,30 @@ def _close_db(db: Database) -> None:
 def _seed_session(registry: SessionRuntimeStoreRegistry, session_id: str = "s1",
                   card_id: str = "c1") -> None:
     now = _now()
+    SqliteCardDefinitionStore(registry.db).save(CardDefinition(
+        logical_card_id=card_id,
+        card_version=1,
+        source_id=f"src_{card_id}_1",
+        source_hash="h",
+        name="Seed Card",
+        display_name="Seed Card",
+        status=CardDefinitionStatus.READY,
+        greetings=[{
+            "schema_id": "awp.rp.card-greeting.v1",
+            "schema_version": 1,
+            "greeting_id": "g0",
+            "index": 0,
+            "label": "Default",
+            "safe_display_content": "hello",
+            "content_hash": "gh_seed",
+            "is_default": True,
+            "source_path": "data.first_mes",
+        }],
+        worldbook_catalog=[],
+        worldbook_chunks=[],
+        created_at=now,
+        updated_at=now,
+    ))
     registry.card_session_binding_store.save(CardSessionBinding(
         session_id=session_id, logical_card_id=card_id, card_version=1,
         source_hash="h", status="ready", created_at=now,
@@ -85,7 +111,9 @@ def _seed_session(registry: SessionRuntimeStoreRegistry, session_id: str = "s1",
     registry.opening_record_store.save(OpeningRecord(
         opening_record_id=f"op_{session_id}", session_id=session_id,
         logical_card_id=card_id, card_version=1, greeting_id="g0",
-        safe_display_content="hello", created_at=now,
+        safe_display_content="hello",
+        source_greeting_ref=f"{card_id}/v1/greetings/g0",
+        created_at=now,
     ))
     registry.worldbook_binding_store.save(WorldbookBinding(
         worldbook_binding_id=f"wb_{session_id}", session_id=session_id,

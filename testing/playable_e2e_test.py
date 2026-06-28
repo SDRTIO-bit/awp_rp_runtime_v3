@@ -91,17 +91,15 @@ def _extract_probe(history_entry: dict) -> dict | None:
 def _extract_text(history_entry: dict) -> str:
     """Extract writer output text from history entry."""
     outputs = history_entry.get("outputs", {})
-    best = ""
-    for node_id, node_output in outputs.items():
+    for node_output in outputs.values():
         if not isinstance(node_output, dict):
             continue
-        # TraceDisplay ui.text
         ui = node_output.get("ui", {})
-        if isinstance(ui, dict) and "text" in ui:
-            for t in (ui["text"] if isinstance(ui["text"], list) else []):
-                if isinstance(t, str) and len(t) > len(best):
-                    best = t
-    return best
+        if isinstance(ui, dict) and "awp_accepted_text" in ui:
+            texts = ui["awp_accepted_text"]
+            if isinstance(texts, list) and texts and isinstance(texts[0], str):
+                return texts[0]
+    return ""
 
 
 PLAYER_INPUTS = [
@@ -147,8 +145,13 @@ def run_playable_e2e(
     with urllib.request.urlopen(req, timeout=10) as resp:
         obj_info = json.loads(resp.read().decode("utf-8"))
 
-    required = ["AWPV2PersistentBootstrap", "AWPV2PersistentFirstTurn",
-                 "AWPV2PersistentContinuationTurn", "AWPV2TurnResultProbe"]
+    required = [
+        "AWPV2PersistentBootstrap",
+        "AWPV2PersistentFirstTurn",
+        "AWPV2PersistentContinuationTurn",
+        "AWPV2AcceptedTextOutput",
+        "AWPV2TurnResultProbe",
+    ]
     missing = [n for n in required if n not in obj_info]
     if missing:
         print(f"ERROR: Missing nodes: {missing}")
@@ -203,6 +206,12 @@ def run_playable_e2e(
             }
         },
         "2": {
+            "class_type": "AWPV2AcceptedTextOutput",
+            "inputs": {
+                "turn_record": ["1", 4]
+            }
+        },
+        "3": {
             "class_type": "AWPV2TurnResultProbe",
             "inputs": {
                 "receipt": ["1", 0],
@@ -223,6 +232,9 @@ def run_playable_e2e(
             idem = probe.get("idempotency_status", "")
             all_ok = _check("Turn 1 idempotency_status=fresh", idem == "fresh",
                             f"got '{idem}'") and all_ok
+            accepted_text = _extract_text(entry)
+            all_ok = _check("Turn 1 accepted text visible", len(accepted_text) > 0,
+                            f"text_len={len(accepted_text)}") and all_ok
             print(f"       Turn 1: rev_before={probe.get('card_state_revision_before')}, "
                   f"rev_after={probe.get('card_state_revision_after')}, "
                   f"text_len={probe.get('accepted_text_length')}")
@@ -251,6 +263,12 @@ def run_playable_e2e(
                 }
             },
             "2": {
+                "class_type": "AWPV2AcceptedTextOutput",
+                "inputs": {
+                    "turn_record": ["1", 4]
+                }
+            },
+            "3": {
                 "class_type": "AWPV2TurnResultProbe",
                 "inputs": {
                     "receipt": ["1", 0],
@@ -272,6 +290,9 @@ def run_playable_e2e(
                 idem = probe.get("idempotency_status", "")
                 all_ok = _check(f"Turn {turn_num} idempotency_status=fresh", idem == "fresh",
                                 f"got '{idem}'") and all_ok
+                accepted_text = _extract_text(entry)
+                all_ok = _check(f"Turn {turn_num} accepted text visible", len(accepted_text) > 0,
+                                f"text_len={len(accepted_text)}") and all_ok
                 print(f"       Turn {turn_num}: rev_before={probe.get('card_state_revision_before')}, "
                       f"rev_after={probe.get('card_state_revision_after')}, "
                       f"text_len={probe.get('accepted_text_length')}")
@@ -305,6 +326,12 @@ def run_playable_e2e(
             }
         },
         "2": {
+            "class_type": "AWPV2AcceptedTextOutput",
+            "inputs": {
+                "turn_record": ["1", 4]
+            }
+        },
+        "3": {
             "class_type": "AWPV2TurnResultProbe",
             "inputs": {
                 "receipt": ["1", 0],

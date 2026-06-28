@@ -23,6 +23,8 @@ class WriterInputBundleV2Builder:
         snapshot: RoundSnapshot,
         final_brief: FinalTurnBrief,
         merge_result: SuggestionMergeResult | None = None,
+        opening_context: dict | None = None,
+        worldbook_context: list[dict] | None = None,
     ) -> WriterInputBundle:
         """Build a WriterInputBundle.
 
@@ -48,6 +50,48 @@ class WriterInputBundleV2Builder:
             "Must not expose sub-agent suggestions to player",
         ])
 
+        recent_turns_context = [
+            {
+                "turn_id": turn.turn_id,
+                "turn_index": turn.turn_index,
+                "player_input": turn.player_input,
+                "writer_output": turn.writer_output,
+            }
+            for turn in snapshot.recent_turn_records[:5]
+        ]
+
+        card_state_context = {
+            "revision": snapshot.card_state.revision,
+            "scene_state": {
+                "location": snapshot.card_state.scene_state.location,
+                "time_of_day": snapshot.card_state.scene_state.time_of_day,
+                "weather": snapshot.card_state.scene_state.weather,
+                "active_npcs": list(snapshot.card_state.scene_state.active_npcs),
+                "description": snapshot.card_state.scene_state.description,
+                "metadata": dict(snapshot.card_state.scene_state.metadata),
+            },
+            "variables": {
+                name: {
+                    "name": entry.name,
+                    "value": entry.value,
+                    "var_type": entry.var_type,
+                    "description": entry.description,
+                    "last_updated_turn": entry.last_updated_turn,
+                }
+                for name, entry in snapshot.card_state.variables.items()
+            },
+            "event_flags": {
+                name: {
+                    "event_id": entry.event_id,
+                    "fired": entry.fired,
+                    "fired_at_turn": entry.fired_at_turn,
+                    "metadata": dict(entry.metadata),
+                }
+                for name, entry in snapshot.card_state.event_flags.items()
+            },
+            "active_stage_ids": list(snapshot.card_state.active_stage_ids),
+        }
+
         return WriterInputBundle(
             bundle_id=f"wib_{uuid.uuid4().hex[:12]}",
             trace_id=snapshot.trace_id,
@@ -63,6 +107,16 @@ class WriterInputBundleV2Builder:
             final_turn_brief=final_brief.to_dict(),
             accepted_guidance=accepted_guidance,
             writer_constraints=writer_constraints,
+            player_input=snapshot.player_input,
+            opening_context=dict(opening_context or {}),
+            worldbook_context=list(
+                worldbook_context if worldbook_context is not None
+                else snapshot.active_worldbook_entries
+            ),
+            recent_turns_context=recent_turns_context,
+            card_state_context=card_state_context,
+            active_memory_context=list(snapshot.active_memories),
+            rag_memory_context=list(snapshot.rag_recall),
             style_contract={
                 "style": "narrative",
                 "language": "zh",
