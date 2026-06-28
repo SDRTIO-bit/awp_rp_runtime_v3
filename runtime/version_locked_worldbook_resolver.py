@@ -1,4 +1,9 @@
-"""Resolve version-locked worldbook content for a bound session."""
+"""Resolve version-locked worldbook content for a bound session.
+
+P1: Supports condition-based activation in addition to keyword matching.
+Condition worldbook entries use the ConditionEvaluator to check CardState
+values. The evaluator only supports safe comparison operators — no eval/exec.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,7 @@ from typing import Any
 from ..contracts.card_definition import CardDefinition
 from ..contracts.first_turn_context import SessionBoundWorldbookRetrievalResult
 from ..storage.card_import_interfaces import CardDefinitionStore
+from .condition_evaluator import ConditionEvaluator, ConditionEvaluationError
 
 
 def _now() -> str:
@@ -42,6 +48,7 @@ class VersionLockedWorldbookResolver:
         opening_record: Any,
         player_input: str,
         recent_turns: list[Any],
+        card_state_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         card = self._load_bound_definition(binding, worldbook_binding)
         catalog = card.worldbook_catalog or []
@@ -63,6 +70,9 @@ class VersionLockedWorldbookResolver:
         constant_count = 0
         selective_count = 0
 
+        # Build state context for condition evaluation
+        state_ctx = dict(card_state_context) if card_state_context else {}
+
         opening_text = getattr(opening_record, "safe_display_content", "") or ""
         recent_text = " ".join(
             f"{getattr(turn, 'player_input', '')} {getattr(turn, 'writer_output', '')}"
@@ -78,6 +88,9 @@ class VersionLockedWorldbookResolver:
                 int(catalog_by_id.get(item.get("entry_id", ""), {}).get("source_order", 0) or 0),
             )
         )
+
+        # P1: condition evaluator for condition-based entries
+        condition_evaluator = ConditionEvaluator() if state_ctx else None
 
         for raw_binding_entry in binding_entries:
             entry_id = raw_binding_entry.get("entry_id", "")
@@ -107,8 +120,25 @@ class VersionLockedWorldbookResolver:
 
             entry_kind = "constant" if entry.get("constant", False) else "selective" if entry.get("selective", False) else "constant"
             matched_keywords: list[str] = []
+            matched_condition = ""
             activation_reason = "constant"
-            if entry_kind == "selective":
+
+            # ── P1: Condition-based activation ───────────────────────────
+            condition_obj = entry.get("condition")
+            if condition_obj and isinstance(condition_obj, dict) and condition_evaluator:
+                # This entry has a structured condition — evaluate against CardState
+                try:
+                    condition_met = condition_evaluator.evaluate(condition_obj, state_ctx)
+                except ConditionEvaluationError as e:
+                    rejected[entry_id] = f"condition_error:{str(e)[:100]}"
+                    continue
+                if not condition_met:
+                    rejected[entry_id] = "condition_not_met"
+                    continue
+                matched_condition = str(condition_obj.get("op", "condition"))
+                activation_reason = "condition_met"
+            elif entry_kind == "selective":
+                # ── Keyword-based activation (existing behavior) ──────────
                 matched_keywords = [
                     key for key in entry.get("keys", [])
                     if isinstance(key, str) and key.lower() in match_haystack
@@ -162,7 +192,7 @@ class VersionLockedWorldbookResolver:
                 "content_excerpt": excerpt,
                 "activation_reason": activation_reason,
                 "matched_keywords": matched_keywords,
-                "matched_condition": "",
+                "matched_condition": matched_condition,
                 "source_entry_id": entry_id,
                 "source_hash": binding.source_hash,
                 "budget_rank": len(activated_content) + 1,

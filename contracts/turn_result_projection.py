@@ -62,6 +62,12 @@ class TurnResultProjection:
     # Provider usage (no API keys)
     provider_usage_summary: dict[str, Any] = field(default_factory=dict)
 
+    # P1: Safe state/memory/delegation effects projection
+    # (Never contains full CardState, card text, or prompt content)
+    state_effects: dict[str, Any] = field(default_factory=dict)
+    memory_effects: dict[str, Any] = field(default_factory=dict)
+    delegation_effects: dict[str, Any] = field(default_factory=dict)
+
     # Diagnostics
     diagnostic_status: str = ""  # "success", "failure", "quality_rejected"
     failure_code: str = ""
@@ -96,6 +102,9 @@ class TurnResultProjection:
             "worldbook_deferred_entry_ids": list(self.worldbook_deferred_entry_ids),
             "memory_disposition": self.memory_disposition,
             "provider_usage_summary": dict(self.provider_usage_summary),
+            "state_effects": dict(self.state_effects),
+            "memory_effects": dict(self.memory_effects),
+            "delegation_effects": dict(self.delegation_effects),
             "diagnostic_status": self.diagnostic_status,
             "failure_code": self.failure_code,
             "failure_message": self.failure_message,
@@ -127,6 +136,9 @@ class TurnResultProjection:
             worldbook_deferred_entry_ids=data.get("worldbook_deferred_entry_ids", []),
             memory_disposition=data.get("memory_disposition", ""),
             provider_usage_summary=data.get("provider_usage_summary", {}),
+            state_effects=data.get("state_effects", {}),
+            memory_effects=data.get("memory_effects", {}),
+            delegation_effects=data.get("delegation_effects", {}),
             diagnostic_status=data.get("diagnostic_status", ""),
             failure_code=data.get("failure_code", ""),
             failure_message=data.get("failure_message", ""),

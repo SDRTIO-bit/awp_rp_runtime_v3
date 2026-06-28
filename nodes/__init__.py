@@ -1,4 +1,4 @@
-"""ComfyUI nodes for RP Runtime V2 — P1 + P2 + C1 + D + P-CardImport + P-CardSession + P-FirstTurn."""
+"""ComfyUI nodes for RP Runtime V2 — P1 + P2 + C1 + D + P-CardImport + P-CardSession + P-FirstTurn + P1-RealEvolution."""
 
 from .card_state_init_node import AWPV2CardStateInit
 from .round_snapshot_node import AWPV2RoundSnapshot
@@ -8,6 +8,9 @@ from .turn_record_commit_node import AWPV2TurnRecordCommit
 from .retry_turn_node import AWPV2RetryTurn
 from .continue_turn_node import AWPV2ContinueTurn
 from .execution_trace_node import AWPV2ExecutionTrace
+
+# P1: Real Continue (world-advance)
+from .continue_turn_execution_node import AWPV2ContinueTurn as AWPV2ContinueTurnP1
 
 # P2 nodes
 from .director_node import AWPV2Director
@@ -249,6 +252,8 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2PersistentBootstrap": AWPV2PersistentBootstrap,
     "AWPV2PersistentFirstTurn": AWPV2PersistentFirstTurn,
     "AWPV2PersistentContinuationTurn": AWPV2PersistentContinuationTurn,
+    # P1: Real Continue (world-advance)
+    "AWPV2ContinueTurnP1": AWPV2ContinueTurnP1,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -369,6 +374,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2PersistentBootstrap": "AWP V2 Persistent Bootstrap",
     "AWPV2PersistentFirstTurn": "AWP V2 Persistent First Turn",
     "AWPV2PersistentContinuationTurn": "AWP V2 Persistent Continuation Turn",
+    # P1: Real Continue (world-advance)
+    "AWPV2ContinueTurnP1": "AWP V2 Continue Turn (World Advance)",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

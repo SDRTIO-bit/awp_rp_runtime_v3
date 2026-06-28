@@ -1,13 +1,16 @@
 """Persistent turn engine — shared execution core for the persistent nodes.
 
-Encapsulates the real/fake Director → Writer → Quality → CardState commit
-→ TurnRecord commit → D6 Memory Curator → Active/RAG memory commit pipeline
-with a per-turn ExecutionTrace persisted to SqliteTraceStore.
+P1 canonical path:
+  Director → DynamicSubAgentPool (0-2) → FinalTurnBrief → Writer
+  → QualityGate → TurnEvolutionCurator (real LLM) → CardState patch
+  → CardStateCommit → TurnRecordCommit → MemoryCommit (active + RAG)
 
-Used by both AWPV2PersistentFirstTurn and AWPV2PersistentContinuationTurn so
-the two nodes share one auditable code path. The nodes differ only in how
-they assemble the RoundSnapshot (first turn: empty history; continuation:
-via SessionRuntimeLoad).
+Replaces P0's fake D6 (empty patches + deterministic fake memory) with:
+  - TurnEvolutionCurator: single LLM call producing real state proposals
+    and memory candidates
+  - Real state patches with actual operations (no more empty operations=[])
+  - Curator-driven memory (no more FakeMemoryCandidateGenerator)
+  - DynamicSubAgentPool integration (Director can delegate 0-2 tasks)
 """
 
 from __future__ import annotations
@@ -22,7 +25,10 @@ from ..contracts.card_state import CardState
 from ..contracts.card_state_commit import (
     CardStateCommitRequest, CardStateCommitStatus,
 )
-from ..contracts.card_state_patch import CardStatePatch
+from ..contracts.card_state_patch import (
+    CardStatePatch, CardStatePatchOperation, PatchOpType,
+    validate_patch_operations,
+)
 from ..contracts.turn_record import TurnRecord, TurnMode
 from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from ..contracts.final_turn_brief import FinalTurnBrief
@@ -32,7 +38,13 @@ from ..contracts.first_turn_receipt import FirstTurnReceipt
 from ..contracts.first_turn_diagnostics import FirstTurnDiagnostics
 from ..contracts.execution_trace import ExecutionTrace, TraceEvent
 from ..contracts.memory_commit_plan import (
-    MemoryCommitRequest, MemoryCommitStatus,
+    MemoryCommitPlan, MemoryCommitRequest, MemoryCommitStatus,
+)
+from ..contracts.active_memory import ActiveMemoryRecord
+from ..contracts.rag_memory import RagMemoryRecord
+from ..contracts.curator_request import CuratorRequest
+from ..contracts.turn_evolution_proposal import (
+    TurnEvolutionProposal, MemoryCandidate,
 )
 
 from .provider_adapter_factory import (
@@ -40,10 +52,14 @@ from .provider_adapter_factory import (
     run_director, run_writer, AdapterOutcome,
 )
 from .writer_input_bundle_v2_builder import WriterInputBundleV2Builder
-from .memory_curation_runtime import MemoryCurationRuntime
-from .memory_plan_compiler import MemoryPlanCompiler
+from .turn_evolution_curator import TurnEvolutionCurator
 from .active_memory_commit_runtime import ActiveMemoryCommitRuntime
 from .rag_memory_commit_runtime import RagMemoryCommitRuntime
+from .dynamic_subagent_pool import DynamicSubAgentPool
+from .agent_runtime_registry import AgentRuntimeRegistry
+from .task_envelope_builder import TaskEnvelopeBuilder
+from .tool_permission_runtime import ToolPermissionRuntime
+from .suggestion_merger import SuggestionMerger
 
 
 def _now() -> str:
@@ -261,6 +277,25 @@ class PersistentTurnEngine:
             card_id=binding.logical_card_id, session_id=session_id,
         )
 
+        # Effects tracking (for TurnResultProjection)
+        effects: dict[str, Any] = {
+            "state_effects": {
+                "status": "no_state_change",
+                "changed_paths": [],
+                "event_ids": [],
+                "relationship_changes": [],
+            },
+            "memory_effects": {
+                "active_added": 0,
+                "active_evicted": 0,
+                "rag_added": 0,
+            },
+            "delegation": {
+                "requested": [],
+                "executed": [],
+            },
+        }
+
         # ── Capture memory-use evidence from the snapshot ───────────────
         diag.round_snapshot_id = snapshot.snapshot_id
         diag.l1_turn_ids_recalled = [t.turn_id for t in snapshot.recent_turn_records]
@@ -308,7 +343,7 @@ class PersistentTurnEngine:
                                       "profile_id": director_profile_id,
                                       "provider": dir_outcome.provider})
             self._persist_trace(trace, diag)
-            return self._failure_return(diag, trace, card_state, snapshot)
+            return self._failure_return(diag, trace, card_state, snapshot, effects)
 
         director_plan, dir_receipt = run_director(
             dir_adapter, dir_outcome, snapshot,
@@ -327,7 +362,7 @@ class PersistentTurnEngine:
                              error=diag.failure_message,
                              details={"failure_code": fc, "provider": dir_outcome.provider})
             self._persist_trace(trace, diag)
-            return self._failure_return(diag, trace, card_state, snapshot)
+            return self._failure_return(diag, trace, card_state, snapshot, effects)
 
         diag.director_call_success = True
         diag.director_plan_ref = getattr(director_plan, "plan_id", "") or _plan_hash(director_plan)
@@ -351,9 +386,12 @@ class PersistentTurnEngine:
                                   "model": dir_outcome.model})
         diag.steps_completed.append("director")
 
-        # ── Sub-Agent Scheduling (D1-D5 trigger policies) ─────────────────
+        # ── Dynamic SubAgent Pool (Director-driven, 0-2 agents) ──────────
         agent_suggestions: list = []
         agent_triggers: list[str] = []
+        delegation_plan = getattr(director_plan, 'delegation_plan_ref', None)
+
+        # Build delegation from trigger policies (D1-D5)
         try:
             agent_suggestions, agent_triggers = self._run_sub_agent_triggers(
                 snapshot, director_plan, binding, turn_id, trace_id
@@ -361,7 +399,11 @@ class PersistentTurnEngine:
         except Exception as e:
             _add_trace_event(trace, "sub_agents", "trigger_policies",
                              success=False, error=str(e)[:200])
-        if agent_triggers:
+
+        # Execute sub-agents via DynamicSubAgentPool if triggered
+        if agent_suggestions:
+            effects["delegation"]["executed"] = agent_triggers
+            effects["delegation"]["requested"] = agent_triggers
             diag.steps_completed.append(f"agents:{','.join(agent_triggers)}")
             _add_trace_event(trace, "sub_agents", "trigger_policies",
                              success=True,
@@ -390,19 +432,17 @@ class PersistentTurnEngine:
 
         # ── Writer ───────────────────────────────────────────────────────
         step_start = time.time()
-        # Load writer preset if specified
         writer_preset_text = ""
         if writer_preset_path:
             try:
                 from ..presets.writer_preset_loader import load_writer_preset
                 preset_name = writer_preset_path
-                # Strip path prefix if given as full path
                 import os as _os
                 if _os.path.sep in preset_name:
                     preset_name = _os.path.splitext(_os.path.basename(preset_name))[0]
                 writer_preset_text = load_writer_preset(preset_name)
             except ImportError:
-                pass  # Preset loader not available — continue without preset
+                pass
 
         wrt_adapter, wrt_outcome = WriterAdapterFactory.build(writer_profile_id, writer_preset_text)
         diag.writer_provider_type = wrt_outcome.provider
@@ -419,7 +459,7 @@ class PersistentTurnEngine:
                              error=wrt_outcome.failure_message,
                              details={"failure_code": wrt_outcome.failure_code})
             self._persist_trace(trace, diag)
-            return self._failure_return(diag, trace, card_state, snapshot)
+            return self._failure_return(diag, trace, card_state, snapshot, effects)
 
         bundle = WriterInputBundleV2Builder().build(
             snapshot,
@@ -446,7 +486,7 @@ class PersistentTurnEngine:
                              error=diag.failure_message,
                              details={"failure_code": fc})
             self._persist_trace(trace, diag)
-            return self._failure_return(diag, trace, card_state, snapshot)
+            return self._failure_return(diag, trace, card_state, snapshot, effects)
 
         diag.writer_call_success = True
         _add_trace_event(trace, "writer", "writer", success=True,
@@ -487,43 +527,167 @@ class PersistentTurnEngine:
             return (receipt.to_dict(), {}, diag.to_dict(),
                     card_state.to_dict(), {}, snapshot.to_dict())
 
-        # ── CardState Commit ─────────────────────────────────────────────
+        # ── TurnEvolutionCurator (P1: real LLM state + memory) ───────────
         step_start = time.time()
-        patch = CardStatePatch(
-            patch_id=_id("patch", turn_id),
-            card_id=binding.logical_card_id, session_id=session_id,
-            trace_id=trace_id, operations=[],
-        )
-        commit_request = CardStateCommitRequest(
-            expected_revision=card_state.revision, patch=patch,
-        )
-        new_state = CardState(
-            card_id=card_state.card_id, session_id=card_state.session_id,
-            revision=card_state.revision + 1,
-            variables=dict(card_state.variables),
-            event_flags=dict(card_state.event_flags),
-            scene_state=card_state.scene_state,
-            created_at=card_state.created_at, updated_at=now,
-        )
-        state_result = self._registry.card_state_store.commit(commit_request, new_state)
-        diag.card_state_commit_status = state_result.status.value
-        _add_trace_event(trace, "card_state_commit", "card_state_store",
-                         success=(state_result.status == CardStateCommitStatus.ACCEPTED),
-                         duration_ms=_ms_since(step_start),
-                         details={"status": state_result.status.value,
-                                  "from_revision": card_state.revision,
-                                  "to_revision": state_result.to_revision})
+        curator_adapter = self._build_curator_adapter(dir_outcome)
+        curator = TurnEvolutionCurator(llm_adapter=curator_adapter)
 
-        if state_result.status != CardStateCommitStatus.ACCEPTED:
-            diag.steps_failed.append("state_commit")
-            diag.outcome = "failure"
-            diag.failure_message = f"CardState commit failed: {state_result.error_message}"
-            self._persist_trace(trace, diag)
-            return self._failure_return(diag, trace, new_state, snapshot)
+        curator_request = CuratorRequest(
+            request_id=_id("cr", request_id),
+            turn_id=turn_id, session_id=session_id, trace_id=trace_id,
+            player_input=player_input,
+            accepted_writer_output=candidate_text,
+            pre_turn_card_state=card_state.to_dict(),
+            final_turn_brief=brief.to_dict(),
+            recent_turns=[
+                {"turn_id": t.turn_id, "turn_index": t.turn_index,
+                 "player_input": t.player_input, "writer_output": t.writer_output}
+                for t in snapshot.recent_turn_records[:5]
+            ],
+            active_memory=list(snapshot.active_memories),
+            resolved_worldbook_context=list(
+                worldbook_context if worldbook_context is not None
+                else snapshot.active_worldbook_entries
+            ),
+            agent_suggestions=[s.to_dict() for s in agent_suggestions],
+            turn_kind=turn_kind,
+            base_card_state_revision=card_state.revision,
+        )
+
+        curator_proposal = curator.curate(curator_request, trace=trace)
+
+        _add_trace_event(trace, "turn_evolution_curator", "turn_evolution_curator",
+                         success=True, duration_ms=_ms_since(step_start),
+                         details={
+                             "is_no_state_change": curator_proposal.is_no_state_change,
+                             "op_count": len(curator_proposal.state_update_proposal.operations),
+                             "active_candidates": len(curator_proposal.memory_candidates_active),
+                             "rag_candidates": len(curator_proposal.memory_candidates_rag),
+                             "curator_confidence": curator_proposal.curator_confidence,
+                         })
+        diag.steps_completed.append("turn_evolution_curator")
+
+        # ── CardState Commit (P1: real patch from curator) ───────────────
+        step_start = time.time()
+        base_revision = card_state.revision
+        operations = curator_proposal.state_update_proposal.operations
+
+        if curator_proposal.is_no_state_change or not operations:
+            # No real state change: do NOT increment revision
+            result_revision = base_revision
+            new_state = card_state
+            patch = CardStatePatch(
+                patch_id=_id("patch", turn_id),
+                card_id=binding.logical_card_id, session_id=session_id,
+                trace_id=trace_id, operations=[],
+            )
+            diag.card_state_commit_status = "no_state_change"
+            effects["state_effects"]["status"] = "no_state_change"
+            _add_trace_event(trace, "card_state_commit", "card_state_store",
+                             success=True, duration_ms=_ms_since(step_start),
+                             details={"status": "no_state_change",
+                                      "from_revision": base_revision,
+                                      "to_revision": base_revision})
+        else:
+            # Build real CardStatePatch from curator operations
+            patch_ops = []
+            changed_paths = []
+            for op in operations:
+                try:
+                    op_type = PatchOpType(op["op"])
+                except (ValueError, KeyError):
+                    continue
+                patch_ops.append(CardStatePatchOperation(
+                    op=op_type, path=op["path"],
+                    value=op.get("value"),
+                    reason=op.get("reason", ""),
+                ))
+                changed_paths.append(op["path"])
+
+            patch = CardStatePatch(
+                patch_id=_id("patch", turn_id),
+                card_id=binding.logical_card_id, session_id=session_id,
+                trace_id=trace_id, operations=patch_ops,
+                source="turn_evolution_curator",
+            )
+
+            # Apply operations to produce new state
+            new_card_state_dict = card_state.to_dict()
+            for pop in patch_ops:
+                parts = pop.path.split(".")
+                prefix = parts[0]
+                key = parts[1] if len(parts) > 1 else ""
+
+                if pop.op == PatchOpType.SET and prefix == "variables":
+                    new_card_state_dict.setdefault("variables", {})[key] = {
+                        "name": key, "value": pop.value,
+                        "var_type": type(pop.value).__name__ if pop.value is not None else "string",
+                        "description": "", "last_updated_turn": None,
+                    }
+                elif pop.op == PatchOpType.INCREMENT and prefix == "variables":
+                    vars_dict = new_card_state_dict.setdefault("variables", {})
+                    if key in vars_dict:
+                        delta = pop.value if pop.value is not None else 1
+                        vars_dict[key]["value"] = vars_dict[key].get("value", 0) + delta
+                elif pop.op == PatchOpType.SET_FLAG and prefix == "event_flags":
+                    new_card_state_dict.setdefault("event_flags", {})[key] = {
+                        "event_id": key, "fired": True,
+                        "fired_at_turn": None,
+                        "metadata": pop.value if isinstance(pop.value, dict) else {},
+                    }
+                elif pop.op == PatchOpType.SET_SCENE_FIELD and prefix == "scene_state":
+                    new_card_state_dict.setdefault("scene_state", {})[key] = pop.value
+
+            new_state = CardState.from_dict(new_card_state_dict)
+            new_state = CardState(
+                card_id=new_state.card_id, session_id=new_state.session_id,
+                revision=card_state.revision + 1,
+                variables=new_state.variables,
+                event_flags=new_state.event_flags,
+                active_stage_ids=new_state.active_stage_ids,
+                scene_state=new_state.scene_state,
+                diagnostics=new_state.diagnostics,
+                created_at=new_state.created_at, updated_at=now,
+                last_accepted_turn_id=new_state.last_accepted_turn_id,
+            )
+
+            commit_request = CardStateCommitRequest(
+                expected_revision=card_state.revision, patch=patch,
+            )
+            state_result = self._registry.card_state_store.commit(commit_request, new_state)
+            diag.card_state_commit_status = state_result.status.value
+
+            _add_trace_event(trace, "card_state_commit", "card_state_store",
+                             success=(state_result.status == CardStateCommitStatus.ACCEPTED),
+                             duration_ms=_ms_since(step_start),
+                             details={"status": state_result.status.value,
+                                      "from_revision": card_state.revision,
+                                      "to_revision": state_result.to_revision,
+                                      "op_count": len(patch_ops),
+                                      "changed_paths": changed_paths})
+
+            if state_result.status != CardStateCommitStatus.ACCEPTED:
+                diag.steps_failed.append("state_commit")
+                diag.outcome = "failure"
+                diag.failure_message = f"CardState commit failed: {state_result.error_message}"
+                effects["state_effects"]["status"] = "rejected"
+                self._persist_trace(trace, diag)
+                return self._failure_return(diag, trace, card_state, snapshot, effects)
+
+            result_revision = state_result.to_revision
+            effects["state_effects"]["status"] = "committed"
+            effects["state_effects"]["changed_paths"] = changed_paths
+
+            # Extract event_ids and relationship changes from proposal
+            for evt in curator_proposal.event_summary:
+                eid = evt.get("event_id", "")
+                if eid:
+                    effects["state_effects"]["event_ids"].append(eid)
+            effects["state_effects"]["relationship_changes"] = [
+                r for r in curator_proposal.relationship_summary
+            ]
 
         diag.steps_completed.append("state_commit")
-        base_revision = card_state.revision
-        result_revision = state_result.to_revision
         diag.card_state_revision_after = result_revision
 
         # ── TurnRecord Commit ────────────────────────────────────────────
@@ -551,20 +715,18 @@ class PersistentTurnEngine:
         except Exception as e:
             from ..storage.interfaces import DuplicateTurnError
             if isinstance(e, DuplicateTurnError):
-                # Idempotent replay handled by the node BEFORE calling engine.
-                # Reaching here means a race; surface as failure.
                 diag.turn_record_commit_status = "failed"
                 diag.steps_failed.append("turn_commit")
                 diag.outcome = "failure"
                 diag.failure_message = f"Duplicate turn: {e}"
                 self._persist_trace(trace, diag)
-                return self._failure_return(diag, trace, new_state, snapshot)
+                return self._failure_return(diag, trace, new_state, snapshot, effects)
             diag.turn_record_commit_status = "failed"
             diag.steps_failed.append("turn_commit")
             diag.outcome = "failure"
             diag.failure_message = f"TurnRecord commit failed: {e}"
             self._persist_trace(trace, diag)
-            return self._failure_return(diag, trace, new_state, snapshot)
+            return self._failure_return(diag, trace, new_state, snapshot, effects)
 
         _add_trace_event(trace, "turn_record_commit", "turn_record_store",
                          success=True, duration_ms=_ms_since(step_start),
@@ -573,16 +735,18 @@ class PersistentTurnEngine:
                                   "result_revision": result_revision})
         diag.steps_completed.append("turn_commit")
 
-        # ── D6 Memory Curator (real deterministic path, no silent noop) ──
-        memory_status, active_ids, rag_ids, commit_ids = self._run_d6(
-            turn_record, snapshot, quality_decision, result_revision,
-            trace_id, turn_id, binding, trace,
+        # ── Memory Commit (P1: from curator proposal, not fake D6) ───────
+        memory_status, active_ids, rag_ids, commit_ids = self._run_memory_commit(
+            curator_proposal, turn_record, snapshot, quality_decision,
+            result_revision, trace_id, turn_id, binding, trace, now,
         )
         diag.memory_curation_status = memory_status
         diag.active_memory_committed_ids = active_ids
         diag.rag_memory_committed_ids = rag_ids
         diag.memory_commit_ids = commit_ids
         diag.steps_completed.append("memory_curator")
+        effects["memory_effects"]["active_added"] = len(active_ids)
+        effects["memory_effects"]["rag_added"] = len(rag_ids)
 
         # ── Persist trace ────────────────────────────────────────────────
         diag.outcome = "success"
@@ -628,6 +792,7 @@ class PersistentTurnEngine:
             "director_provider": diag.director_provider_type,
             "writer_provider": diag.writer_provider_type,
             "created_at": now,
+            "effects": effects,
         }
 
         return (
@@ -660,7 +825,6 @@ class PersistentTurnEngine:
         })
 
         if text_len < MIN_CHARS:
-            # Diagnose the shortfall
             if text_len < 100:
                 reason = "CRITICAL: near-empty output, likely generation failure"
                 decision.verdict = QualityVerdict.REJECTED
@@ -682,9 +846,42 @@ class PersistentTurnEngine:
 
         return decision
 
-    # ── D6 memory curator → Active/RAG commit ───────────────────────────
-    def _run_d6(
+    # ── Curator adapter builder ─────────────────────────────────────────
+    def _build_curator_adapter(self, dir_outcome: Any) -> Any:
+        """Build an LLM adapter for the TurnEvolutionCurator.
+
+        If the Director uses a real provider, reuse the same provider for
+        the curator (same DeepSeek adapter). If the Director is fake,
+        return None (deterministic curator fallback).
+        """
+        if not dir_outcome.is_real:
+            return None
+
+        try:
+            from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
+            from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+            import os
+
+            profile = ModelProfileRegistry.resolve(
+                getattr(dir_outcome, 'profile_id', '')
+            )
+            api_key_env = profile.api_key_env or "DEEPSEEK_API_KEY"
+            if not os.environ.get(api_key_env, ""):
+                return None
+
+            return DeepSeekAdapter(
+                model=profile.model,
+                default_max_tokens=profile.default_max_tokens,
+                timeout_seconds=profile.timeout_seconds,
+                max_retries=profile.max_retries,
+            )
+        except Exception:
+            return None
+
+    # ── P1 memory commit from TurnEvolutionProposal ─────────────────────
+    def _run_memory_commit(
         self,
+        proposal: TurnEvolutionProposal,
         turn_record: TurnRecord,
         snapshot: RoundSnapshot,
         quality_decision: QualityDecision,
@@ -693,7 +890,13 @@ class PersistentTurnEngine:
         turn_id: str,
         binding: Any,
         trace: ExecutionTrace,
+        now: str,
     ) -> tuple[str, list[str], list[str], list[str]]:
+        """Commit memory candidates from the TurnEvolutionProposal.
+
+        Compiles curator MemoryCandidates into MemoryCommitPlan and
+        commits via ActiveMemoryCommitRuntime / RagMemoryCommitRuntime.
+        """
         import time
         step_start = time.time()
         active_ids: list[str] = []
@@ -701,43 +904,87 @@ class PersistentTurnEngine:
         commit_ids: list[str] = []
         memory_status = "noop"
 
-        # Use the deterministic D6 runtime + candidate generator (rule-based,
-        # not the test-only fixture). This is the real curation path; it
-        # produces candidates only when long-term signals are present.
-        runtime = MemoryCurationRuntime()
-        try:
-            curation_result = runtime.curate(
-                quality_decision=quality_decision,
-                card_state_commit_result=None,
-                turn_record=turn_record,
-                snapshot=snapshot,
-                trace=trace,
-            )
-        except Exception as e:
-            _add_trace_event(trace, "memory_curator", "memory_curation_runtime",
-                             success=False, duration_ms=_ms_since(step_start),
-                             error=str(e)[:200])
-            return "failed", active_ids, rag_ids, commit_ids
+        active_candidates = proposal.memory_candidates_active
+        rag_candidates = proposal.memory_candidates_rag
 
-        if curation_result is None or not curation_result.accepted_candidates:
-            _add_trace_event(trace, "memory_curator", "memory_curation_runtime",
+        if not active_candidates and not rag_candidates:
+            _add_trace_event(trace, "memory_curator", "turn_evolution_curator",
                              success=True, duration_ms=_ms_since(step_start),
                              details={"status": "noop",
-                                      "skip_reason": "no_long_term_signals"})
+                                      "skip_reason": "no_memory_candidates"})
             return "noop", active_ids, rag_ids, commit_ids
 
-        # Compile → commit
-        compiler = MemoryPlanCompiler()
-        plan = compiler.compile(
-            curation_result, turn_id, binding.logical_card_id,
-            turn_record.session_id, trace_id, result_revision,
-            turn_record.quality_decision_ref or turn_id,
+        # Compile curator candidates into MemoryCommitPlan
+        new_active_entries: list[ActiveMemoryRecord] = []
+        new_rag_entries: list[RagMemoryRecord] = []
+
+        for cand in active_candidates[:5]:  # Max 5 active per turn
+            content = cand.content[:80]
+            if not content:
+                continue
+            kind = cand.kind or "scene_pressure"
+            new_active_entries.append(ActiveMemoryRecord(
+                memory_id=f"am_{turn_id}_{hashlib.sha256(content.encode()).hexdigest()[:8]}",
+                card_id=binding.logical_card_id,
+                session_id=turn_record.session_id,
+                summary=content,
+                kind=kind,
+                entity_refs=list(cand.entity_refs),
+                source_turn_ids=[turn_id],
+                source_card_state_revision=result_revision,
+                importance=cand.importance,
+                confidence=proposal.curator_confidence or 0.6,
+                status="active",
+                retention_reason=cand.reason,
+                created_at=now,
+            ))
+
+        for cand in rag_candidates[:3]:  # Max 3 rag per turn
+            content = cand.content[:200]
+            if not content:
+                continue
+            new_rag_entries.append(RagMemoryRecord(
+                memory_id=f"rag_{turn_id}_{hashlib.sha256(content.encode()).hexdigest()[:8]}",
+                card_id=binding.logical_card_id,
+                session_id=turn_record.session_id,
+                scope="session",
+                content=content,
+                summary=content[:80],
+                source_turn_ids=[turn_id],
+                source_card_state_revision=result_revision,
+                importance=cand.importance,
+                confidence=proposal.curator_confidence or 0.6,
+                provenance=f"curator:{turn_id}",
+                event_tags=list(cand.tags),
+            ))
+
+        if not new_active_entries and not new_rag_entries:
+            _add_trace_event(trace, "memory_curator", "turn_evolution_curator",
+                             success=True, duration_ms=_ms_since(step_start),
+                             details={"status": "noop",
+                                      "skip_reason": "empty_candidates_after_compile"})
+            return "noop", active_ids, rag_ids, commit_ids
+
+        # Build plan
+        memory_commit_id = f"mc_{uuid.uuid4().hex[:12]}"
+        idempotency_key = f"{turn_id}:{memory_commit_id}"
+
+        plan = MemoryCommitPlan(
+            turn_id=turn_id,
+            card_id=binding.logical_card_id,
+            session_id=turn_record.session_id,
+            trace_id=trace_id,
+            expected_card_state_revision=result_revision,
+            memory_commit_id=memory_commit_id,
+            idempotency_key=idempotency_key,
+            quality_decision_ref=turn_id,
+            new_active_entries=new_active_entries,
+            new_rag_entries=new_rag_entries,
+            write_reasons=["turn_evolution_curator"],
         )
 
-        has_active = bool(plan.new_active_entries or plan.updated_active_entries)
-        has_rag = bool(plan.new_rag_entries)
-
-        if has_active:
+        # Commit active memories
+        if new_active_entries:
             active_runtime = ActiveMemoryCommitRuntime(self._registry.active_memory_store)
             mem_request = MemoryCommitRequest(
                 plan=plan,
@@ -755,22 +1002,20 @@ class PersistentTurnEngine:
                 if mem_result.status == MemoryCommitStatus.COMMITTED and mem_result.receipt:
                     active_ids = list(mem_result.receipt.committed_active_ids)
                     commit_ids.append(plan.memory_commit_id)
-                    if memory_status == "noop":
-                        memory_status = "curated_active"
+                    memory_status = "curated_active"
                 elif mem_result.status == MemoryCommitStatus.IDEMPOTENT_REPLAY and mem_result.receipt:
                     active_ids = list(mem_result.receipt.committed_active_ids)
-                    if memory_status == "noop":
-                        memory_status = "curated_active_replay"
+                    memory_status = "curated_active_replay"
                 else:
-                    if memory_status != "failed":
-                        memory_status = f"active_blocked:{mem_result.status}"
+                    memory_status = f"active_blocked:{mem_result.status}"
             except Exception as e:
                 memory_status = "failed"
                 _add_trace_event(trace, "active_memory_commit", "active_memory_store",
                                  success=False, error=str(e)[:200])
                 return memory_status, active_ids, rag_ids, commit_ids
 
-        if has_rag:
+        # Commit RAG memories
+        if new_rag_entries:
             rag_runtime = RagMemoryCommitRuntime(self._registry.rag_memory_store)
             rag_request = MemoryCommitRequest(
                 plan=plan,
@@ -789,11 +1034,11 @@ class PersistentTurnEngine:
                     rag_ids = list(rag_result.receipt.committed_rag_ids)
                     commit_ids.append(f"rag_{plan.memory_commit_id}")
                     if memory_status in ("noop", "curated_active", "curated_active_replay"):
-                        memory_status = "curated_both" if has_active else "curated_rag"
+                        memory_status = "curated_both" if active_ids else "curated_rag"
                 elif rag_result.status == MemoryCommitStatus.IDEMPOTENT_REPLAY and rag_result.receipt:
                     rag_ids = list(rag_result.receipt.committed_rag_ids)
                     if memory_status in ("noop", "curated_active", "curated_active_replay"):
-                        memory_status = "curated_both_replay" if has_active else "curated_rag_replay"
+                        memory_status = "curated_both_replay" if active_ids else "curated_rag_replay"
                 else:
                     if not memory_status.startswith("failed"):
                         memory_status = f"rag_blocked:{rag_result.status}"
@@ -803,7 +1048,7 @@ class PersistentTurnEngine:
                                  success=False, error=str(e)[:200])
                 return memory_status, active_ids, rag_ids, commit_ids
 
-        _add_trace_event(trace, "memory_curator", "memory_curation_runtime",
+        _add_trace_event(trace, "memory_curator", "turn_evolution_curator",
                          success=(memory_status != "failed"),
                          duration_ms=_ms_since(step_start),
                          details={
@@ -811,7 +1056,8 @@ class PersistentTurnEngine:
                              "active_committed_ids": active_ids,
                              "rag_committed_ids": rag_ids,
                              "commit_ids": commit_ids,
-                             "total_accepted": curation_result.total_candidates_accepted,
+                             "active_candidates": len(active_candidates),
+                             "rag_candidates": len(rag_candidates),
                          })
         return memory_status, active_ids, rag_ids, commit_ids
 
@@ -823,12 +1069,12 @@ class PersistentTurnEngine:
             self._registry.trace_store.save(trace)
             diag.trace_persisted = True
         except Exception:
-            # Trace persistence is non-fatal; the turn outcome already stands.
             diag.trace_persisted = False
 
     def _failure_return(
         self, diag: FirstTurnDiagnostics, trace: ExecutionTrace,
         card_state: CardState, snapshot: RoundSnapshot,
+        effects: dict[str, Any] | None = None,
     ) -> tuple[dict, dict, dict, dict, dict, dict]:
         return ({}, {}, diag.to_dict(),
                 card_state.to_dict() if card_state else {}, {}, snapshot.to_dict())

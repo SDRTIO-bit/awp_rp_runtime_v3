@@ -131,12 +131,15 @@ class SessionRuntimeLoad:
 
         if worldbook_entries is None:
             try:
+                # P1: pass CardState context for condition-based worldbook activation
+                card_state_ctx = card_state.to_dict() if card_state else {}
                 retrieval = VersionLockedWorldbookResolver(self._card_definitions).resolve(
                     binding=binding,
                     worldbook_binding=worldbook_binding,
                     opening_record=opening,
                     player_input=player_input,
                     recent_turns=recent_turns,
+                    card_state_context=card_state_ctx,
                 )
             except ValueError as e:
                 bundle.load_errors.append(str(e))

@@ -7,6 +7,7 @@ On failure, produces structured ProviderFailure.
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any
 
 from .deepseek_adapter import DeepSeekAdapter
@@ -105,7 +106,11 @@ class RealDirectorV2Adapter:
         turn_id: str = "",
         attempt_id: str = "",
     ) -> tuple[DelegationPlan, ProviderAttemptReceipt]:
-        """Generate DelegationPlan (simplified for this phase)."""
+        """Generate DelegationPlan — P1: Director can request 0-2 sub-agent tasks.
+
+        Uses structured output to decide which sub-agents (D1-D5) to invoke.
+        Default: 0 tasks (no delegation). Max: 2 per turn to control cost.
+        """
         receipt = ProviderAttemptReceipt(
             provider_role="director",
             success=True,
@@ -114,7 +119,68 @@ class RealDirectorV2Adapter:
             turn_id=turn_id,
             attempt_id=attempt_id,
         )
-        return DelegationPlan(tasks=[]), receipt
+
+        # Determine which sub-agents are contextually relevant
+        tasks: list[DelegationTask] = []
+        recent_turn_count = len(snapshot.recent_turn_records)
+        active_mem_count = len(snapshot.active_memories)
+
+        # D1: History Recall — useful when there are prior turns to check
+        if recent_turn_count >= 2:
+            tasks.append(DelegationTask(
+                task_id=f"d1_{uuid.uuid4().hex[:8]}",
+                role="history_recall",
+                priority=0.7,
+                purpose="Check recent history for consistency and unresolved threads",
+                max_tokens=500,
+                timeout_ms=20000,
+                failure_policy="skip",
+                expected_suggestion_kinds=["identity_clarification", "historical_conflict"],
+            ))
+
+        # D4: Emotion/Relationship — useful when relationship context matters
+        if active_mem_count > 0 or recent_turn_count >= 1:
+            tasks.append(DelegationTask(
+                task_id=f"d4_{uuid.uuid4().hex[:8]}",
+                role="emotion_relationship",
+                priority=0.6,
+                purpose="Analyze current emotional state and relationship dynamics",
+                max_tokens=500,
+                timeout_ms=20000,
+                failure_policy="skip",
+                expected_suggestion_kinds=["relationship_shift"],
+            ))
+
+        # D5: Continuity — useful when facts need verification
+        if recent_turn_count >= 3:
+            tasks.append(DelegationTask(
+                task_id=f"d5_{uuid.uuid4().hex[:8]}",
+                role="continuity",
+                priority=0.8,
+                purpose="Verify factual continuity with established world state",
+                max_tokens=500,
+                timeout_ms=20000,
+                failure_policy="skip",
+                expected_suggestion_kinds=["continuity_fact_constraint"],
+            ))
+
+        # Cap at 2 tasks per turn to control cost
+        # Prioritize by priority score (higher = more important)
+        tasks.sort(key=lambda t: -t.priority)
+        tasks = tasks[:2]
+
+        return DelegationPlan(
+            plan_id=f"del_{uuid.uuid4().hex[:12]}",
+            trace_id=trace_id,
+            snapshot_id=snapshot.snapshot_id,
+            brief_id=plan.plan_id,
+            card_id=snapshot.card_id,
+            session_id=snapshot.session_id,
+            tasks=tasks,
+            max_task_count=2,
+            total_token_budget=3000,
+            total_time_budget_ms=60000,
+        ), receipt
 
     def _build_plan_prompt(self, snapshot: RoundSnapshot) -> str:
         """Build prompt for Director plan generation.

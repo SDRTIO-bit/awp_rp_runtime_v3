@@ -417,7 +417,8 @@ class TestPersistentNodeFullFlow:
                 assert diag["outcome"] == "success"
                 assert diag["steps_completed"]  # non-empty
                 assert diag["quality_verdict"] == "accept"
-                assert diag["card_state_commit_status"] == "accepted"
+                # P1: "no_state_change" is valid when no real state signals detected
+                assert diag["card_state_commit_status"] in ("accepted", "no_state_change")
                 assert diag["turn_record_commit_status"] == "committed"
                 tr = registry.turn_record_store.load("t1")
                 assert tr is not None
@@ -484,7 +485,8 @@ class TestPersistentNodeFullFlow:
                 tr = f2.registry.turn_record_store.load("t1")
                 assert tr is not None
                 cs = f2.registry.card_state_store.load("c1", "s1")
-                assert cs.revision == 1
+                # P1: revision stays 0 when no real state signals
+                assert cs.revision == 0
                 # Continue
                 ct = AWPV2PersistentContinuationTurn()
                 result = ct.execute(
@@ -494,8 +496,8 @@ class TestPersistentNodeFullFlow:
                 )
                 diag = result[2]
                 assert diag["outcome"] == "success"
-                assert diag["card_state_revision_before"] == 1
-                assert diag["card_state_revision_after"] == 2
+                assert diag["card_state_revision_before"] == 0
+                assert diag["card_state_revision_after"] == 0  # P1: no fake increment
                 assert "t1" in diag["l1_turn_ids_recalled"]
             finally:
                 clear_registry_cache()
@@ -554,13 +556,14 @@ class TestPersistentNodeFullFlow:
                            turn_id="t1", request_id="r1",
                            workflow_run_id="w1", trace_id="tc1")
                 cs1 = factory.registry.card_state_store.load("c1", "s1")
-                assert cs1.revision == 1
+                # P1: revision stays 0 when no real state signals detected
+                assert cs1.revision == 0
                 # Replay
                 ft.execute(session_id="s1", player_input="你好",
                            turn_id="t1", request_id="r1",
                            workflow_run_id="w1", trace_id="tc1")
                 cs2 = factory.registry.card_state_store.load("c1", "s1")
-                assert cs2.revision == 1  # NOT 2
+                assert cs2.revision == 0  # P1: no fake increment, no double-increment
             finally:
                 clear_registry_cache()
                 for k in ("AWP_TEST_STORE_ROOT", "AWP_TEST_RUNTIME_NAMESPACE"):

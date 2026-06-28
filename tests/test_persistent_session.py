@@ -1139,9 +1139,10 @@ class TestIdempotentReplay:
                 recent = registry.turn_record_store.get_recent("card_001", "sess_replay")
                 assert len(recent) == 1
 
-                # State revision did NOT double-increment
+                # P1: State revision stays at 0 when no real state change detected
+                # (fake writer "Hello world" has no actionable state signals)
                 cs = registry.card_state_store.load("card_001", "sess_replay")
-                assert cs.revision == 1  # Only one increment from the fresh turn
+                assert cs.revision == 0  # P1: no_state_change when nothing happened
             finally:
                 os.environ.pop("AWP_TEST_STORE_ROOT", None)
                 os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
@@ -1202,9 +1203,10 @@ class TestIdempotentReplay:
                 recent = registry.turn_record_store.get_recent("card_001", "sess_cont")
                 assert len(recent) == 2
 
-                # State revision = 2 (one per turn, not 3)
+                # P1: State revision stays at 0 when no real state change detected
+                # (fake writer outputs don't trigger state changes)
                 cs = registry.card_state_store.load("card_001", "sess_cont")
-                assert cs.revision == 2
+                assert cs.revision == 0  # P1: no_state_change for no-signal turns
             finally:
                 os.environ.pop("AWP_TEST_STORE_ROOT", None)
                 os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
