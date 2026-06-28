@@ -78,7 +78,7 @@ def check_real_provider_env() -> ProviderEnvConfig:
         card_content_allowed=os.environ.get(_CARD_FLAG, "") == "1",
         api_key_present=bool(os.environ.get(_API_KEY_VAR, "")),
         card_path=os.environ.get(_CARD_PATH_VAR, ""),
-        model=os.environ.get(_MODEL_VAR, "deepseek-chat"),
+        model=os.environ.get(_MODEL_VAR, "deepseek-v4-pro"),
         max_turns=int(os.environ.get(_MAX_TURNS_VAR, "12")),
         max_provider_calls=int(os.environ.get(_MAX_CALLS_VAR, "48")),
         max_input_tokens=int(os.environ.get(_MAX_INPUT_TOKENS_VAR, "4000")),
@@ -145,4 +145,4 @@ def get_deepseek_base_url() -> str:
 
     Defaults to https://api.deepseek.com/v1
     """
-    return os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+    return os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic")

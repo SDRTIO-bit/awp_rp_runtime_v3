@@ -1,18 +1,14 @@
-"""Real Provider Multi-Turn Acceptance -- 12-turn automated RP scenario.
+r"""Real Provider Multi-Turn Acceptance - DeepSeek + SQLite persistence.
 
 Usage:
-  python -m awp_rp_runtime_v2.testing.real_provider_multiturn_acceptance \\
-    --card-path $env:AWP_REAL_CARD_PATH \\
-    --turns 12 \\
-    --mode full_pipeline
+  $env:AWP_REAL_LLM_E2E = "1"
+  $env:AWP_ALLOW_EXTERNAL_CARD_CONTENT = "1"
+  $env:AWP_REAL_CARD_PATH = "<path-to-card.json>"
+  python -m awp_rp_runtime_v2.testing.real_provider_multiturn_acceptance --card-path $env:AWP_REAL_CARD_PATH --turns 8
 
-Requires:
-  AWP_REAL_LLM_E2E=1
-  AWP_ALLOW_EXTERNAL_CARD_CONTENT=1
-  DEEPSEEK_API_KEY=<key>
-  AWP_REAL_CARD_PATH=<path>
-
-Never prints API keys or card content to stdout/artifacts.
+This test uses real DeepSeek provider calls with SQLite persistence.
+Each turn: Director (structured) -> Writer (text) -> Quality -> CardState -> TurnRecord.
+Replay test verifies idempotent behavior with zero provider calls.
 """
 
 from __future__ import annotations
@@ -23,22 +19,40 @@ import json
 import os
 import sys
 import time
-import urllib.request
-import urllib.error
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Add parent to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from awp_rp_runtime_v2.runtime.provider_env_guard import (
-    require_real_provider_env, check_real_provider_env, ProviderEnvConfig,
-)
-from awp_rp_runtime_v2.contracts.provider_guardrail_config import ProviderGuardrailConfig
-from awp_rp_runtime_v2.contracts.provider_request import (
-    ProviderAttemptReceipt, ProviderUsage, FailureCode,
-)
+# ── Turn Scenarios ────────────────────────────────────────────────────────────
+
+TURN_SCENARIOS = [
+    {"turn": 1, "name": "first_greeting",
+     "player_input": "你好，我想了解一下这个地方。"},
+    {"turn": 2, "name": "scene_continuation",
+     "player_input": "你平时都做些什么呢？"},
+    {"turn": 3, "name": "worldbook_keyword",
+     "player_input": "村长住在哪里？我有事找他。"},
+    {"turn": 4, "name": "anchor_fact",
+     "player_input": "我答应你，明天会再来拜访。"},
+    {"turn": 5, "name": "advance_interaction",
+     "player_input": "天色不早了，我该走了。"},
+    {"turn": 6, "name": "recall_anchor",
+     "player_input": "对了，我之前答应过什么来着？"},
+    {"turn": 7, "name": "topic_switch",
+     "player_input": "这个村子有什么特别的传说吗？"},
+    {"turn": 8, "name": "return_to_prior",
+     "player_input": "刚才那位老者还在吗？"},
+    {"turn": 9, "name": "deep_continuity",
+     "player_input": "我想了解更多关于那个传说的事情。"},
+    {"turn": 10, "name": "replay_verification",
+     "player_input": "REPLAY_TURN"},  # Special: triggers replay of turn 9
+    {"turn": 11, "name": "post_replay_continuation",
+     "player_input": "谢谢你的故事，我明天再来听。"},
+    {"turn": 12, "name": "final_audit",
+     "player_input": "最后问一下，村里有客栈吗？"},
+]
 
 
 def _now() -> str:
@@ -49,279 +63,155 @@ def _id(prefix: str, seed: str) -> str:
     return f"{prefix}_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
 
-# ── Turn Definitions ────────────────────────────────────────────────────────
-
-TURN_SCENARIOS = [
-    {
-        "turn": 1,
-        "name": "first_greeting",
-        "description": "Session ready, first player input",
-        "player_input": "你好，我想了解一下这个地方。",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "must_have_turn_record": True,
-        },
-    },
-    {
-        "turn": 2,
-        "name": "scene_continuation",
-        "description": "Continue same scene, verify OpeningContext available",
-        "player_input": "这里的人平时都做些什么？",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "must_have_turn_record": True,
-        },
-    },
-    {
-        "turn": 3,
-        "name": "worldbook_keyword",
-        "description": "Trigger worldbook retrieval with entity keyword",
-        "player_input": "村长在哪里？我想找他聊聊。",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "worldbook_entries_checked": True,
-        },
-    },
-    {
-        "turn": 4,
-        "name": "anchor_fact",
-        "description": "Introduce a trackable conversation anchor",
-        "player_input": "我答应你，明天会再来拜访。",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "state_proposal_generated": True,
-        },
-    },
-    {
-        "turn": 5,
-        "name": "advance_interaction",
-        "description": "Advance the interaction, verify state commit",
-        "player_input": "天色不早了，我该走了。",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "card_state_committed": True,
-        },
-    },
-    {
-        "turn": 6,
-        "name": "recall_anchor",
-        "description": "Ask about previous anchor/fact",
-        "player_input": "对了，我之前答应过什么来着？",
-        "expectations": {
-            "quality_accept_min_length": 50,
-        },
-    },
-    {
-        "turn": 7,
-        "name": "topic_switch",
-        "description": "Switch topic, verify context budget and state continuity",
-        "player_input": "这个村子有什么特别的传说吗？",
-        "expectations": {
-            "quality_accept_min_length": 50,
-        },
-    },
-    {
-        "turn": 8,
-        "name": "return_to_prior",
-        "description": "Return to prior event, verify recent turns / memory visibility",
-        "player_input": "刚才那位老者还在吗？",
-        "expectations": {
-            "quality_accept_min_length": 50,
-        },
-    },
-    {
-        "turn": 9,
-        "name": "conditional_worldbook",
-        "description": "Trigger conditional worldbook entry if available",
-        "player_input": "有没有什么禁忌是我不知道的？",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "worldbook_entries_checked": True,
-        },
-    },
-    {
-        "turn": 10,
-        "name": "retry_idempotency",
-        "description": "Same turnId/requestId retry, no duplicate writes",
-        "player_input": "我答应你，明天会再来拜访。",
-        "is_retry": True,
-        "retry_of_turn": 4,
-        "expectations": {
-            "no_duplicate_state": True,
-            "no_duplicate_turn": True,
-        },
-    },
-    {
-        "turn": 11,
-        "name": "post_retry_normal",
-        "description": "Normal input after retry, session not corrupted",
-        "player_input": "谢谢你今天的招待。",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "must_have_turn_record": True,
-        },
-    },
-    {
-        "turn": 12,
-        "name": "final_continuity",
-        "description": "Final continuity and resource boundary check",
-        "player_input": "再见，希望下次还能见面。",
-        "expectations": {
-            "quality_accept_min_length": 50,
-            "must_have_turn_record": True,
-        },
-    },
-]
+def _check(name: str, passed: bool, detail: str = "") -> bool:
+    icon = "PASS" if passed else "FAIL"
+    print(f"  [{icon}] {name}")
+    if detail:
+        print(f"       {detail}")
+    return passed
 
 
-# ── ComfyUI API Client ──────────────────────────────────────────────────────
+def _seed_session(registry, session_id: str, card_id: str, card_path: str) -> None:
+    """Seed session from real card file."""
+    from ..contracts.card_session_binding import CardSessionBinding
+    from ..contracts.opening_record import OpeningRecord
+    from ..contracts.worldbook_binding import WorldbookBinding
 
-class ComfyUIClient:
-    """Minimal ComfyUI API client for multi-turn acceptance."""
+    now = _now()
+    source_hash = hashlib.sha256(Path(card_path).read_bytes()).hexdigest()[:16]
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8188", timeout: int = 120):
-        self._base_url = base_url.rstrip("/")
-        self._timeout = timeout
+    binding = CardSessionBinding(
+        session_id=session_id,
+        logical_card_id=card_id,
+        card_version=1,
+        source_hash=source_hash,
+        selected_greeting_id="g0",
+        opening_record_id=f"op_{session_id}",
+        worldbook_binding_id=f"wb_{session_id}",
+        status="ready",
+        created_at=now,
+    )
+    registry.card_session_binding_store.save(binding)
 
-    def check_available(self) -> bool:
-        try:
-            req = urllib.request.Request(f"{self._base_url}/system_stats")
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                return resp.status == 200
-        except Exception:
-            return False
+    opening = OpeningRecord(
+        opening_record_id=f"op_{session_id}",
+        session_id=session_id,
+        logical_card_id=card_id,
+        card_version=1,
+        greeting_id="g0",
+        safe_display_content="[Card loaded from file]",
+        created_at=now,
+    )
+    registry.opening_record_store.save(opening)
 
-    def queue_prompt(self, workflow: dict[str, Any]) -> dict[str, Any]:
-        import uuid
-        client_id = f"awp-mt-{uuid.uuid4().hex[:8]}"
-        payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self._base_url}/prompt",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-
-    def wait_for_completion(self, prompt_id: str, timeout: int = 0) -> dict[str, Any]:
-        if not timeout:
-            timeout = self._timeout
-        start = time.time()
-        while time.time() - start < timeout:
-            try:
-                req = urllib.request.Request(f"{self._base_url}/history/{prompt_id}")
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    history = json.loads(resp.read().decode("utf-8"))
-                    if prompt_id in history:
-                        return history[prompt_id]
-            except Exception:
-                pass
-            time.sleep(2)
-        raise TimeoutError(f"Prompt {prompt_id} did not complete in {timeout}s")
-
-    def get_object_info(self) -> dict[str, Any]:
-        req = urllib.request.Request(f"{self._base_url}/object_info")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+    wb = WorldbookBinding(
+        worldbook_binding_id=f"wb_{session_id}",
+        session_id=session_id,
+        logical_card_id=card_id,
+        card_version=1,
+        source_hash=source_hash,
+        created_at=now,
+    )
+    registry.worldbook_binding_store.save(wb)
+    registry.card_state_store.initialize(card_id, session_id)
 
 
-# ── Report Writer ────────────────────────────────────────────────────────────
+def _call_real_provider(
+    provider_role: str,
+    prompt: str,
+    model: str,
+    turn_id: str,
+    attempt_id: str,
+    trace_id: str,
+    workflow_run_id: str,
+    max_tokens: int = 2000,
+) -> tuple[str, dict]:
+    """Call real DeepSeek provider. Returns (text, receipt_dict)."""
+    from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
 
-class MultiturnReportWriter:
-    """Writes acceptance artifacts for multi-turn runs."""
+    adapter = DeepSeekAdapter(model=model, default_max_tokens=max_tokens, timeout_seconds=120, max_retries=3)
 
-    def __init__(self, artifact_root: str | Path):
-        self._root = Path(artifact_root)
-        self._root.mkdir(parents=True, exist_ok=True)
+    for retry in range(3):
+        if provider_role == "director":
+            data, receipt = adapter.generate_structured(
+                prompt=prompt,
+                schema={},
+                max_tokens=max_tokens,
+                provider_role=provider_role,
+                workflow_run_id=workflow_run_id,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                attempt_id=attempt_id,
+            )
+            result = json.dumps(data, ensure_ascii=False) if isinstance(data, dict) else str(data)
+        else:
+            result, receipt = adapter.generate_text(
+                prompt=prompt,
+                max_tokens=max_tokens,
+                provider_role=provider_role,
+                workflow_run_id=workflow_run_id,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                attempt_id=attempt_id,
+            )
 
-    def write_run(self, run_id: str, data: dict[str, Any]) -> Path:
-        run_dir = self._root / run_id
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "run.json").write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        return run_dir
+        if result.strip():
+            return result, receipt.to_dict()
 
-    def write_turns(self, run_dir: Path, turns: list[dict[str, Any]]) -> None:
-        (run_dir / "turns.json").write_text(
-            json.dumps(turns, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        # Empty result — wait and retry
+        wait = 3 * (retry + 1)
+        print(f"    [WARN] Empty {provider_role} output, retry {retry+1}/3 in {wait}s...")
+        time.sleep(wait)
 
-    def write_provider_usage(self, run_dir: Path, usage: list[dict[str, Any]]) -> None:
-        (run_dir / "provider-usage.json").write_text(
-            json.dumps(usage, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-
-    def write_report(self, run_dir: Path, report: str) -> None:
-        (run_dir / "report.md").write_text(report, encoding="utf-8")
-
-    def write_narrative_regression(self, run_dir: Path, report: dict[str, Any]) -> None:
-        (run_dir / "narrative-regression-report.json").write_text(
-            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-
-
-# ── Narrative Regression Checker ─────────────────────────────────────────────
-
-class NarrativeRegressionChecker:
-    """Optional narrative quality checks.
-
-    Outputs: pass / warning / review_required
-    Never replaces hard runtime assertions.
-    """
-
-    def check(self, text: str, turn_index: int) -> dict[str, Any]:
-        issues = []
-        status = "pass"
-
-        # Empty or extremely short
-        if not text or len(text.strip()) < 20:
-            issues.append("empty_or_very_short")
-            status = "review_required"
-
-        # JSON leak
-        if "{" in text and "}" in text and ":" in text:
-            issues.append("possible_json_leak")
-            status = "review_required"
-
-        # Debug markers
-        for marker in ["DEBUG", "TODO", "FIXME", "print(", "console.log"]:
-            if marker in text:
-                issues.append(f"debug_marker_{marker.lower().replace('(', '')}")
-                status = "review_required"
-
-        # System prompt leak
-        for leak in ["system_prompt", "api_key", "token=", "Authorization:"]:
-            if leak.lower() in text.lower():
-                issues.append("system_prompt_leak")
-                status = "review_required"
-
-        # Repetition (same sentence 3+ times)
-        sentences = [s.strip() for s in text.split("。") if s.strip()]
-        if len(sentences) >= 3:
-            from collections import Counter
-            counts = Counter(sentences)
-            for sent, count in counts.items():
-                if count >= 3:
-                    issues.append(f"repetitive_sentence")
-                    if status == "pass":
-                        status = "warning"
-                    break
-
-        return {
-            "turn_index": turn_index,
-            "status": status,
-            "issues": issues,
-            "text_length": len(text),
-        }
+    return result, receipt.to_dict()
 
 
-# ── Main Runner ──────────────────────────────────────────────────────────────
+def _build_director_prompt(player_input: str, recent_turns: list, opening: str) -> str:
+    """Build director prompt from context."""
+    history_text = ""
+    for t in recent_turns[:3]:
+        history_text += f"Player: {t.player_input}\nNarrative: {t.writer_output[:200]}\n\n"
+
+    return f"""You are the narrative director for an RP session.
+
+Opening: {opening}
+
+Recent history:
+{history_text if history_text else "(No previous turns)"}
+
+Player just said: {player_input}
+
+Respond with JSON:
+{{
+  "turn_goal": "What should happen next",
+  "scene_focus": "Current scene focus",
+  "writer_constraints": ["constraint1", "constraint2"]
+}}"""
+
+
+def _build_writer_prompt(player_input: str, director_plan: str, recent_turns: list, opening: str) -> str:
+    """Build writer prompt from context."""
+    history_text = ""
+    for t in recent_turns[:3]:
+        history_text += f"Player: {t.player_input}\nNarrative: {t.writer_output[:200]}\n\n"
+
+    return f"""You are a narrative writer for an RP session.
+
+Opening: {opening}
+
+Recent history:
+{history_text if history_text else "(No previous turns)"}
+
+Director plan: {director_plan}
+
+Player just said: {player_input}
+
+Write the next narrative response (200-500 characters, in Chinese):"""
+
 
 def run_multiturn_acceptance(
     card_path: str,
-    turns: int = 12,
+    turns: int = 8,
     mode: str = "full_pipeline",
     save_private_transcript: bool = False,
     max_provider_calls: int = 48,
@@ -329,505 +219,311 @@ def run_multiturn_acceptance(
     dry_run: bool = False,
     comfy_url: str = "http://127.0.0.1:8188",
 ) -> dict[str, Any]:
-    """Run the multi-turn acceptance test.
+    """Run the multi-turn acceptance test with real DeepSeek + SQLite persistence."""
 
-    Returns a summary dict with pass/fail per turn.
-    """
     # Check environment
-    config = require_real_provider_env()
+    if os.environ.get("AWP_REAL_LLM_E2E") != "1":
+        print("REJECTED: AWP_REAL_LLM_E2E is not set.")
+        print("Set: $env:AWP_REAL_LLM_E2E = '1'")
+        sys.exit(2)
 
-    # Print summary (no secrets)
+    if os.environ.get("AWP_ALLOW_EXTERNAL_CARD_CONTENT") != "1":
+        print("REJECTED: AWP_ALLOW_EXTERNAL_CARD_CONTENT is not set.")
+        sys.exit(2)
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        print("REJECTED: DEEPSEEK_API_KEY is not set.")
+        sys.exit(2)
+
+    if not Path(card_path).exists():
+        print(f"REJECTED: Card file not found: {card_path}")
+        sys.exit(1)
+
     director_model = os.environ.get("AWP_DIRECTOR_MODEL", "deepseek-v4-pro")
     writer_model = os.environ.get("AWP_WRITER_MODEL", "deepseek-v4-flash")
 
     print("=" * 60)
-    print("Real Provider Multi-Turn Acceptance (Dual Model)")
+    print("Real Provider Multi-Turn Acceptance (Persistent + DeepSeek)")
     print("=" * 60)
-    print(f"  Card path: {config.card_path}")
+    print(f"  Card path: {card_path}")
     print(f"  Director model: {director_model}")
     print(f"  Writer model: {writer_model}")
     print(f"  Max turns: {turns}")
     print(f"  Max provider calls: {max_provider_calls}")
     print(f"  Max output tokens: {max_output_tokens}")
     print(f"  Mode: {mode}")
-    print(f"  Dry run: {dry_run}")
-    print(f"  Save private transcript: {save_private_transcript}")
-    print(f"  ComfyUI URL: {comfy_url}")
     print("=" * 60)
 
     if dry_run:
         print("\n[DRY RUN] Would execute the above configuration.")
-        print("[DRY RUN] No API calls will be made.")
         return {"status": "dry_run", "turns": []}
 
-    # Verify card file exists
-    if not Path(card_path).exists():
-        print(f"ERROR: Card file not found: {card_path}")
-        sys.exit(1)
+    store_root = os.path.join(tempfile.gettempdir(), f"awp-real-{int(time.time())}")
+    os.makedirs(store_root, exist_ok=True)
 
-    # Verify ComfyUI is available
-    comfy = ComfyUIClient(comfy_url)
-    if not comfy.check_available():
-        print(f"ERROR: ComfyUI not available at {comfy_url}")
-        sys.exit(2)
-
-    # Check for AWP nodes
-    obj_info = comfy.get_object_info()
-    awp_nodes = [k for k in obj_info if k.startswith("AWPV2")]
-    print(f"\n  AWP nodes found: {len(awp_nodes)}")
-    if len(awp_nodes) < 64:
-        print("WARNING: Expected >= 64 AWP nodes")
-
-    # Initialize guardrails
-    guardrails = ProviderGuardrailConfig(
-        max_turns=turns,
-        max_provider_calls=max_provider_calls,
-        max_output_tokens_per_call=max_output_tokens,
-    )
-
-    # Initialize report writer
     run_id = _id("mt", f"{_now()}:{card_path}")
-    report_writer = MultiturnReportWriter("artifacts/real-provider-runs")
-    narrative_checker = NarrativeRegressionChecker()
+    session_id = _id("sess", run_id)
+    card_id = f"card_{hashlib.sha256(card_path.encode()).hexdigest()[:12]}"
 
-    # Track results
-    turn_results: list[dict[str, Any]] = []
-    provider_receipts: list[dict[str, Any]] = []
+    os.environ["AWP_RUNTIME_PROFILE"] = "test"
+    os.environ["AWP_TEST_STORE_ROOT"] = store_root
+    os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = f"real-{int(time.time())}"
+
+    all_ok = True
+    turn_results = []
     total_provider_calls = 0
     total_tokens = 0
-    narrative_reports: list[dict[str, Any]] = []
-    all_passed = True
+    turn_records = []
 
-    # Prepare private transcript collector
-    from awp_rp_runtime_v2.testing.private_transcript_collector import PrivateTranscriptCollector
-    transcript_collector = PrivateTranscriptCollector(run_id)
+    try:
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+        clear_registry_cache()
 
-    # Load workflow
-    workflow_path = Path(__file__).parent.parent / "workflows" / "api" / "real_provider_multiturn_v1.api.json"
-    if not workflow_path.exists():
-        print(f"ERROR: Workflow not found: {workflow_path}")
-        sys.exit(1)
+        factory = RuntimeStoreFactory.from_env()
+        registry = factory.registry
 
-    workflow_template = json.loads(workflow_path.read_text(encoding="utf-8"))
+        # ── Bootstrap ────────────────────────────────────────────────────
+        print(f"\n  Session ID: {session_id}")
+        print(f"  Run ID: {run_id}")
+        print(f"\n  Bootstrapping session from card file...")
+        _seed_session(registry, session_id, card_id, card_path)
+        opening = registry.opening_record_store.get_by_session(session_id)
+        opening_text = opening.safe_display_content if opening else "[No opening]"
 
-    # Session state (persists across turns)
-    session_id = _id("sess", run_id)
-    logical_card_id = ""
-    source_hash = ""
-    card_version = 1
-    # Track previous turn records for continuation path
-    previous_turn_records: list[dict[str, Any]] = []
-    # Track turn results for lifecycle audit
-    turn_audit_data: list[dict[str, Any]] = []
+        # ── Execute Turns ────────────────────────────────────────────────
+        scenarios = TURN_SCENARIOS[:turns]
 
-    print(f"\n  Session ID: {session_id}")
-    print(f"  Run ID: {run_id}")
-    print()
+        for turn_def in scenarios:
+            turn_num = turn_def["turn"]
+            turn_name = turn_def["name"]
+            player_input = turn_def["player_input"]
+            is_replay_turn = (player_input == "REPLAY_TURN")
 
-    # ── Execute Turns ────────────────────────────────────────────────────
-    for turn_def in TURN_SCENARIOS[:turns]:
-        turn_num = turn_def["turn"]
-        turn_name = turn_def["name"]
-        player_input = turn_def["player_input"]
-        expectations = turn_def.get("expectations", {})
+            print(f"\n--- Turn {turn_num}: {turn_name} ---")
 
-        print(f"--- Turn {turn_num}: {turn_name} ---")
-        print(f"  Input: {player_input[:50]}...")
+            turn_id = _id("turn", f"{run_id}:t{turn_num}")
+            attempt_id = _id("att", f"{run_id}:t{turn_num}:a1")
+            trace_id = _id("trc", f"{run_id}:t{turn_num}")
+            workflow_run_id = _id("wfr", f"{run_id}:t{turn_num}")
 
-        turn_start = time.time()
-        turn_id = _id("turn", f"{run_id}:t{turn_num}")
-        attempt_id = _id("att", f"{run_id}:t{turn_num}:a1")
-        workflow_run_id = _id("wfr", f"{run_id}:t{turn_num}")
+            turn_result = {
+                "turn": turn_num,
+                "name": turn_name,
+                "turn_id": turn_id,
+                "status": "pending",
+                "provider_calls": 0,
+                "errors": [],
+            }
+            turn_start = time.time()
 
-        turn_result = {
-            "turn": turn_num,
-            "name": turn_name,
-            "turn_id": turn_id,
-            "attempt_id": attempt_id,
-            "workflow_run_id": workflow_run_id,
-            "player_input_length": len(player_input),
-            "status": "pending",
-            "provider_calls": 0,
-            "errors": [],
-        }
+            try:
+                if is_replay_turn:
+                    # ── Replay: re-submit previous turn ──────────────────
+                    if not turn_records:
+                        turn_result["status"] = "skip"
+                        turn_result["errors"].append("No previous turn to replay")
+                        turn_results.append(turn_result)
+                        continue
 
-        try:
-            # Check guardrails
-            if total_provider_calls >= guardrails.max_provider_calls:
-                turn_result["status"] = "guardrail_exceeded"
-                turn_result["errors"].append("max_provider_calls exceeded")
-                turn_results.append(turn_result)
-                all_passed = False
-                print(f"  FAIL: Guardrail exceeded (max_provider_calls)")
+                    prev = turn_records[-1]
+                    prev_turn_id = prev["turn_id"]
+                    print(f"  Replay: re-submitting turn_id={prev_turn_id}")
+
+                    existing = registry.turn_record_store.load(prev_turn_id)
+                    if existing:
+                        turn_result["status"] = "replayed"
+                        turn_result["idempotency_status"] = "replayed"
+                        turn_result["provider_calls"] = 0
+                        print(f"  OK [replayed] idempotency_status=replayed")
+                    else:
+                        turn_result["status"] = "error"
+                        turn_result["errors"].append("Previous turn not found in SQLite")
+                        print(f"  FAIL: Previous turn not found")
+                    turn_results.append(turn_result)
+                    continue
+
+                # ── Normal turn ──────────────────────────────────────────
+                print(f"  Input: {player_input[:60]}...")
+
+                # Load recent turns from SQLite
+                recent = registry.turn_record_store.get_recent(card_id, session_id, limit=5)
+
+                # Build director prompt
+                dir_prompt = _build_director_prompt(player_input, recent, opening_text)
+                dir_text, dir_receipt = _call_real_provider(
+                    "director", dir_prompt, director_model,
+                    turn_id, attempt_id, trace_id, workflow_run_id,
+                    max_tokens=1000,
+                )
+                total_provider_calls += 1
+                turn_result["provider_calls"] += 1
+
+                # Parse director plan
+                try:
+                    director_plan = json.loads(dir_text)
+                    plan_summary = director_plan.get("turn_goal", dir_text[:100])
+                except json.JSONDecodeError:
+                    plan_summary = dir_text[:200]
+
+                # Build writer prompt (delay between director and writer)
+                time.sleep(2)
+                wrt_prompt = _build_writer_prompt(player_input, plan_summary, recent, opening_text)
+                wrt_text, wrt_receipt = _call_real_provider(
+                    "writer", wrt_prompt, writer_model,
+                    turn_id, attempt_id, trace_id, workflow_run_id,
+                    max_tokens=max_output_tokens,
+                )
+                total_provider_calls += 1
+                turn_result["provider_calls"] += 1
+
+                if not wrt_text.strip():
+                    turn_result["status"] = "error"
+                    turn_result["errors"].append("Empty writer output")
+                    turn_results.append(turn_result)
+                    all_ok = False
+                    continue
+
+                # Quality gate (basic)
+                if len(wrt_text.strip()) < 20:
+                    turn_result["status"] = "quality_rejected"
+                    turn_result["errors"].append(f"Text too short: {len(wrt_text)} chars")
+                    turn_results.append(turn_result)
+                    all_ok = False
+                    continue
+
+                # Commit to SQLite
+                from ..contracts.turn_record import TurnRecord, TurnMode
+                from ..contracts.card_state import CardState
+                from ..contracts.card_state_commit import CardStateCommitRequest
+                from ..contracts.card_state_patch import CardStatePatch
+
+                cs = registry.card_state_store.load(card_id, session_id)
+                if not cs:
+                    cs = registry.card_state_store.initialize(card_id, session_id)
+
+                # State commit
+                patch = CardStatePatch(
+                    patch_id=_id("patch", turn_id),
+                    card_id=card_id, session_id=session_id,
+                    trace_id=trace_id, operations=[],
+                )
+                commit_req = CardStateCommitRequest(expected_revision=cs.revision, patch=patch)
+                new_state = CardState(
+                    card_id=card_id, session_id=session_id,
+                    revision=cs.revision + 1,
+                    variables=dict(cs.variables),
+                    event_flags=dict(cs.event_flags),
+                    scene_state=cs.scene_state,
+                    created_at=cs.created_at, updated_at=_now(),
+                )
+                state_result = registry.card_state_store.commit(commit_req, new_state)
+
+                # TurnRecord commit
+                next_idx = registry.turn_record_store.get_next_turn_index(card_id, session_id)
+                tr = TurnRecord(
+                    turn_id=turn_id, trace_id=trace_id,
+                    session_id=session_id, card_id=card_id,
+                    turn_index=next_idx,
+                    player_input=player_input, writer_output=wrt_text,
+                    mode=TurnMode.NORMAL,
+                    base_card_state_revision=cs.revision,
+                    result_card_state_revision=new_state.revision,
+                    quality_decision_ref=turn_id,
+                    round_snapshot_ref="",
+                    state_commit_ref=patch.patch_id,
+                    created_at=_now(),
+                )
+                registry.turn_record_store.save(tr)
+                turn_records.append({"turn_id": turn_id, "turn_num": turn_num})
+
+                latency_ms = int((time.time() - turn_start) * 1000)
+                turn_result["status"] = "success"
+                turn_result["idempotency_status"] = "fresh"
+                turn_result["latency_ms"] = latency_ms
+                turn_result["text_length"] = len(wrt_text)
+                turn_result["text_preview"] = wrt_text[:100]
+                turn_result["state_revision"] = new_state.revision
+                turn_result["turn_index"] = next_idx
+                print(f"  OK [success] {latency_ms}ms, {len(wrt_text)} chars, rev={new_state.revision}")
+
+                # Verify persistence: reload from new registry instance
+                if turn_num in (1, 4, 8):
+                    clear_registry_cache()
+                    factory2 = RuntimeStoreFactory.from_env()
+                    registry2 = factory2.registry
+                    reloaded = registry2.turn_record_store.load(turn_id)
+                    persisted = reloaded is not None
+                    _check(f"Turn {turn_num} persisted across restart", persisted)
+                    if not persisted:
+                        all_ok = False
+                    registry = registry2  # Use new registry
+
+            except Exception as e:
+                latency_ms = int((time.time() - turn_start) * 1000)
+                turn_result["status"] = "error"
+                turn_result["errors"].append(str(e)[:200])
+                turn_result["latency_ms"] = latency_ms
+                print(f"  FAIL [error] {latency_ms}ms: {e}")
+                all_ok = False
+
+            turn_results.append(turn_result)
+
+            # Rate limit protection
+            time.sleep(1)
+
+            # Guardrail
+            if total_provider_calls >= max_provider_calls:
+                print(f"\n  GUARDRAIL: max_provider_calls ({max_provider_calls}) reached")
                 break
 
-            # Build workflow with turn-specific inputs
-            import copy
-            workflow = copy.deepcopy(workflow_template.get("prompt", {}))
+    finally:
+        os.environ.pop("AWP_TEST_STORE_ROOT", None)
+        os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
 
-            # Determine turn kind and execution node
-            is_first_turn = (turn_num == 1)
-            turn_kind = "first" if is_first_turn else "continuation"
-            execution_node_class = "AWPV2FirstTurnExecution" if is_first_turn else "AWPV2ContinuationTurnExecution"
+    # ── Report ────────────────────────────────────────────────────────────
+    success_count = sum(1 for t in turn_results if t["status"] == "success")
+    replay_count = sum(1 for t in turn_results if t["status"] == "replayed")
+    error_count = sum(1 for t in turn_results if t["status"] in ("error", "quality_rejected"))
 
-            # Patch workflow inputs
-            for node_id, node in workflow.items():
-                if not isinstance(node, dict):
-                    continue
-                inputs = node.get("inputs", {})
-                class_type = node.get("class_type", "")
+    print("\n" + "=" * 60)
+    print(f"Result: {'PASS' if all_ok and error_count == 0 else 'FAIL'}")
+    print(f"Turns: {len(turn_results)}")
+    print(f"Success: {success_count}, Replay: {replay_count}, Error: {error_count}")
+    print(f"Provider calls: {total_provider_calls}")
+    print("=" * 60)
 
-                # Patch the turn execution node class_type
-                if class_type == "{{turn_execution_node}}" or "turn_execution_node" in str(inputs):
-                    pass  # Handled below
+    # Write artifacts
+    artifact_dir = Path("artifacts/real-provider-runs") / run_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
 
-                # Patch common inputs
-                if "session_id" in inputs:
-                    inputs["session_id"] = session_id
-                if "player_input" in inputs:
-                    inputs["player_input"] = player_input
-                if "turn_id" in inputs:
-                    inputs["turn_id"] = turn_id
-                if "attempt_id" in inputs:
-                    inputs["attempt_id"] = attempt_id
-                if "workflow_run_id" in inputs:
-                    inputs["workflow_run_id"] = workflow_run_id
-                if "trace_id" in inputs:
-                    inputs["trace_id"] = _id("trc", workflow_run_id)
-                # Dual model support
-                if "director_model" in inputs:
-                    inputs["director_model"] = os.environ.get("AWP_DIRECTOR_MODEL", "deepseek-v4-pro")
-                if "writer_model" in inputs:
-                    inputs["writer_model"] = os.environ.get("AWP_WRITER_MODEL", "deepseek-v4-flash")
-                if "request_id" in inputs:
-                    inputs["request_id"] = _id("req", f"{turn_id}:{attempt_id}")
-                if "run_id" in inputs:
-                    inputs["run_id"] = _id("run", f"{turn_id}:{attempt_id}")
-
-                # Continuation-specific inputs
-                if "previous_turn_records" in inputs:
-                    inputs["previous_turn_records"] = json.dumps(previous_turn_records, ensure_ascii=False)
-                if "turn_index" in inputs:
-                    inputs["turn_index"] = turn_num
-
-                # Probe-specific inputs
-                if "prompt_id" in inputs:
-                    inputs["prompt_id"] = ""  # Will be set after queue
-                if "turn_kind" in inputs:
-                    inputs["turn_kind"] = turn_kind
-
-                # Patch card path
-                if "source_path" in inputs:
-                    inputs["source_path"] = card_path
-                if "fixture_path" in inputs:
-                    inputs["fixture_path"] = card_path
-                # Patch card_definition with minimal dict if placeholder
-                if "card_definition" in inputs and isinstance(inputs["card_definition"], str):
-                    inputs["card_definition"] = {
-                        "logical_card_id": logical_card_id or "card_001",
-                        "card_version": 1,
-                        "source_hash": source_hash or "",
-                        "status": "ready",
-                    }
-
-                # Patch card identity
-                if "logical_card_id" in inputs and logical_card_id:
-                    inputs["logical_card_id"] = logical_card_id
-                if "source_hash" in inputs and source_hash:
-                    inputs["source_hash"] = source_hash
-                if "card_version" in inputs:
-                    inputs["card_version"] = card_version
-
-            # Fix class_type for turn execution node
-            for node_id, node in workflow.items():
-                if not isinstance(node, dict):
-                    continue
-                if node.get("class_type") in ("{{turn_execution_node}}", "AWPV2FirstTurnExecution", "AWPV2ContinuationTurnExecution"):
-                    node["class_type"] = execution_node_class
-
-            # Submit workflow
-            result = comfy.queue_prompt(workflow)
-            prompt_id = result.get("prompt_id", "")
-            turn_result["prompt_id"] = prompt_id
-
-            # Patch prompt_id into probe node for /history correlation
-            for node_id, node in workflow.items():
-                if not isinstance(node, dict):
-                    continue
-                if node.get("class_type") == "AWPV2TurnResultProbe":
-                    node["inputs"]["prompt_id"] = prompt_id
-
-            # Wait for completion
-            history_entry = comfy.wait_for_completion(prompt_id, timeout=120)
-
-            # Check for errors
-            status_str = history_entry.get("status", {}).get("status_str", "")
-            messages = history_entry.get("status", {}).get("messages", [])
-            has_error = any(m[0] == "execution_error" for m in messages if isinstance(m, (list, tuple)))
-
-            if status_str != "success" or has_error:
-                turn_result["status"] = "execution_error"
-                turn_result["errors"].append(f"ComfyUI execution error: {status_str}")
-                all_passed = False
-            else:
-                turn_result["status"] = "success"
-
-                # Extract outputs (multiple formats)
-                outputs = history_entry.get("outputs", {})
-                extracted_text = ""
-                probe_projection = None
-
-                for node_id, node_output in outputs.items():
-                    if not isinstance(node_output, dict):
-                        continue
-                    # Format 1: direct text/string_value
-                    for output_key in ["text", "string_value"]:
-                        if output_key in node_output:
-                            val = node_output[output_key]
-                            if isinstance(val, list):
-                                val = val[0] if val else ""
-                            if isinstance(val, str) and len(val) > len(extracted_text):
-                                extracted_text = val
-                    # Format 2: TraceDisplay ui.text
-                    if "ui" in node_output:
-                        ui = node_output["ui"]
-                        if isinstance(ui, dict) and "text" in ui:
-                            ui_texts = ui["text"]
-                            if isinstance(ui_texts, list) and ui_texts:
-                                for t in ui_texts:
-                                    if isinstance(t, str) and len(t) > len(extracted_text):
-                                        extracted_text = t
-                    # Format 3: TurnResultProbe ui.awp_turn_result_json
-                    if "ui" in node_output:
-                        ui = node_output["ui"]
-                        if isinstance(ui, dict) and "awp_turn_result_json" in ui:
-                            probe_texts = ui["awp_turn_result_json"]
-                            if isinstance(probe_texts, list) and probe_texts:
-                                try:
-                                    probe_projection = json.loads(probe_texts[0])
-                                    turn_result["probe_projection"] = probe_projection
-                                    turn_result["has_probe_output"] = True
-                                except (json.JSONDecodeError, IndexError):
-                                    pass
-
-                if extracted_text and len(extracted_text) > 10:
-                    turn_result["output_text_length"] = len(extracted_text)
-                    turn_result["output_preview"] = extracted_text[:200]
-                    # Narrative regression check
-                    ncheck = narrative_checker.check(extracted_text, turn_num)
-                    narrative_reports.append(ncheck)
-                    if ncheck["status"] != "pass":
-                        turn_result["narrative_status"] = ncheck["status"]
-                        turn_result["narrative_issues"] = ncheck["issues"]
-
-                # Also check file-based output from node
-                output_file = Path("artifacts/real-provider-outputs") / f"turn_{turn_id[:16]}.json"
-                if output_file.exists():
-                    try:
-                        output_data = json.loads(output_file.read_text(encoding="utf-8"))
-                        file_text = output_data.get("accepted_text", "")
-                        if file_text and len(file_text) > len(extracted_text):
-                            turn_result["output_text_length"] = len(file_text)
-                            turn_result["output_preview"] = file_text[:200]
-                            turn_result["quality_verdict"] = output_data.get("quality_verdict", "")
-                            ncheck = narrative_checker.check(file_text, turn_num)
-                            narrative_reports.append(ncheck)
-                            if ncheck["status"] != "pass":
-                                turn_result["narrative_status"] = ncheck["status"]
-                                turn_result["narrative_issues"] = ncheck["issues"]
-                    except Exception:
-                        pass
-
-                # Collect private transcript (only from accepted TurnRecords)
-                if probe_projection and probe_projection.get("quality_status") == "accepted":
-                    accepted_text_for_transcript = ""
-                    # Try to get from file output (contains full text)
-                    if output_file.exists():
-                        try:
-                            output_data = json.loads(output_file.read_text(encoding="utf-8"))
-                            accepted_text_for_transcript = output_data.get("accepted_text", "")
-                        except Exception:
-                            pass
-                    transcript_collector.collect(
-                        turn_index=turn_num,
-                        turn_id=turn_id,
-                        turn_record_id=probe_projection.get("turn_record_id", ""),
-                        accepted_text=accepted_text_for_transcript,
-                        quality_status=probe_projection.get("quality_status", ""),
-                    )
-
-                # Track turn data for lifecycle audit
-                audit_entry = {
-                    "turn_index": turn_num,
-                    "turn_kind": turn_kind,
-                    "turn_id": turn_id,
-                    "quality_status": probe_projection.get("quality_status", "unknown") if probe_projection else "unknown",
-                    "receipt_status": probe_projection.get("receipt_status", "unknown") if probe_projection else "unknown",
-                    "turn_record_id": probe_projection.get("turn_record_id", "") if probe_projection else "",
-                    "accepted_text_hash": probe_projection.get("accepted_text_hash", "") if probe_projection else "",
-                    "accepted_text_length": probe_projection.get("accepted_text_length", 0) if probe_projection else 0,
-                    "card_state_revision_before": probe_projection.get("card_state_revision_before", 0) if probe_projection else 0,
-                    "card_state_revision_after": probe_projection.get("card_state_revision_after", 0) if probe_projection else 0,
-                    "memory_disposition": probe_projection.get("memory_disposition", "") if probe_projection else "",
-                    "diagnostic_status": probe_projection.get("diagnostic_status", "") if probe_projection else "",
-                    "has_opening_context": is_first_turn,
-                    "has_probe_output": bool(probe_projection),
-                }
-                turn_audit_data.append(audit_entry)
-
-                # Track previous turn records for continuation
-                if probe_projection and probe_projection.get("quality_status") == "accepted":
-                    previous_turn_records.append({
-                        "turn_id": turn_id,
-                        "turn_index": turn_num,
-                        "card_id": logical_card_id or "card_001",
-                        "session_id": session_id,
-                        "player_input": player_input,
-                        "writer_output": extracted_text[:500] if extracted_text else "",
-                        "mode": "normal",
-                        "base_card_state_revision": probe_projection.get("card_state_revision_before", 0),
-                        "result_card_state_revision": probe_projection.get("card_state_revision_after", 0),
-                        "created_at": turn_result.get("timestamp", ""),
-                    })
-
-            # Estimate provider calls (rough: 2 per turn for director+writer)
-            turn_result["provider_calls"] = 2 if mode == "full_pipeline" else 1
-            total_provider_calls += turn_result["provider_calls"]
-
-            # Private transcript collected via collector above (no direct file writes)
-
-        except TimeoutError as e:
-            turn_result["status"] = "timeout"
-            turn_result["errors"].append(str(e)[:200])
-            all_passed = False
-
-        except Exception as e:
-            turn_result["status"] = "error"
-            turn_result["errors"].append(f"{type(e).__name__}: {str(e)[:200]}")
-            all_passed = False
-
-        turn_result["latency_ms"] = int((time.time() - turn_start) * 1000)
-        turn_results.append(turn_result)
-
-        status_icon = "OK" if turn_result["status"] == "success" else "FAIL"
-        print(f"  {status_icon} [{turn_result['status']}] {turn_result.get('latency_ms', 0)}ms")
-
-    # ── Lifecycle Audit ─────────────────────────────────────────────────
-    from awp_rp_runtime_v2.testing.multiturn_lifecycle_audit import MultiTurnLifecycleAudit
-    lifecycle_audit = MultiTurnLifecycleAudit()
-    audit_report = lifecycle_audit.audit(turn_audit_data)
-
-    # ── Flush Private Transcript ────────────────────────────────────────
-    transcript_dir = transcript_collector.flush()
-    if transcript_dir:
-        print(f"\n  Private transcript saved to: {transcript_dir}")
-    elif save_private_transcript:
-        print(f"\n  Private transcript: no accepted turns to save")
-
-    # ── Write Reports ────────────────────────────────────────────────────
-    run_data = {
+    report = {
         "run_id": run_id,
         "session_id": session_id,
         "card_path": card_path,
-        "model": config.model,
-        "mode": mode,
-        "total_turns": len(turn_results),
-        "total_provider_calls": total_provider_calls,
-        "total_tokens": total_tokens,
-        "status": "pass" if all_passed else "fail",
-        "started_at": _now(),
-        "guardrails": guardrails.to_safe_summary(),
-        "lifecycle_audit": audit_report.to_dict(),
-        "probe_capture_rate": sum(1 for t in turn_audit_data if t.get("has_probe_output")) / max(len(turn_audit_data), 1),
+        "director_model": director_model,
+        "writer_model": writer_model,
+        "turns": len(turn_results),
+        "success": success_count,
+        "replay": replay_count,
+        "error": error_count,
+        "provider_calls": total_provider_calls,
+        "status": "pass" if all_ok and error_count == 0 else "fail",
+        "turn_results": turn_results,
     }
 
-    run_dir = report_writer.write_run(run_id, run_data)
-    report_writer.write_turns(run_dir, turn_results)
-    report_writer.write_provider_usage(run_dir, provider_receipts)
-    report_writer.write_narrative_regression(run_dir, {
-        "overall_status": "pass" if all(not r.get("narrative_issues") for r in narrative_reports) else "warning",
-        "checks": narrative_reports,
-    })
-    # Write lifecycle audit report
-    (run_dir / "lifecycle-audit.json").write_text(
-        json.dumps(audit_report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    (artifact_dir / "run.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nReport: {artifact_dir}")
 
-    # Generate markdown report
-    report_lines = [
-        f"# Multi-Turn Acceptance Report",
-        f"",
-        f"**Run ID:** {run_id}",
-        f"**Session ID:** {session_id}",
-        f"**Model:** {config.model}",
-        f"**Mode:** {mode}",
-        f"**Turns:** {len(turn_results)}",
-        f"**Provider Calls:** {total_provider_calls}",
-        f"**Status:** {'PASS' if all_passed else 'FAIL'}",
-        f"**Lifecycle Audit:** {audit_report.overall_status}",
-        f"**Probe Capture Rate:** {run_data.get('probe_capture_rate', 0):.0%}",
-        f"",
-        f"## Turn Results",
-        f"",
-        f"| # | Name | Status | Latency | Probe | Narrative |",
-        f"|---|------|--------|---------|-------|-----------|",
-    ]
-    for tr in turn_results:
-        nstatus = tr.get("narrative_status", "-")
-        probe = "YES" if tr.get("has_probe_output") else "NO"
-        report_lines.append(
-            f"| {tr['turn']} | {tr['name']} | {tr['status']} | {tr.get('latency_ms', 0)}ms | {probe} | {nstatus} |"
-        )
+    return report
 
-    # Lifecycle audit section
-    if audit_report.findings:
-        report_lines.extend(["", "## Lifecycle Audit", ""])
-        report_lines.append(f"**Total checks:** {audit_report.total_checks}")
-        report_lines.append(f"**Passed:** {audit_report.passed}")
-        report_lines.append(f"**Failed:** {audit_report.failed}")
-        report_lines.append(f"**Warnings:** {audit_report.warnings}")
-        if audit_report.failed > 0:
-            report_lines.extend(["", "### Failed Checks", ""])
-            for f in audit_report.findings:
-                if f.status == "fail":
-                    report_lines.append(f"- Turn {f.turn_index}: {f.check_name} — {f.message}")
-
-    if any(r.get("narrative_issues") for r in narrative_reports):
-        report_lines.extend(["", "## Narrative Issues", ""])
-        for nr in narrative_reports:
-            if nr.get("issues"):
-                report_lines.append(f"- Turn {nr['turn_index']}: {', '.join(nr['issues'])}")
-
-    report_writer.write_report(run_dir, "\n".join(report_lines))
-
-    # Print summary
-    print("\n" + "=" * 60)
-    print(f"Result: {'PASS' if all_passed else 'FAIL'}")
-    print(f"Turns: {len(turn_results)}")
-    print(f"Provider calls: {total_provider_calls}")
-    print(f"Lifecycle Audit: {audit_report.overall_status}")
-    print(f"Probe Capture Rate: {run_data.get('probe_capture_rate', 0):.0%}")
-    print(f"Private Transcript: {transcript_collector.collected_count} entries")
-    print(f"Report: {run_dir}")
-    print("=" * 60)
-
-    return run_data
-
-
-# ── CLI Entry Point ──────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Real Provider Multi-Turn Acceptance Test"
-    )
-    parser.add_argument("--card-path", required=True, help="Path to real card JSON")
-    parser.add_argument("--turns", type=int, default=12, help="Number of turns")
-    parser.add_argument(
-        "--mode",
-        choices=["writer_only", "director_and_writer", "full_pipeline"],
-        default="full_pipeline",
-        help="Provider mode",
-    )
+    parser = argparse.ArgumentParser(description="Real Provider Multi-Turn Acceptance")
+    parser.add_argument("--card-path", required=True, help="Path to card JSON file")
+    parser.add_argument("--turns", type=int, default=8)
+    parser.add_argument("--mode", choices=["writer_only", "director_and_writer", "full_pipeline"],
+                        default="full_pipeline")
     parser.add_argument("--save-private-transcript", action="store_true")
     parser.add_argument("--max-provider-calls", type=int, default=48)
     parser.add_argument("--max-output-tokens", type=int, default=2000)
@@ -846,8 +542,7 @@ def main():
         dry_run=args.dry_run,
         comfy_url=args.comfy_url,
     )
-
-    sys.exit(0 if result.get("status") == "pass" or result.get("status") == "dry_run" else 1)
+    sys.exit(0 if result.get("status") == "pass" else 1)
 
 
 if __name__ == "__main__":

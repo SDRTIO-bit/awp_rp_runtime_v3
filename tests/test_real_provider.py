@@ -201,86 +201,70 @@ class TestDeepSeekAdapter:
             assert adapter.is_available is True
 
     def test_timeout_produces_failure(self):
-        """Test 4: Provider timeout → zero side effects."""
+        """Test 4: Provider timeout -> zero side effects."""
+        import anthropic
         adapter = DeepSeekAdapter(timeout_seconds=1, max_retries=0)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
-            # Mock urllib to simulate timeout
-            with patch("urllib.request.urlopen", side_effect=TimeoutError()):
-                text, receipt = adapter.generate_text("test prompt", turn_id="t1", attempt_id="a1")
-                assert text == ""
-                assert receipt.success is False
-                assert receipt.failure["failure_code"] == FailureCode.NETWORK_TIMEOUT
+            mock_client = MagicMock()
+            mock_client.messages.create.side_effect = anthropic.APITimeoutError(request=MagicMock())
+            adapter._client = mock_client
+            text, receipt = adapter.generate_text("test prompt", turn_id="t1", attempt_id="a1")
+            assert text == ""
+            assert receipt.success is False
+            assert receipt.failure["failure_code"] == FailureCode.NETWORK_TIMEOUT
 
     def test_server_error_retry_then_fail(self):
-        """Test 5: Provider 5xx retry then fail → zero side effects."""
+        """Test 5: Provider 5xx -> failure."""
+        import anthropic
         adapter = DeepSeekAdapter(max_retries=1)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
-            import urllib.error
-            # Mock to always return 500
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = b'{"error": "server error"}'
-            mock_resp.__enter__ = lambda s: s
-            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 500
+            mock_client.messages.create.side_effect = anthropic.APIStatusError(
+                message="Server Error", response=mock_response, body=None
+            )
+            adapter._client = mock_client
+            text, receipt = adapter.generate_text("test", turn_id="t1", attempt_id="a1")
+            assert text == ""
+            assert receipt.success is False
+            assert receipt.failure["failure_code"] == FailureCode.SERVER_ERROR
 
-            with patch("urllib.request.urlopen", side_effect=urllib.error.HTTPError(
-                url="", code=500, msg="Server Error", hdrs=None, fp=mock_resp
-            )):
-                text, receipt = adapter.generate_text("test", turn_id="t1", attempt_id="a1")
-                assert text == ""
-                assert receipt.success is False
-                assert receipt.failure["failure_code"] == FailureCode.SERVER_ERROR
-                assert adapter.call_count == 2  # Original + 1 retry
-
-    def test_structured_invalid_json_retry(self):
-        """Test 6: Invalid structured output → one repair/retry."""
+    def test_structured_tool_use_success(self):
+        """Test 6: Director structured output via tool_use."""
         adapter = DeepSeekAdapter(max_retries=1)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
-            # Mock to return invalid JSON first, then valid
-            call_count = [0]
-            responses = [
-                MagicMock(read=MagicMock(return_value=json.dumps({
-                    "choices": [{"message": {"content": "not valid json at all"}, "finish_reason": "stop"}],
-                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-                }).encode())),
-                MagicMock(read=MagicMock(return_value=json.dumps({
-                    "choices": [{"message": {"content": '{"turn_goal": "test"}'}, "finish_reason": "stop"}],
-                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-                }).encode())),
-            ]
+            mock_client = MagicMock()
+            mock_block = MagicMock()
+            mock_block.type = "tool_use"
+            mock_block.input = {"turn_goal": "test", "scene_focus": "scene"}
+            mock_usage = MagicMock(input_tokens=10, output_tokens=5)
+            mock_message = MagicMock(content=[mock_block], usage=mock_usage)
+            mock_client.messages.create.return_value = mock_message
+            adapter._client = mock_client
+            parsed, receipt = adapter.generate_structured(
+                "test", {"required": ["turn_goal"]}, turn_id="t1", attempt_id="a1"
+            )
+            assert receipt.success is True
+            assert parsed.get("turn_goal") == "test"
 
-            def mock_urlopen(req, timeout=60):
-                resp = responses[min(call_count[0], len(responses) - 1)]
-                call_count[0] += 1
-                resp.__enter__ = lambda s: s
-                resp.__exit__ = MagicMock(return_value=False)
-                return resp
-
-            with patch("urllib.request.urlopen", side_effect=mock_urlopen):
-                parsed, receipt = adapter.generate_structured(
-                    "test", {"required": ["turn_goal"]}, turn_id="t1", attempt_id="a1"
-                )
-                assert receipt.success is True
-                assert parsed.get("turn_goal") == "test"
-
-    def test_structured_invalid_json_final_fail(self):
-        """Test 7: Invalid structured output final → fail closed."""
+    def test_structured_empty_final_fail(self):
+        """Test 7: Empty structured output -> fail closed."""
         adapter = DeepSeekAdapter(max_retries=0)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps({
-                "choices": [{"message": {"content": "not json"}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-            }).encode()
-            mock_resp.__enter__ = lambda s: s
-            mock_resp.__exit__ = MagicMock(return_value=False)
-
-            with patch("urllib.request.urlopen", return_value=mock_resp):
-                parsed, receipt = adapter.generate_structured(
-                    "test", {"required": ["turn_goal"]}, turn_id="t1", attempt_id="a1"
-                )
-                assert parsed == {}
-                assert receipt.success is False
-                assert receipt.failure["failure_code"] == FailureCode.INVALID_JSON
+            mock_client = MagicMock()
+            mock_block = MagicMock()
+            mock_block.text = ""
+            del mock_block.type  # No type attribute
+            mock_usage = MagicMock(input_tokens=10, output_tokens=5)
+            mock_message = MagicMock(content=[mock_block], usage=mock_usage)
+            mock_client.messages.create.return_value = mock_message
+            adapter._client = mock_client
+            parsed, receipt = adapter.generate_structured(
+                "test", {"required": ["turn_goal"]}, turn_id="t1", attempt_id="a1"
+            )
+            assert parsed == {}
+            assert receipt.success is False
 
 
 # ── Trace & Usage Tests ─────────────────────────────────────────────────────

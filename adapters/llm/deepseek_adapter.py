@@ -1,17 +1,19 @@
-"""DeepSeek Provider Adapter -- real LLM calls via OpenAI-compatible API.
+"""DeepSeek Provider Adapter via Anthropic API format.
 
-This adapter makes actual HTTP calls to DeepSeek.
-It NEVER logs or stores the API key in traces/reports.
-All errors produce structured ProviderFailure, never raw exceptions.
+Uses the official anthropic SDK targeting DeepSeek's Anthropic-compatible
+endpoint (https://api.deepseek.com/anthropic).
+
+Director uses tool_use for reliable structured output.
+Writer uses standard text generation.
+NEVER logs or stores the API key in traces/reports.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
-import urllib.request
-import urllib.error
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,19 +33,56 @@ def _id(prefix: str, seed: str) -> str:
     return f"{prefix}_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
 
-class DeepSeekAdapter(BaseLlmAdapter):
-    """Real DeepSeek provider adapter.
+# Director tool schema — forces structured JSON output via tool_use
+DIRECTOR_TOOL = {
+    "name": "submit_director_plan",
+    "description": "Submit the narrative director plan for this turn",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "turn_goal": {
+                "type": "string",
+                "description": "What should happen in this turn"
+            },
+            "scene_focus": {
+                "type": "string",
+                "description": "Current scene focus"
+            },
+            "writer_constraints": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Constraints for the writer"
+            },
+            "narrative_opportunities": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Narrative opportunities to explore"
+            },
+            "risk_flags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Risk flags to avoid"
+            }
+        },
+        "required": ["turn_goal", "scene_focus"]
+    }
+}
 
-    Uses OpenAI-compatible chat completions API.
+
+class DeepSeekAdapter(BaseLlmAdapter):
+    """Real DeepSeek provider adapter via Anthropic API.
+
+    Uses anthropic SDK for reliable HTTP handling.
+    Director uses tool_use for guaranteed structured output.
     Requires DEEPSEEK_API_KEY environment variable.
     """
 
     def __init__(
         self,
-        model: str = "deepseek-chat",
+        model: str = "deepseek-v4-pro",
         default_max_tokens: int = 2000,
-        timeout_seconds: int = 60,
-        max_retries: int = 1,
+        timeout_seconds: int = 120,
+        max_retries: int = 2,
     ):
         self._model = model
         self._default_max_tokens = default_max_tokens
@@ -52,6 +91,25 @@ class DeepSeekAdapter(BaseLlmAdapter):
         self._call_count = 0
         self._total_tokens = 0
         self._receipts: list[ProviderAttemptReceipt] = []
+        self._client = None
+
+    def _get_client(self):
+        """Lazy-initialize the Anthropic client for DeepSeek."""
+        if self._client is None:
+            import anthropic
+            api_key = get_deepseek_api_key()
+            # DeepSeek Anthropic endpoint
+            base_url = os.environ.get(
+                "DEEPSEEK_BASE_URL",
+                "https://api.deepseek.com/anthropic"
+            )
+            self._client = anthropic.Anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=self._timeout,
+                max_retries=self._max_retries,
+            )
+        return self._client
 
     @property
     def model_name(self) -> str:
@@ -101,167 +159,98 @@ class DeepSeekAdapter(BaseLlmAdapter):
         started_at = _now()
         start_time = time.time()
 
-        last_failure = None
-        for retry in range(self._max_retries + 1):
-            try:
-                api_key = get_deepseek_api_key()
-                base_url = get_deepseek_base_url()
+        try:
+            client = self._get_client()
+            message = client.messages.create(
+                model=use_model,
+                max_tokens=max_tokens,
+                temperature=0.8,
+                messages=[{"role": "user", "content": prompt}],
+            )
 
-                # Build request payload (OpenAI-compatible format)
-                payload = {
-                    "model": use_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": max_tokens,
-                    "temperature": 0.8,
-                }
+            self._call_count += 1
+            latency_ms = int((time.time() - start_time) * 1000)
 
-                data = json.dumps(payload).encode("utf-8")
-                req = urllib.request.Request(
-                    f"{base_url}/chat/completions",
-                    data=data,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {api_key}",
-                    },
-                    method="POST",
+            # Extract text from content blocks
+            text = ""
+            for block in message.content:
+                if hasattr(block, "text"):
+                    text += block.text
+
+            # Extract usage
+            usage = ProviderUsage(
+                prompt_tokens=message.usage.input_tokens if message.usage else 0,
+                completion_tokens=message.usage.output_tokens if message.usage else 0,
+                total_tokens=(
+                    (message.usage.input_tokens + message.usage.output_tokens)
+                    if message.usage else 0
+                ),
+                model=use_model,
+            )
+            self._total_tokens += usage.total_tokens
+
+            success = bool(text.strip())
+            failure = None
+            if not success:
+                failure = ProviderFailure(
+                    failure_code=FailureCode.EMPTY_RESPONSE,
+                    failure_message="Empty content in response",
+                    retry_count=0,
                 )
 
-                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                    body = json.loads(resp.read().decode("utf-8"))
+            receipt = ProviderAttemptReceipt(
+                receipt_id=_id("prrec", request_id),
+                provider_role=provider_role,
+                provider_request_id=request_id,
+                model=use_model,
+                workflow_run_id=workflow_run_id,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                attempt_id=attempt_id,
+                started_at=started_at,
+                finished_at=_now(),
+                latency_ms=latency_ms,
+                success=success,
+                usage=usage.to_dict(),
+                retry_count=0,
+                failure=failure.to_dict() if failure else {},
+            )
+            self._receipts.append(receipt)
+            return text, receipt
 
-                self._call_count += 1
-                latency_ms = int((time.time() - start_time) * 1000)
+        except Exception as e:
+            self._call_count += 1
+            latency_ms = int((time.time() - start_time) * 1000)
 
-                # Extract response
-                choices = body.get("choices", [])
-                if not choices:
-                    last_failure = ProviderFailure(
-                        failure_code=FailureCode.EMPTY_RESPONSE,
-                        failure_message="No choices in response",
-                        retry_count=retry,
-                    )
-                    continue
+            code, msg = self._map_exception(e)
 
-                text = choices[0].get("message", {}).get("content", "")
-                if not text.strip():
-                    last_failure = ProviderFailure(
-                        failure_code=FailureCode.EMPTY_RESPONSE,
-                        failure_message="Empty content in response",
-                        retry_count=retry,
-                    )
-                    continue
-
-                finish_reason = choices[0].get("finish_reason", "stop")
-
-                # Extract usage
-                usage_data = body.get("usage", {})
-                usage = ProviderUsage(
-                    prompt_tokens=usage_data.get("prompt_tokens", 0),
-                    completion_tokens=usage_data.get("completion_tokens", 0),
-                    total_tokens=usage_data.get("total_tokens", 0),
-                    model=use_model,
-                )
-                self._total_tokens += usage.total_tokens
-
-                receipt = ProviderAttemptReceipt(
-                    receipt_id=_id("prrec", request_id),
-                    provider_role=provider_role,
-                    provider_request_id=request_id,
-                    model=use_model,
-                    workflow_run_id=workflow_run_id,
-                    trace_id=trace_id,
-                    turn_id=turn_id,
-                    attempt_id=attempt_id,
-                    started_at=started_at,
-                    finished_at=_now(),
-                    latency_ms=latency_ms,
-                    success=True,
-                    usage=usage.to_dict(),
-                    retry_count=retry,
-                )
-                self._receipts.append(receipt)
-                return text, receipt
-
-            except urllib.error.HTTPError as e:
-                self._call_count += 1
-                latency_ms = int((time.time() - start_time) * 1000)
-                status_code = e.code
-
-                if status_code == 429:
-                    code = FailureCode.RATE_LIMITED
-                    retryable = True
-                elif 500 <= status_code < 600:
-                    code = FailureCode.SERVER_ERROR
-                    retryable = True
-                else:
-                    code = FailureCode.SERVER_ERROR
-                    retryable = False
-
-                last_failure = ProviderFailure(
-                    failure_code=code,
-                    failure_message=f"HTTP {status_code}",
-                    status_code=status_code,
-                    retry_count=retry,
-                    is_retryable=retryable,
-                )
-
-                if not retryable or retry >= self._max_retries:
-                    break
-
-            except urllib.error.URLError as e:
-                self._call_count += 1
-                latency_ms = int((time.time() - start_time) * 1000)
-                last_failure = ProviderFailure(
-                    failure_code=FailureCode.CONNECTION_ERROR,
-                    failure_message=str(e.reason)[:200],
-                    retry_count=retry,
-                    is_retryable=True,
-                )
-                if retry >= self._max_retries:
-                    break
-
-            except TimeoutError:
-                self._call_count += 1
-                latency_ms = int((time.time() - start_time) * 1000)
-                last_failure = ProviderFailure(
-                    failure_code=FailureCode.NETWORK_TIMEOUT,
-                    failure_message=f"Timeout after {self._timeout}s",
-                    retry_count=retry,
-                    is_retryable=True,
-                )
-                if retry >= self._max_retries:
-                    break
-
-            except Exception as e:
-                self._call_count += 1
-                latency_ms = int((time.time() - start_time) * 1000)
-                last_failure = ProviderFailure(
-                    failure_code=FailureCode.CANCELLED,
-                    failure_message=type(e).__name__,
-                    retry_count=retry,
-                    is_retryable=False,
-                )
-                break
-
-        # All retries exhausted
-        receipt = ProviderAttemptReceipt(
-            receipt_id=_id("prrec", request_id),
-            provider_role=provider_role,
-            provider_request_id=request_id,
-            model=use_model,
-            workflow_run_id=workflow_run_id,
-            trace_id=trace_id,
-            turn_id=turn_id,
-            attempt_id=attempt_id,
-            started_at=started_at,
-            finished_at=_now(),
-            latency_ms=int((time.time() - start_time) * 1000),
-            success=False,
-            failure=last_failure.to_dict() if last_failure else {},
-            retry_count=self._max_retries,
-        )
-        self._receipts.append(receipt)
-        return "", receipt
+            failure = ProviderFailure(
+                failure_code=code,
+                failure_message=msg,
+                retry_count=self._max_retries,
+                is_retryable=code in (
+                    FailureCode.RATE_LIMITED, FailureCode.SERVER_ERROR,
+                    FailureCode.NETWORK_TIMEOUT, FailureCode.CONNECTION_ERROR,
+                ),
+            )
+            receipt = ProviderAttemptReceipt(
+                receipt_id=_id("prrec", request_id),
+                provider_role=provider_role,
+                provider_request_id=request_id,
+                model=use_model,
+                workflow_run_id=workflow_run_id,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                attempt_id=attempt_id,
+                started_at=started_at,
+                finished_at=_now(),
+                latency_ms=latency_ms,
+                success=False,
+                failure=failure.to_dict(),
+                retry_count=self._max_retries,
+            )
+            self._receipts.append(receipt)
+            return "", receipt
 
     def generate_structured(
         self,
@@ -275,8 +264,10 @@ class DeepSeekAdapter(BaseLlmAdapter):
         attempt_id: str = "",
         model: str = "",
     ) -> tuple[dict[str, Any], ProviderAttemptReceipt]:
-        """Generate structured JSON from a prompt.
+        """Generate structured JSON via tool_use.
 
+        Uses Anthropic's tool_use feature to guarantee structured output.
+        The model MUST call submit_director_plan with the required schema.
         Returns (parsed_data, receipt).
         On failure, returns ({}, receipt_with_failure).
         """
@@ -288,198 +279,134 @@ class DeepSeekAdapter(BaseLlmAdapter):
         started_at = _now()
         start_time = time.time()
 
-        # Add JSON instruction to prompt
-        json_instruction = (
-            "\n\nPlease respond with valid JSON only. "
-            "Do not include any text before or after the JSON object."
-        )
-        full_prompt = prompt + json_instruction
+        try:
+            client = self._get_client()
+            message = client.messages.create(
+                model=use_model,
+                max_tokens=max_tokens,
+                temperature=0.3,
+                system="You are a narrative director for an interactive role-play session. "
+                       "Analyze the scene and call the submit_director_plan tool with your plan.",
+                messages=[{"role": "user", "content": prompt}],
+                tools=[DIRECTOR_TOOL],
+                tool_choice={"type": "tool", "name": "submit_director_plan"},
+            )
 
-        last_failure = None
-        for retry in range(self._max_retries + 1):
-            try:
-                api_key = get_deepseek_api_key()
-                base_url = get_deepseek_base_url()
+            self._call_count += 1
+            latency_ms = int((time.time() - start_time) * 1000)
 
-                payload = {
-                    "model": use_model,
-                    "messages": [{"role": "user", "content": full_prompt}],
-                    "max_tokens": max_tokens,
-                    "temperature": 0.3,  # Lower temp for structured output
-                }
+            # Extract tool_use result
+            parsed = {}
+            for block in message.content:
+                if hasattr(block, "type") and block.type == "tool_use":
+                    parsed = block.input
+                    break
 
-                data = json.dumps(payload).encode("utf-8")
-                req = urllib.request.Request(
-                    f"{base_url}/chat/completions",
-                    data=data,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {api_key}",
-                    },
-                    method="POST",
-                )
-
-                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                    body = json.loads(resp.read().decode("utf-8"))
-
-                self._call_count += 1
-                latency_ms = int((time.time() - start_time) * 1000)
-
-                choices = body.get("choices", [])
-                if not choices:
-                    last_failure = ProviderFailure(
-                        failure_code=FailureCode.EMPTY_RESPONSE,
-                        failure_message="No choices in response",
-                        retry_count=retry,
-                    )
-                    continue
-
-                raw_text = choices[0].get("message", {}).get("content", "")
-                if not raw_text.strip():
-                    last_failure = ProviderFailure(
-                        failure_code=FailureCode.EMPTY_RESPONSE,
-                        failure_message="Empty content in response",
-                        retry_count=retry,
-                    )
-                    continue
-
-                # Try to parse JSON
-                try:
-                    # Strip markdown code fences if present
-                    cleaned = raw_text.strip()
-                    if cleaned.startswith("```"):
-                        lines = cleaned.split("\n")
-                        cleaned = "\n".join(lines[1:])
-                        if cleaned.endswith("```"):
-                            cleaned = cleaned[:-3]
-                        cleaned = cleaned.strip()
-
-                    parsed = json.loads(cleaned)
-                except json.JSONDecodeError:
-                    last_failure = ProviderFailure(
-                        failure_code=FailureCode.INVALID_JSON,
-                        failure_message="Response is not valid JSON",
-                        retry_count=retry,
-                        is_retryable=True,
-                    )
-                    if retry >= self._max_retries:
+            # Fallback: try text content as JSON
+            if not parsed:
+                for block in message.content:
+                    if hasattr(block, "text") and block.text.strip():
+                        try:
+                            cleaned = block.text.strip()
+                            if cleaned.startswith("```"):
+                                lines = cleaned.split("\n")
+                                cleaned = "\n".join(lines[1:])
+                                if cleaned.endswith("```"):
+                                    cleaned = cleaned[:-3]
+                                cleaned = cleaned.strip()
+                            parsed = json.loads(cleaned)
+                        except json.JSONDecodeError:
+                            pass
                         break
-                    continue
 
-                # Validate schema (basic check: required keys present)
-                if schema and isinstance(schema, dict):
-                    required_keys = schema.get("required", [])
-                    if isinstance(required_keys, list):
-                        missing = [k for k in required_keys if k not in parsed]
-                        if missing:
-                            last_failure = ProviderFailure(
-                                failure_code=FailureCode.SCHEMA_MISMATCH,
-                                failure_message=f"Missing keys: {missing}",
-                                retry_count=retry,
-                                is_retryable=True,
-                            )
-                            if retry >= self._max_retries:
-                                break
-                            continue
+            usage = ProviderUsage(
+                prompt_tokens=message.usage.input_tokens if message.usage else 0,
+                completion_tokens=message.usage.output_tokens if message.usage else 0,
+                total_tokens=(
+                    (message.usage.input_tokens + message.usage.output_tokens)
+                    if message.usage else 0
+                ),
+                model=use_model,
+            )
+            self._total_tokens += usage.total_tokens
 
-                usage_data = body.get("usage", {})
-                usage = ProviderUsage(
-                    prompt_tokens=usage_data.get("prompt_tokens", 0),
-                    completion_tokens=usage_data.get("completion_tokens", 0),
-                    total_tokens=usage_data.get("total_tokens", 0),
-                    model=use_model,
+            success = bool(parsed)
+            failure = None
+            if not success:
+                failure = ProviderFailure(
+                    failure_code=FailureCode.EMPTY_RESPONSE,
+                    failure_message="No tool_use or valid JSON in response",
+                    retry_count=0,
                 )
-                self._total_tokens += usage.total_tokens
 
-                receipt = ProviderAttemptReceipt(
-                    receipt_id=_id("prrec", request_id),
-                    provider_role=provider_role,
-                    provider_request_id=request_id,
-                    model=use_model,
-                    workflow_run_id=workflow_run_id,
-                    trace_id=trace_id,
-                    turn_id=turn_id,
-                    attempt_id=attempt_id,
-                    started_at=started_at,
-                    finished_at=_now(),
-                    latency_ms=latency_ms,
-                    success=True,
-                    usage=usage.to_dict(),
-                    retry_count=retry,
-                )
-                self._receipts.append(receipt)
-                return parsed, receipt
+            receipt = ProviderAttemptReceipt(
+                receipt_id=_id("prrec", request_id),
+                provider_role=provider_role,
+                provider_request_id=request_id,
+                model=use_model,
+                workflow_run_id=workflow_run_id,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                attempt_id=attempt_id,
+                started_at=started_at,
+                finished_at=_now(),
+                latency_ms=latency_ms,
+                success=success,
+                usage=usage.to_dict(),
+                retry_count=0,
+                failure=failure.to_dict() if failure else {},
+            )
+            self._receipts.append(receipt)
+            return parsed, receipt
 
-            except urllib.error.HTTPError as e:
-                self._call_count += 1
-                status_code = e.code
-                if status_code == 429:
-                    code = FailureCode.RATE_LIMITED
-                    retryable = True
-                elif 500 <= status_code < 600:
-                    code = FailureCode.SERVER_ERROR
-                    retryable = True
-                else:
-                    code = FailureCode.SERVER_ERROR
-                    retryable = False
+        except Exception as e:
+            self._call_count += 1
+            latency_ms = int((time.time() - start_time) * 1000)
 
-                last_failure = ProviderFailure(
-                    failure_code=code,
-                    failure_message=f"HTTP {status_code}",
-                    status_code=status_code,
-                    retry_count=retry,
-                    is_retryable=retryable,
-                )
-                if not retryable or retry >= self._max_retries:
-                    break
+            code, msg = self._map_exception(e)
 
-            except urllib.error.URLError as e:
-                self._call_count += 1
-                last_failure = ProviderFailure(
-                    failure_code=FailureCode.CONNECTION_ERROR,
-                    failure_message=str(e.reason)[:200],
-                    retry_count=retry,
-                    is_retryable=True,
-                )
-                if retry >= self._max_retries:
-                    break
+            failure = ProviderFailure(
+                failure_code=code,
+                failure_message=msg,
+                retry_count=self._max_retries,
+                is_retryable=code in (
+                    FailureCode.RATE_LIMITED, FailureCode.SERVER_ERROR,
+                    FailureCode.NETWORK_TIMEOUT, FailureCode.CONNECTION_ERROR,
+                ),
+            )
+            receipt = ProviderAttemptReceipt(
+                receipt_id=_id("prrec", request_id),
+                provider_role=provider_role,
+                provider_request_id=request_id,
+                model=use_model,
+                workflow_run_id=workflow_run_id,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                attempt_id=attempt_id,
+                started_at=started_at,
+                finished_at=_now(),
+                latency_ms=latency_ms,
+                success=False,
+                failure=failure.to_dict(),
+                retry_count=self._max_retries,
+            )
+            self._receipts.append(receipt)
+            return {}, receipt
 
-            except TimeoutError:
-                self._call_count += 1
-                last_failure = ProviderFailure(
-                    failure_code=FailureCode.NETWORK_TIMEOUT,
-                    failure_message=f"Timeout after {self._timeout}s",
-                    retry_count=retry,
-                    is_retryable=True,
-                )
-                if retry >= self._max_retries:
-                    break
+    @staticmethod
+    def _map_exception(e: Exception) -> tuple[str, str]:
+        """Map anthropic SDK exceptions to FailureCode."""
+        import anthropic
 
-            except Exception as e:
-                self._call_count += 1
-                last_failure = ProviderFailure(
-                    failure_code=FailureCode.CANCELLED,
-                    failure_message=type(e).__name__,
-                    retry_count=retry,
-                    is_retryable=False,
-                )
-                break
-
-        receipt = ProviderAttemptReceipt(
-            receipt_id=_id("prrec", request_id),
-            provider_role=provider_role,
-            provider_request_id=request_id,
-            model=use_model,
-            workflow_run_id=workflow_run_id,
-            trace_id=trace_id,
-            turn_id=turn_id,
-            attempt_id=attempt_id,
-            started_at=started_at,
-            finished_at=_now(),
-            latency_ms=int((time.time() - start_time) * 1000),
-            success=False,
-            failure=last_failure.to_dict() if last_failure else {},
-            retry_count=self._max_retries,
-        )
-        self._receipts.append(receipt)
-        return {}, receipt
+        if isinstance(e, anthropic.APITimeoutError):
+            return FailureCode.NETWORK_TIMEOUT, "Request timed out"
+        elif isinstance(e, anthropic.APIConnectionError):
+            return FailureCode.CONNECTION_ERROR, str(e)[:200]
+        elif isinstance(e, anthropic.RateLimitError):
+            return FailureCode.RATE_LIMITED, "Rate limited"
+        elif isinstance(e, anthropic.APIStatusError):
+            return FailureCode.SERVER_ERROR, f"HTTP {e.status_code}"
+        elif isinstance(e, anthropic.BadRequestError):
+            return FailureCode.INVALID_JSON, str(e)[:200]
+        else:
+            return FailureCode.CANCELLED, f"{type(e).__name__}: {str(e)[:150]}"

@@ -54,8 +54,8 @@ def _register(profile: ModelProfile) -> None:
 _register(ModelProfile(
     profile_id="deepseek-v4-pro-director",
     provider="deepseek",
-    model="deepseek-chat",
-    base_url="https://api.deepseek.com/v1",
+    model="deepseek-v4-pro",
+    base_url="https://api.deepseek.com/anthropic",
     timeout_seconds=120,
     default_max_tokens=4000,
     max_retries=2,
@@ -66,8 +66,8 @@ _register(ModelProfile(
 _register(ModelProfile(
     profile_id="deepseek-v4-flash-writer",
     provider="deepseek",
-    model="deepseek-chat",
-    base_url="https://api.deepseek.com/v1",
+    model="deepseek-v4-flash",
+    base_url="https://api.deepseek.com/anthropic",
     timeout_seconds=60,
     default_max_tokens=4000,
     max_retries=1,
