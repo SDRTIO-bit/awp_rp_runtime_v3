@@ -85,6 +85,8 @@ class TestNodeRegistration:
             "AWPV2TurnResultProbe",
             "AWPV2ContinuationTurnExecution",
             "AWPV2SessionRuntimeLoad",
+            "AWPV2PersistentBootstrap",
+            "AWPV2PersistentFirstTurn",
             "AWPV2PersistentContinuationTurn",
         }
         all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected | canonical_expected
