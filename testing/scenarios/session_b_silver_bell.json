@@ -1,0 +1,39 @@
+{
+  "scenario_id": "session-b-silver-bell",
+  "session_label": "B",
+  "description": "Session B: 玩家将银铃交给阿洛，要求立即告诉老丈。与 Session A 的事实故意相反，验证 session 间隔离。",
+  "player_persona": "一位爽朗健谈的货郎，自称姓周。你不喜欢藏着掖着，认为光明正大才是做人之道。你记性一般，但直觉很准。",
+  "global_goal": "将银铃公开交给阿洛并要求立即告诉老丈，验证该事实与 Session A 的青铜怀表保密事实互不串扰。",
+  "initial_action": "（爽朗地）阿洛姑娘！我在集市上淘到一只银铃，做工可精致了。麻烦你现在就去告诉老丈——就说周货郎送来的，请他掌掌眼。",
+  "required_facts": ["银铃", "立即告诉老丈", "公开"],
+  "checkpoints": [
+    {
+      "turn": 2,
+      "kind": "establish_fact",
+      "fact_id": "public_silver_bell",
+      "fact": "玩家将银铃交给阿洛并要求立即公开告诉老丈",
+      "expected_acknowledgment": "阿洛应表示收到银铃并答应立即告知老丈"
+    },
+    {
+      "turn": 8,
+      "kind": "memory_probe",
+      "fact_id": "public_silver_bell",
+      "prompt_goal": "（闲聊）上次我给你的银铃，老丈看过了吧？他怎么说的？",
+      "expected_recall_source": "L2 或 L3 记忆应包含银铃信息"
+    },
+    {
+      "turn": 14,
+      "kind": "delayed_recall_probe",
+      "fact_id": "public_silver_bell",
+      "prompt_goal": "（不经意地）说起来，那银铃后来怎样了？我记得是让你马上告诉老丈的。",
+      "expected_recall_source": "L2/L3 应保留银铃+公开告知的信息"
+    },
+    {
+      "turn": 19,
+      "kind": "final_consistency_probe",
+      "fact_id": "public_silver_bell",
+      "prompt_goal": "（最后确认）阿洛，我给你的银铃……你应该是一直带着的吧？老丈那边都知道了吧？",
+      "expected_recall_source": "应体现该事实未被遗忘"
+    }
+  ]
+}

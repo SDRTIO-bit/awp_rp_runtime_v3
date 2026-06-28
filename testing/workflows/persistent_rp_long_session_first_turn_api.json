@@ -1,0 +1,39 @@
+{
+  "1": {
+    "class_type": "AWPV2PersistentBootstrap",
+    "inputs": {
+      "source_path": "{{card_path}}",
+      "session_id": "{{session_id}}",
+      "greeting_id": "g0",
+      "request_id": "{{request_id}}_bootstrap",
+      "run_id": "{{run_id}}_bootstrap",
+      "workflow_run_id": "{{workflow_run_id}}",
+      "trace_id": "{{trace_id}}"
+    }
+  },
+  "2": {
+    "class_type": "AWPV2PersistentFirstTurn",
+    "inputs": {
+      "session_id": "{{session_id}}",
+      "player_input": "{{player_input}}",
+      "workflow_run_id": "{{workflow_run_id}}",
+      "trace_id": "{{trace_id}}",
+      "turn_id": "{{turn_id}}",
+      "attempt_id": "{{attempt_id}}",
+      "request_id": "{{request_id}}",
+      "run_id": "{{run_id}}",
+      "director_profile_id": "{{director_profile_id}}",
+      "writer_profile_id": "{{writer_profile_id}}"
+    }
+  },
+  "3": {
+    "class_type": "AWPV2TurnResultProbe",
+    "inputs": {
+      "receipt": ["2", 0],
+      "diagnostics": ["2", 2],
+      "turn_record": ["2", 4],
+      "prompt_id": "{{prompt_id}}",
+      "turn_kind": "first"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "1": {
+    "class_type": "AWPV2PersistentContinuationTurn",
+    "inputs": {
+      "session_id": "{{session_id}}",
+      "player_input": "{{player_input}}",
+      "workflow_run_id": "{{workflow_run_id}}",
+      "trace_id": "{{trace_id}}",
+      "turn_id": "{{turn_id}}",
+      "attempt_id": "{{attempt_id}}",
+      "request_id": "{{request_id}}",
+      "run_id": "{{run_id}}",
+      "director_profile_id": "{{director_profile_id}}",
+      "writer_profile_id": "{{writer_profile_id}}"
+    }
+  },
+  "2": {
+    "class_type": "AWPV2TurnResultProbe",
+    "inputs": {
+      "receipt": ["1", 0],
+      "diagnostics": ["1", 2],
+      "turn_record": ["1", 4],
+      "prompt_id": "{{prompt_id}}",
+      "turn_kind": "continuation"
+    }
+  }
+}
