@@ -1,8 +1,9 @@
-"""AWPV2PersistentContinuationTurn — Turn 2+ using RuntimeStoreFactory + SQLite.
+"""AWPV2PersistentFirstTurn — Turn 1 using RuntimeStoreFactory + SQLite.
 
-All history restored from SQLite via SessionRuntimeLoad + RoundSnapshotBuilder.
-No dbPath input. No JSON injection. No Fake stores for state/turn/memory.
-Uses RuntimeStoreFactory.from_env() for profile + namespace resolution.
+Replaces AWPV2FirstTurnExecution for the canonical persistent path.
+All stores come from RuntimeStoreFactory. No Fake stores. No dbPath input.
+Uses SessionRuntimeLoad + RoundSnapshotBuilder for context assembly.
+Commits to SQLite: CardState, TurnRecord, D6 Memory (test fixture or no-op).
 """
 
 from __future__ import annotations
@@ -16,20 +17,21 @@ from typing import Any
 
 from ..contracts.round_snapshot import RoundSnapshot
 from ..contracts.card_state import CardState
+from ..contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
+from ..contracts.card_state_patch import CardStatePatch
 from ..contracts.turn_record import TurnRecord
 from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from ..contracts.director_plan import DirectorPlan
 from ..contracts.final_turn_brief import FinalTurnBrief
 from ..contracts.writer_draft import WriterDraft
 from ..contracts.state_update_proposal import StateUpdateProposal
-from ..contracts.card_state_patch import CardStatePatch
-from ..contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
 from ..contracts.first_turn_receipt import FirstTurnReceipt
 from ..contracts.first_turn_diagnostics import FirstTurnDiagnostics
 from ..contracts.memory_commit_plan import MemoryCommitRequest, MemoryCommitStatus
 
 from ..runtime.runtime_store_factory import RuntimeStoreFactory
 from ..runtime.session_runtime_load import SessionRuntimeLoad
+from ..runtime.round_snapshot_builder import RoundSnapshotBuilder
 from ..runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
 from ..runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
 
@@ -49,14 +51,14 @@ def _ms_since(start: float) -> int:
 class _FakeDirectorAdapter:
     def plan(self, snapshot: RoundSnapshot) -> tuple[DirectorPlan, dict, dict]:
         plan = DirectorPlan(
-            turn_goal=f"Continue the narrative (turn {len(snapshot.recent_turn_records) + 1})",
-            scene_focus="Ongoing scene",
+            turn_goal="Begin the first interaction",
+            scene_focus="Opening scene",
             must_preserve_facts=[],
-            must_not_do=["Do not contradict established facts"],
-            narrative_opportunities=["Build on previous interactions"],
+            must_not_do=["Do not contradict the opening greeting"],
+            narrative_opportunities=["Establish the initial setting"],
             unresolved_threads=[],
             risk_flags=[],
-            writer_constraints=["Stay in character", "Maintain continuity"],
+            writer_constraints=["Stay in character"],
             active_character_refs=[],
         )
         return plan, {}, {}
@@ -64,20 +66,15 @@ class _FakeDirectorAdapter:
 
 class _FakeWriterAdapter:
     def write(self, brief: FinalTurnBrief, snapshot: RoundSnapshot) -> WriterDraft:
-        history_count = len(snapshot.recent_turn_records)
-        last_input = ""
-        if snapshot.recent_turn_records:
-            last_input = snapshot.recent_turn_records[0].player_input[:50]
         text = (
-            f"[Turn {history_count + 1} Response] "
-            f"Continuing from previous interaction. "
+            f"[First Turn Response] "
+            f"The scene begins. {brief.turn_goal}. "
             f"Player said: '{snapshot.player_input}'. "
-            f"Previous context: '{last_input}'. "
-            f"The narrative builds on {brief.turn_goal}."
+            f"The narrative unfolds with careful attention to {brief.scene_focus}."
         )
-        text += " " + "The story continues with depth and consistency." * 3
+        text += " " + "The atmosphere is rich with detail and the characters respond naturally." * 3
         return WriterDraft(
-            draft_id=f"cont_draft_{history_count}",
+            draft_id="fake_draft_001",
             text=text,
             writer_model="fake_writer_v1",
             prompt_tokens=0,
@@ -108,20 +105,19 @@ class _FakeQualityAdapter:
 class _FakeStateProposalAdapter:
     def propose(self, accepted_text: str, snapshot: RoundSnapshot) -> StateUpdateProposal:
         return StateUpdateProposal(
-            proposal_id=f"cont_proposal_{snapshot.snapshot_id[:12]}",
+            proposal_id="fake_proposal_001",
             patch_ops=[],
-            reasoning="Continuation turn: no state changes needed",
+            reasoning="First turn: no state changes needed",
         )
 
 
-class AWPV2PersistentContinuationTurn:
-    """Execute Turn 2+ using RuntimeStoreFactory + SQLite.
+class AWPV2PersistentFirstTurn:
+    """Execute Turn 1 using RuntimeStoreFactory + SQLite.
 
-    Key changes from previous version:
-    - NO db_path input
-    - Uses RuntimeStoreFactory.from_env() for profile + namespace
-    - Memory commit via test fixture (test profile) or no-op (production)
-    - RoundSnapshotBuilder is the canonical context entry point
+    All L0 data loaded from SQLite (via bootstrap).
+    RoundSnapshotBuilder is the canonical context entry point.
+    State/Turn/Memory committed to SQLite.
+    No dbPath input. Profile + namespace resolved from env.
     """
 
     @classmethod
@@ -148,7 +144,7 @@ class AWPV2PersistentContinuationTurn:
         "CARD_STATE", "TURN_RECORD", "ROUND_SNAPSHOT",
     )
     RETURN_NAMES = (
-        "receipt", "continuation_context", "diagnostics",
+        "receipt", "first_turn_context", "diagnostics",
         "card_state", "turn_record", "round_snapshot",
     )
     FUNCTION = "execute"
@@ -176,7 +172,7 @@ class AWPV2PersistentContinuationTurn:
         seed = f"{session_id}:{now}:{run_id}"
 
         if not request_id:
-            request_id = f"ctr_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
+            request_id = f"ftr_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
         if not workflow_run_id:
             workflow_run_id = f"wfr_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
         if not trace_id:
@@ -190,39 +186,63 @@ class AWPV2PersistentContinuationTurn:
         factory = RuntimeStoreFactory.from_env()
         registry = factory.registry
 
-        # ── Load from persistent stores via SessionRuntimeLoad ───────────
-        loader = SessionRuntimeLoad(registry)
-        bundle = loader.load(
-            session_id=session_id,
-            player_input=player_input,
-        )
-
         diag = FirstTurnDiagnostics(
-            diagnostics_id=_id("ctd", request_id),
+            diagnostics_id=_id("ftd", request_id),
             request_id=request_id,
             trace_id=trace_id,
             session_id=session_id,
         )
         t_start = time.time()
 
-        if not bundle.is_valid:
+        # ── Load L0 from SQLite ──────────────────────────────────────────
+        step_start = time.time()
+        binding = registry.card_session_binding_store.load(session_id)
+        if not binding:
+            diag.steps_failed.append("load_binding")
             diag.outcome = "failure"
-            diag.failure_message = "; ".join(bundle.load_errors)
-            diag.steps_failed.append("session_load")
+            diag.failure_message = f"No CardSessionBinding for session {session_id}"
             return ({}, {}, diag.to_dict(), {}, {}, {})
 
-        snapshot = bundle.round_snapshot
-        cs = bundle.card_state
-        binding = bundle.card_session_binding
+        if binding.status != "ready":
+            diag.steps_failed.append("verify_session")
+            diag.outcome = "failure"
+            diag.failure_message = f"Session status is '{binding.status}', expected 'ready'"
+            return ({}, {}, diag.to_dict(), {}, {}, {})
 
-        diag.step_timings_ms["session_load"] = _ms_since(t_start)
-        diag.steps_completed.append("session_load")
+        opening = registry.opening_record_store.get_by_session(session_id)
+        if not opening:
+            diag.steps_failed.append("load_opening")
+            diag.outcome = "failure"
+            diag.failure_message = f"No OpeningRecord for session {session_id}"
+            return ({}, {}, diag.to_dict(), {}, {}, {})
 
-        diag.agent_dispositions = {
-            "history-recall": "loaded" if bundle.l1_turn_count > 0 else "empty",
-            "active-memory": "loaded" if bundle.l2_active_memory_count > 0 else "empty",
-            "rag-memory": "loaded" if bundle.l3_rag_recall_count > 0 else "empty",
-        }
+        wb_binding = registry.worldbook_binding_store.get_by_session(session_id)
+        if not wb_binding:
+            diag.steps_failed.append("load_worldbook")
+            diag.outcome = "failure"
+            diag.failure_message = f"No WorldbookBinding for session {session_id}"
+            return ({}, {}, diag.to_dict(), {}, {}, {})
+
+        diag.step_timings_ms["load_l0"] = _ms_since(step_start)
+        diag.steps_completed.append("load_l0")
+
+        # ── Build RoundSnapshot via canonical builder ────────────────────
+        step_start = time.time()
+        snapshot_builder = RoundSnapshotBuilder(
+            card_state_store=registry.card_state_store,
+            turn_record_store=registry.turn_record_store,
+            active_memory_store=registry.active_memory_store,
+            rag_memory_store=registry.rag_memory_store,
+        )
+        # First turn: L1=[], L2=[], L3=[] (no history yet)
+        snapshot = snapshot_builder.build(
+            card_id=binding.logical_card_id,
+            session_id=session_id,
+            player_input=player_input,
+        )
+        registry.round_snapshot_store.save(snapshot)
+        diag.step_timings_ms["build_snapshot"] = _ms_since(step_start)
+        diag.steps_completed.append("build_snapshot")
 
         # ── Director ────────────────────────────────────────────────────
         step_start = time.time()
@@ -245,6 +265,13 @@ class AWPV2PersistentContinuationTurn:
             accepted_relationship_findings=[],
             accepted_continuity_constraints=[],
         )
+        diag.agent_dispositions = {
+            "history-recall": "not_required",
+            "opportunity": "not_required",
+            "world-life": "not_required",
+            "emotion-relationship": "not_required",
+            "continuity": "not_required",
+        }
         diag.step_timings_ms["director_and_agents"] = _ms_since(step_start)
         diag.steps_completed.append("director_and_agents")
 
@@ -266,7 +293,7 @@ class AWPV2PersistentContinuationTurn:
             diag.outcome = "quality_rejected"
             diag.failure_message = f"Quality gate rejected: {quality_decision.blocking_reasons}"
             receipt = FirstTurnReceipt(
-                receipt_id=_id("ctr", request_id),
+                receipt_id=_id("ftr", request_id),
                 request_id=request_id, workflow_run_id=workflow_run_id,
                 trace_id=trace_id, turn_id=turn_id, attempt_id=attempt_id,
                 session_id=session_id,
@@ -276,12 +303,16 @@ class AWPV2PersistentContinuationTurn:
                 quality_verdict="reject", idempotency_status="new",
                 created_at=now,
             )
-            return (receipt.to_dict(), {}, diag.to_dict(), cs.to_dict(), {}, {})
+            return (receipt.to_dict(), {}, diag.to_dict(), {}, {}, {})
 
         diag.steps_completed.append("quality_gate")
 
         # ── CardState Commit ────────────────────────────────────────────
         step_start = time.time()
+        cs = registry.card_state_store.load(binding.logical_card_id, session_id)
+        if not cs:
+            cs = registry.card_state_store.initialize(binding.logical_card_id, session_id)
+
         patch = CardStatePatch(
             patch_id=_id("patch", turn_id),
             card_id=binding.logical_card_id,
@@ -352,12 +383,15 @@ class AWPV2PersistentContinuationTurn:
         active_write_count = 0
         rag_write_count = 0
 
+        # Try test fixture memory curator (only in test profile)
         try:
             from ..testing.fakes.test_memory_curator_fixture import compile_test_memory_plan
             plan = compile_test_memory_plan(turn_record, snapshot, quality_decision)
             if plan and (plan.new_active_entries or plan.new_rag_entries):
+                # Commit active memories
                 if plan.new_active_entries:
                     active_runtime = ActiveMemoryCommitRuntime(registry.active_memory_store)
+                    from ..contracts.memory_commit_plan import MemoryCommitRequest
                     mem_request = MemoryCommitRequest(
                         plan=plan,
                         card_id=binding.logical_card_id,
@@ -376,6 +410,7 @@ class AWPV2PersistentContinuationTurn:
                         active_write_count = len(plan.new_active_entries)
                         memory_status = "curated_active"
 
+                # Commit RAG memories
                 if plan.new_rag_entries:
                     rag_runtime = RagMemoryCommitRuntime(registry.rag_memory_store)
                     rag_request = MemoryCommitRequest(
@@ -397,6 +432,7 @@ class AWPV2PersistentContinuationTurn:
                         memory_status = "curated_both" if active_write_count > 0 else "curated_rag"
         except Exception:
             memory_status = "noop"
+            diag.memory_curation_reason = "test_fixture_not_available"
 
         diag.memory_curation_status = memory_status
         diag.step_timings_ms["memory_curation"] = _ms_since(step_start)
@@ -407,7 +443,7 @@ class AWPV2PersistentContinuationTurn:
         diag.step_timings_ms["total"] = _ms_since(t_start)
 
         receipt = FirstTurnReceipt(
-            receipt_id=_id("ctr", request_id),
+            receipt_id=_id("ftr", request_id),
             request_id=request_id, workflow_run_id=workflow_run_id,
             trace_id=trace_id, turn_id=turn_id, attempt_id=attempt_id,
             session_id=session_id,
@@ -423,21 +459,28 @@ class AWPV2PersistentContinuationTurn:
             turn_index=turn_record.turn_index,
             turn_record_commit_status="committed",
             memory_curation_status=memory_status,
+            active_memory_write_count=active_write_count,
+            rag_memory_write_count=rag_write_count,
             idempotency_status="new",
             created_at=now,
         )
 
-        cont_ctx = {
+        first_turn_ctx = {
             "turn_id": turn_id,
             "turn_index": next_turn_index,
-            "turn_kind": "continuation",
+            "turn_kind": "first",
             "session_id": session_id,
             "logical_card_id": binding.logical_card_id,
-            "recent_accepted_turn_count": bundle.l1_turn_count,
-            "active_memory_count": bundle.l2_active_memory_count,
-            "rag_recall_count": bundle.l3_rag_recall_count,
+            "recent_accepted_turn_count": 0,
+            "active_memory_count": active_write_count,
+            "rag_recall_count": rag_write_count,
             "base_card_state_revision": base_revision,
             "result_card_state_revision": result_revision,
+            "opening_context": {
+                "opening_record_id": opening.opening_record_id,
+                "greeting_id": opening.greeting_id,
+                "safe_display_content": opening.safe_display_content,
+            },
             "workflow_run_id": workflow_run_id,
             "trace_id": trace_id,
             "created_at": now,
@@ -445,7 +488,7 @@ class AWPV2PersistentContinuationTurn:
 
         return (
             receipt.to_dict(),
-            cont_ctx,
+            first_turn_ctx,
             diag.to_dict(),
             new_state.to_dict(),
             turn_record.to_dict(),
@@ -454,8 +497,8 @@ class AWPV2PersistentContinuationTurn:
 
 
 NODE_CLASS_MAPPINGS = {
-    "AWPV2PersistentContinuationTurn": AWPV2PersistentContinuationTurn,
+    "AWPV2PersistentFirstTurn": AWPV2PersistentFirstTurn,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "AWPV2PersistentContinuationTurn": "AWP V2 Persistent Continuation Turn",
+    "AWPV2PersistentFirstTurn": "AWP V2 Persistent First Turn",
 }

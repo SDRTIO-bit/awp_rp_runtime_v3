@@ -7,65 +7,16 @@ Given a sessionId, restores:
   L3: RagMemory recall
 
 Builds the canonical RoundSnapshot via RoundSnapshotBuilder.
-No JSON injection. No client-provided history.
+No JSON injection. No client-provided history. No dbPath input.
+Uses RuntimeStoreFactory.from_env() for profile + namespace resolution.
 """
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from typing import Any
 
-from ..storage.sqlite.database import Database
-from ..runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from ..runtime.runtime_store_factory import RuntimeStoreFactory
 from ..runtime.session_runtime_load import SessionRuntimeLoad
-
-
-# Module-level registry cache keyed by db_path
-_registry_cache: dict[str, SessionRuntimeStoreRegistry] = {}
-
-
-def _get_registry(db_path: str) -> SessionRuntimeStoreRegistry:
-    """Get or create a registry for the given database path."""
-    if db_path not in _registry_cache:
-        db = Database(db_path)
-        db.initialize()
-        _registry_cache[db_path] = SessionRuntimeStoreRegistry(db)
-    return _registry_cache[db_path]
-
-
-def _clear_registry_cache() -> None:
-    """Clear the registry cache (for testing)."""
-    for registry in _registry_cache.values():
-        registry.db.close()
-    _registry_cache.clear()
-
-
-def _resolve_db_path() -> str:
-    """Resolve the database path from environment or default.
-
-    Priority:
-    1. AWP_TEST_STORE_ROOT + namespace (test mode)
-    2. AWP_RUNTIME_DB_PATH (explicit override)
-    3. Default: awp_rp_runtime.db in current directory
-    """
-    profile = os.environ.get("AWP_RUNTIME_PROFILE", "production")
-
-    if profile == "test":
-        store_root = os.environ.get("AWP_TEST_STORE_ROOT", "")
-        namespace = os.environ.get("AWP_TEST_RUNTIME_NAMESPACE", "default")
-        if store_root:
-            db_dir = Path(store_root) / namespace
-        else:
-            db_dir = Path("artifacts") / "test-runtime" / namespace
-        db_dir.mkdir(parents=True, exist_ok=True)
-        return str(db_dir / "awp_session.db")
-
-    explicit = os.environ.get("AWP_RUNTIME_DB_PATH", "")
-    if explicit:
-        return explicit
-
-    return "awp_rp_runtime.db"
 
 
 class AWPV2SessionRuntimeLoad:
@@ -74,6 +25,7 @@ class AWPV2SessionRuntimeLoad:
     Restores L0 (bootstrap), L1 (turn history), L2 (active memory),
     L3 (RAG memory), and builds the canonical RoundSnapshot.
 
+    No dbPath input. Profile + namespace resolved from env.
     OUTPUT_NODE = False — this is a data-loading node, not terminal.
     """
 
@@ -88,7 +40,6 @@ class AWPV2SessionRuntimeLoad:
                 "expected_logical_card_id": ("STRING", {"default": ""}),
                 "expected_card_version": ("INT", {"default": 0, "min": 0}),
                 "expected_source_hash": ("STRING", {"default": ""}),
-                "db_path": ("STRING", {"default": ""}),
             },
         }
 
@@ -111,11 +62,10 @@ class AWPV2SessionRuntimeLoad:
         expected_logical_card_id: str = "",
         expected_card_version: int = 0,
         expected_source_hash: str = "",
-        db_path: str = "",
     ) -> tuple:
-        # Resolve database
-        resolved_db_path = db_path if db_path else _resolve_db_path()
-        registry = _get_registry(resolved_db_path)
+        # Resolve factory from env (no db_path input)
+        factory = RuntimeStoreFactory.from_env()
+        registry = factory.registry
 
         # Load session runtime
         loader = SessionRuntimeLoad(registry)

@@ -495,24 +495,36 @@ class TestRetryIdempotency:
 class TestDeprecatedJsonInjection:
 
     def test_11_formal_mode_rejects_json_injection(self):
-        """The persistent continuation path does not accept previous_turn_records.
+        """The persistent paths do not accept injected history/state/memory.
 
-        AWPV2PersistentContinuationTurn.INPUT_TYPES has NO previous_turn_records.
-        This is enforced at the node interface level.
+        All persistent nodes (bootstrap, first turn, continuation, load)
+        must NOT accept these deprecated/injectable inputs.
         """
         from ..nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+        from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+        from ..nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+        from ..nodes.session_runtime_load_node import AWPV2SessionRuntimeLoad
 
-        input_types = AWPV2PersistentContinuationTurn.INPUT_TYPES()
-        all_inputs = {}
-        all_inputs.update(input_types.get("required", {}))
-        all_inputs.update(input_types.get("optional", {}))
+        forbidden = [
+            "previous_turn_records", "active_memories", "rag_recall",
+            "card_state", "card_session_binding", "opening_record",
+            "worldbook_binding", "db_path", "store_path", "databasePath",
+        ]
 
-        # Must NOT have these deprecated inputs
-        for forbidden in ["previous_turn_records", "active_memories", "rag_recall",
-                          "card_state", "card_session_binding", "opening_record",
-                          "worldbook_binding"]:
-            assert forbidden not in all_inputs, \
-                f"Persistent continuation must not accept '{forbidden}' as input"
+        for node_cls in [
+            AWPV2PersistentContinuationTurn,
+            AWPV2PersistentFirstTurn,
+            AWPV2PersistentBootstrap,
+            AWPV2SessionRuntimeLoad,
+        ]:
+            input_types = node_cls.INPUT_TYPES()
+            all_inputs = {}
+            all_inputs.update(input_types.get("required", {}))
+            all_inputs.update(input_types.get("optional", {}))
+
+            for f in forbidden:
+                assert f not in all_inputs, \
+                    f"{node_cls.__name__} must not accept '{f}' as input"
 
 
 # ── Test 12: Arbitrary DB path injection ────────────────────────────────────
@@ -520,11 +532,11 @@ class TestDeprecatedJsonInjection:
 class TestDbPathSafety:
 
     def test_12_db_path_from_env_not_workflow(self):
-        """Database path is resolved from environment, not arbitrary workflow input.
+        """Database path is resolved from environment via RuntimeStoreFactory.
 
-        The db_path input exists for test override only — production uses env.
+        No db_path input on production nodes. Profile + namespace drive path.
         """
-        from ..nodes.session_runtime_load_node import _resolve_db_path
+        from ..runtime.runtime_store_factory import _resolve_db_path
 
         # Default (no env) returns a safe path
         old_env = os.environ.get("AWP_RUNTIME_PROFILE")
@@ -537,16 +549,48 @@ class TestDbPathSafety:
             os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
             os.environ.pop("AWP_RUNTIME_DB_PATH", None)
 
-            path = _resolve_db_path()
+            # Production: no explicit path → default
+            path = _resolve_db_path("production", "", "")
             assert path == "awp_rp_runtime.db"
 
             # Test mode resolves to controlled directory
-            os.environ["AWP_RUNTIME_PROFILE"] = "test"
-            os.environ["AWP_TEST_STORE_ROOT"] = "/tmp/test_stores"
-            os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "run_001"
-            path = _resolve_db_path()
+            path = _resolve_db_path("test", "run_001", "/tmp/test_stores")
             assert "run_001" in path
             assert "awp_session.db" in path
+
+            # Verify node INPUT_TYPES has no db_path
+            from ..nodes.session_runtime_load_node import AWPV2SessionRuntimeLoad
+            input_types = AWPV2SessionRuntimeLoad.INPUT_TYPES()
+            all_inputs = {}
+            all_inputs.update(input_types.get("required", {}))
+            all_inputs.update(input_types.get("optional", {}))
+            assert "db_path" not in all_inputs, \
+                "SessionRuntimeLoad must not accept db_path as input"
+
+            from ..nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+            cont_inputs = AWPV2PersistentContinuationTurn.INPUT_TYPES()
+            all_cont = {}
+            all_cont.update(cont_inputs.get("required", {}))
+            all_cont.update(cont_inputs.get("optional", {}))
+            assert "db_path" not in all_cont, \
+                "PersistentContinuationTurn must not accept db_path as input"
+
+            from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+            ft_inputs = AWPV2PersistentFirstTurn.INPUT_TYPES()
+            all_ft = {}
+            all_ft.update(ft_inputs.get("required", {}))
+            all_ft.update(ft_inputs.get("optional", {}))
+            assert "db_path" not in all_ft, \
+                "PersistentFirstTurn must not accept db_path as input"
+
+            from ..nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+            bs_inputs = AWPV2PersistentBootstrap.INPUT_TYPES()
+            all_bs = {}
+            all_bs.update(bs_inputs.get("required", {}))
+            all_bs.update(bs_inputs.get("optional", {}))
+            assert "db_path" not in all_bs, \
+                "PersistentBootstrap must not accept db_path as input"
+
         finally:
             if old_env is not None:
                 os.environ["AWP_RUNTIME_PROFILE"] = old_env
@@ -637,3 +681,278 @@ class TestSessionRuntimeLoadIntegration:
             assert bundle.l1_turn_count == 1
             assert bundle.round_snapshot.recent_turn_records[0].turn_id == "turn_001"
             db2.close()
+
+
+# ── Test: RuntimeStoreFactory ────────────────────────────────────────────────
+
+class TestRuntimeStoreFactory:
+
+    def test_factory_same_namespace_same_registry(self):
+        """Same (profile, namespace) yields the same registry instance."""
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+        with tempfile.TemporaryDirectory() as tmp:
+            clear_registry_cache()
+            try:
+                f1 = RuntimeStoreFactory.for_test("ns_001", store_root=tmp)
+                f2 = RuntimeStoreFactory.for_test("ns_001", store_root=tmp)
+                assert f1.registry is f2.registry
+            finally:
+                clear_registry_cache()
+
+    def test_factory_different_namespace_different_registry(self):
+        """Different namespaces yield different registries."""
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+        with tempfile.TemporaryDirectory() as tmp:
+            clear_registry_cache()
+            try:
+                f1 = RuntimeStoreFactory.for_test("ns_A", store_root=tmp)
+                f2 = RuntimeStoreFactory.for_test("ns_B", store_root=tmp)
+                assert f1.registry is not f2.registry
+                assert f1.db_path != f2.db_path
+            finally:
+                clear_registry_cache()
+
+    def test_factory_test_profile_cannot_access_production(self):
+        """Test namespace resolves to test directory, not production."""
+        from ..runtime.runtime_store_factory import _resolve_db_path
+        path = _resolve_db_path("test", "run_xyz", "/tmp/test_root")
+        assert "run_xyz" in path
+        assert "awp_session.db" in path
+        # Not the production path
+        assert path != "awp_rp_runtime.db"
+
+
+# ── Test: Controlled Memory Persistence ──────────────────────────────────────
+
+class TestControlledMemoryPersistence:
+
+    def test_13_controlled_active_memory_write_and_recall(self):
+        """Test-only MemoryCurator fixture writes ActiveMemory that can be recalled."""
+        from ..testing.fakes.test_memory_curator_fixture import TestMemoryCuratorFixture
+        from ..contracts.turn_record import TurnRecord, TurnMode
+        from ..contracts.round_snapshot import RoundSnapshot
+        from ..contracts.quality_decision import QualityDecision, QualityVerdict
+        from ..runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
+        from ..contracts.memory_commit_plan import MemoryCommitRequest, MemoryCommitStatus
+        from ..runtime.memory_plan_compiler import MemoryPlanCompiler
+
+        old_profile = os.environ.get("AWP_RUNTIME_PROFILE")
+        os.environ["AWP_RUNTIME_PROFILE"] = "test"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                db = _make_db(tmp)
+                registry = SessionRuntimeStoreRegistry(db)
+                _seed_session(registry)
+
+                # Create turn record and snapshot
+                turn = TurnRecord(
+                    turn_id="turn_mem_001", trace_id="trc_001",
+                    session_id="sess_001", card_id="card_001",
+                    turn_index=1, player_input="Hello there",
+                    writer_output="Response text for memory",
+                    mode=TurnMode.NORMAL,
+                    base_card_state_revision=0, result_card_state_revision=1,
+                    created_at=_now(),
+                )
+                snapshot = RoundSnapshot(
+                    snapshot_id="snap_001", trace_id="trc_001",
+                    card_id="card_001", session_id="sess_001",
+                    base_card_state_revision=0,
+                    card_state=registry.card_state_store.load("card_001", "sess_001"),
+                    player_input="Hello there",
+                    created_at=_now(),
+                )
+                qd = QualityDecision(
+                    verdict=QualityVerdict.ACCEPTED,
+                    candidate_text="Response text",
+                    overall_score=0.8,
+                )
+
+                # Run test fixture curator
+                curator = TestMemoryCuratorFixture()
+                result = curator.curate(turn, snapshot, qd)
+                assert result is not None
+                assert result.total_candidates_accepted == 1
+
+                # Compile plan
+                compiler = MemoryPlanCompiler()
+                plan = compiler.compile(
+                    result, turn.turn_id, "card_001", "sess_001",
+                    "trc_001", 1, turn.turn_id,
+                )
+                assert len(plan.new_active_entries) == 1
+
+                # Commit to SQLite
+                runtime = ActiveMemoryCommitRuntime(registry.active_memory_store)
+                request = MemoryCommitRequest(
+                    plan=plan, card_id="card_001", session_id="sess_001",
+                    turn_id="turn_mem_001", trace_id="trc_001",
+                    memory_commit_id=plan.memory_commit_id,
+                    idempotency_key=plan.idempotency_key,
+                    quality_decision_ref="trc_001",
+                    expected_card_state_revision=1,
+                    card_state_commit_success=True,
+                    turn_record_commit_success=True,
+                )
+                commit_result = runtime.commit_request(request, qd)
+                _close_db(db)
+
+                assert commit_result.status == MemoryCommitStatus.COMMITTED
+
+                # Verify: new store instance can recall
+                db2 = Database(str(Path(tmp) / "test.db"))
+                db2.initialize()
+                store2 = SqliteActiveMemoryStore(db2)
+
+                all_entries = store2.get_all("card_001", "sess_001")
+                assert len(all_entries) == 1
+                assert "test_memory:turn_mem_001" in all_entries[0].summary
+                assert len(all_entries[0].summary) >= 30  # policy minimum
+
+                # Recall works
+                recall_req = MemoryRecallRequest(
+                    card_id="card_001", session_id="sess_001",
+                    snapshot_id="snap_001", trace_id="trc_001",
+                    query="test_memory", limit=10,
+                )
+                recall_result = store2.recall("card_001", "sess_001", recall_req)
+                assert len(recall_result.hits) >= 1
+                _close_db(db2)
+        finally:
+            if old_profile is not None:
+                os.environ["AWP_RUNTIME_PROFILE"] = old_profile
+            else:
+                os.environ.pop("AWP_RUNTIME_PROFILE", None)
+
+    def test_14_memory_in_round_snapshot_after_commit(self):
+        """After memory commit, new RoundSnapshot includes the memory."""
+        from ..testing.fakes.test_memory_curator_fixture import TestMemoryCuratorFixture
+        from ..contracts.turn_record import TurnRecord, TurnMode
+        from ..contracts.round_snapshot import RoundSnapshot
+        from ..contracts.quality_decision import QualityDecision, QualityVerdict
+        from ..runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
+        from ..contracts.memory_commit_plan import MemoryCommitRequest, MemoryCommitStatus
+        from ..runtime.memory_plan_compiler import MemoryPlanCompiler
+
+        old_profile = os.environ.get("AWP_RUNTIME_PROFILE")
+        os.environ["AWP_RUNTIME_PROFILE"] = "test"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                db = _make_db(tmp)
+                registry = SessionRuntimeStoreRegistry(db)
+                _seed_session(registry)
+                _commit_turn(registry, "turn_001", "card_001", "sess_001", 1,
+                             "Hello", "Response")
+
+                # Commit memory via test fixture
+                turn = registry.turn_record_store.load("turn_001")
+                snapshot = RoundSnapshot(
+                    snapshot_id="snap_002", trace_id="trc_002",
+                    card_id="card_001", session_id="sess_001",
+                    base_card_state_revision=0,
+                    card_state=registry.card_state_store.load("card_001", "sess_001"),
+                    player_input="Hello", created_at=_now(),
+                )
+                qd = QualityDecision(verdict=QualityVerdict.ACCEPTED, candidate_text="Response")
+
+                curator = TestMemoryCuratorFixture()
+                result = curator.curate(turn, snapshot, qd)
+                compiler = MemoryPlanCompiler()
+                plan = compiler.compile(
+                    result, turn.turn_id, "card_001", "sess_001",
+                    "trc_001", 1, turn.turn_id,
+                )
+                runtime = ActiveMemoryCommitRuntime(registry.active_memory_store)
+                request = MemoryCommitRequest(
+                    plan=plan, card_id="card_001", session_id="sess_001",
+                    turn_id="turn_001", trace_id="trc_001",
+                    memory_commit_id=plan.memory_commit_id,
+                    idempotency_key=plan.idempotency_key,
+                    quality_decision_ref="trc_001",
+                    expected_card_state_revision=1,
+                    card_state_commit_success=True,
+                    turn_record_commit_success=True,
+                )
+                commit_result = runtime.commit_request(request, qd)
+                assert commit_result.status == MemoryCommitStatus.COMMITTED
+
+                # Build new RoundSnapshot — should include the memory
+                builder = RoundSnapshotBuilder(
+                    card_state_store=registry.card_state_store,
+                    turn_record_store=registry.turn_record_store,
+                    active_memory_store=registry.active_memory_store,
+                    rag_memory_store=registry.rag_memory_store,
+                )
+                # Use a player_input that is a substring of the memory summary
+                # so the recall query filter can find it
+                snap = builder.build("card_001", "sess_001", "test_memory")
+                active_count = len(snap.active_memories)
+                _close_db(db)
+                assert active_count >= 1
+        finally:
+            if old_profile is not None:
+                os.environ["AWP_RUNTIME_PROFILE"] = old_profile
+            else:
+                os.environ.pop("AWP_RUNTIME_PROFILE", None)
+
+
+# ── Test: Node INPUT_TYPES no forbidden inputs ──────────────────────────────
+
+class TestNodeInputContracts:
+
+    def test_15_persistent_first_turn_no_forbidden_inputs(self):
+        """PersistentFirstTurn node does not accept forbidden inputs."""
+        from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+        input_types = AWPV2PersistentFirstTurn.INPUT_TYPES()
+        all_inputs = {}
+        all_inputs.update(input_types.get("required", {}))
+        all_inputs.update(input_types.get("optional", {}))
+
+        for forbidden in ["db_path", "store_path", "databasePath",
+                          "previous_turn_records", "active_memories",
+                          "rag_recall", "card_state", "card_session_binding",
+                          "opening_record", "worldbook_binding"]:
+            assert forbidden not in all_inputs, \
+                f"PersistentFirstTurn must not accept '{forbidden}'"
+
+    def test_16_persistent_bootstrap_no_forbidden_inputs(self):
+        """PersistentBootstrap node does not accept forbidden inputs."""
+        from ..nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+        input_types = AWPV2PersistentBootstrap.INPUT_TYPES()
+        all_inputs = {}
+        all_inputs.update(input_types.get("required", {}))
+        all_inputs.update(input_types.get("optional", {}))
+
+        for forbidden in ["db_path", "store_path", "databasePath"]:
+            assert forbidden not in all_inputs, \
+                f"PersistentBootstrap must not accept '{forbidden}'"
+
+    def test_17_real_provider_config_does_not_affect_fake_tests(self):
+        """Setting real provider env vars does not change fake adapter behavior."""
+        old_key = os.environ.get("DEEPSEEK_API_KEY")
+        old_model = os.environ.get("AWP_DIRECTOR_MODEL")
+        try:
+            os.environ["DEEPSEEK_API_KEY"] = "sk-test-fake-key"
+            os.environ["AWP_DIRECTOR_MODEL"] = "deepseek-v4-pro"
+
+            # Fake adapters still work independently
+            from ..nodes.persistent_first_turn_node import _FakeDirectorAdapter
+            from ..contracts.round_snapshot import RoundSnapshot as RS
+            adapter = _FakeDirectorAdapter()
+            # Create minimal snapshot
+            snap = RS(
+                snapshot_id="s", trace_id="t", card_id="c",
+                session_id="s", base_card_state_revision=0,
+                player_input="test", created_at=_now(),
+            )
+            plan, _, _ = adapter.plan(snap)
+            assert plan.turn_goal  # Works regardless of env
+        finally:
+            if old_key is not None:
+                os.environ["DEEPSEEK_API_KEY"] = old_key
+            else:
+                os.environ.pop("DEEPSEEK_API_KEY", None)
+            if old_model is not None:
+                os.environ["AWP_DIRECTOR_MODEL"] = old_model
+            else:
+                os.environ.pop("AWP_DIRECTOR_MODEL", None)
