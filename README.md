@@ -176,9 +176,9 @@ Writer 使用标准文本生成。
 # 必须：DeepSeek API Key
 $env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxx"
 
-# 可选：端点选择（默认 Anthropic）
-$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic"  # Anthropic 端点（推荐）
-# $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"          # OpenAI 端点
+# 可选：端点选择（默认 OpenAI /v1）
+$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"        # OpenAI 端点（推荐，支持 function calling）
+# $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic" # Anthropic 端点（仅基础文本生成）
 
 # 可选：模型覆盖（默认 deepseek-v4-pro / deepseek-v4-flash）
 $env:AWP_DIRECTOR_MODEL = "deepseek-v4-pro"
@@ -187,10 +187,12 @@ $env:AWP_WRITER_MODEL = "deepseek-v4-flash"
 
 ### 端点对比
 
-| 端点 | Base URL | SDK | 特点 |
-|------|----------|-----|------|
-| Anthropic | `https://api.deepseek.com/anthropic` | anthropic | tool_use 结构化输出，ThinkingBlock 分离，更稳定 |
-| OpenAI | `https://api.deepseek.com` | openai | function calling，兼容性更广 |
+| 端点 | Base URL | SDK | 结构化输出 | 特点 |
+|------|----------|-----|-----------|------|
+| OpenAI | `https://api.deepseek.com/v1` | openai | ✅ function calling | Director + Writer 均可用，**推荐** |
+| Anthropic | `https://api.deepseek.com/anthropic` | anthropic | ❌ tool_use 返回 HTTP 400 | 仅基础文本生成，不推荐用于 Director |
+
+> **注意**: DeepSeek Anthropic 端点当前不支持 `tool_choice` 参数（返回 "Thinking mode does not support this tool_choice"），因此 Director 的结构化输出（function calling / tool_use）必须使用 OpenAI 端点。
 
 适配器根据 `DEEPSEEK_BASE_URL` 自动选择 SDK，无需改代码。
 
@@ -220,21 +222,69 @@ deepseek-v4-flash-writer             → 真实 DeepSeek Writer
 # 1. 设置 API Key
 $env:DEEPSEEK_API_KEY = "sk-xxx"
 
-# 2. 测试连接
+# 2. 测试基础文本生成
 python -c "
-import os, anthropic
-client = anthropic.Anthropic(
+import os
+from openai import OpenAI
+client = OpenAI(
     api_key=os.environ['DEEPSEEK_API_KEY'],
-    base_url='https://api.deepseek.com/anthropic',
+    base_url='https://api.deepseek.com/v1',
 )
-msg = client.messages.create(
+resp = client.chat.completions.create(
     model='deepseek-v4-flash', max_tokens=50,
-    messages=[{'role': 'user', 'content': 'Say hello'}],
+    messages=[{'role': 'user', 'content': '你好'}],
 )
-for b in msg.content:
-    if hasattr(b, 'text'): print(b.text)
+print(resp.choices[0].message.content)
+"
+
+# 3. 测试 Director function calling（可选）
+python -c "
+import os, json
+from openai import OpenAI
+client = OpenAI(
+    api_key=os.environ['DEEPSEEK_API_KEY'],
+    base_url='https://api.deepseek.com/v1',
+)
+resp = client.chat.completions.create(
+    model='deepseek-v4-pro', max_tokens=200, temperature=0.3,
+    messages=[{'role': 'user', 'content': '玩家说：你好。请生成导演计划。'}],
+    tools=[{'type': 'function', 'function': {
+        'name': 'submit_plan',
+        'parameters': {'type': 'object', 'properties': {
+            'turn_goal': {'type': 'string'},
+            'scene_focus': {'type': 'string'}
+        }, 'required': ['turn_goal', 'scene_focus']}
+    }}],
+)
+if resp.choices[0].message.tool_calls:
+    args = json.loads(resp.choices[0].message.tool_calls[0].function.arguments)
+    print('turn_goal:', args.get('turn_goal', '')[:100])
+    print('scene_focus:', args.get('scene_focus', ''))
 "
 ```
+
+### 长会话测试框架
+
+```powershell
+# 离线测试（fake，无需 API Key）
+python -m awp_rp_runtime_v2.testing.user_simulation_harness \
+    --turns 10 --restart-after-turn 5 --save-artifacts
+
+# 真实模型测试（需 API Key + 角色卡）
+$env:AWP_REAL_LLM_E2E = "1"
+$env:AWP_ALLOW_EXTERNAL_CARD_CONTENT = "1"
+python -m awp_rp_runtime_v2.testing.user_simulation_harness \
+    --card-path "<角色卡路径>.json" \
+    --turns 10 \
+    --director-profile-id "deepseek-v4-pro-director" \
+    --writer-profile-id "deepseek-v4-flash-writer" \
+    --player-profile-id "simulated-player-v1" \
+    --mode "debug-full" \
+    --restart-after-turn 5 \
+    --save-artifacts
+```
+
+Artifact 输出目录: `artifacts/long-session-runs/<run_id>/`
 
 ---
 
