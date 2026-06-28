@@ -1,8 +1,8 @@
 """DeepSeek Provider Adapter -- real LLM calls via OpenAI-compatible API.
 
-Uses the official openai SDK for reliable HTTP handling (connection pooling,
-automatic retries, proper timeout management).
-Target: https://api.deepseek.com (OpenAI-compatible endpoint).
+Uses the official openai SDK targeting DeepSeek's OpenAI endpoint.
+Director uses function calling (tools/tool_choice) for reliable structured output.
+Writer uses standard text generation.
 Models: deepseek-v4-pro (director), deepseek-v4-flash (writer).
 NEVER logs or stores the API key in traces/reports.
 """
@@ -31,10 +31,50 @@ def _id(prefix: str, seed: str) -> str:
     return f"{prefix}_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
 
+# Director tool schema for OpenAI function calling
+DIRECTOR_TOOL_OPENAI = {
+    "type": "function",
+    "function": {
+        "name": "submit_director_plan",
+        "description": "Submit the narrative director plan for this RP turn",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "turn_goal": {
+                    "type": "string",
+                    "description": "What should happen in this turn"
+                },
+                "scene_focus": {
+                    "type": "string",
+                    "description": "Current scene focus"
+                },
+                "writer_constraints": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Constraints for the writer"
+                },
+                "narrative_opportunities": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Narrative opportunities to explore"
+                },
+                "risk_flags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Risk flags to avoid"
+                }
+            },
+            "required": ["turn_goal", "scene_focus"]
+        }
+    }
+}
+
+
 class DeepSeekAdapter(BaseLlmAdapter):
     """Real DeepSeek provider adapter via OpenAI-compatible API.
 
     Uses openai SDK for reliable HTTP handling.
+    Director uses function calling for guaranteed structured output.
     Requires DEEPSEEK_API_KEY environment variable.
     """
 
@@ -218,8 +258,10 @@ class DeepSeekAdapter(BaseLlmAdapter):
         attempt_id: str = "",
         model: str = "",
     ) -> tuple[dict[str, Any], ProviderAttemptReceipt]:
-        """Generate structured JSON from a prompt.
+        """Generate structured JSON via function calling.
 
+        Uses OpenAI's tools/tool_choice to force the model to call
+        submit_director_plan with the required schema.
         Returns (parsed_data, receipt).
         On failure, returns ({}, receipt_with_failure).
         """
@@ -231,27 +273,50 @@ class DeepSeekAdapter(BaseLlmAdapter):
         started_at = _now()
         start_time = time.time()
 
-        json_instruction = (
-            "\n\nPlease respond with valid JSON only. "
-            "Do not include any text before or after the JSON object."
-        )
-        full_prompt = prompt + json_instruction
-
         try:
             client = self._get_client()
             response = client.chat.completions.create(
                 model=use_model,
-                messages=[{"role": "user", "content": full_prompt}],
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a narrative director for an interactive role-play session. "
+                                   "Analyze the scene and call the submit_director_plan function with your plan."
+                    },
+                    {"role": "user", "content": prompt},
+                ],
                 max_tokens=max_tokens,
                 temperature=0.3,
+                tools=[DIRECTOR_TOOL_OPENAI],
+                tool_choice={"type": "function", "function": {"name": "submit_director_plan"}},
             )
 
             self._call_count += 1
             latency_ms = int((time.time() - start_time) * 1000)
 
-            raw_text = ""
+            # Extract tool_call result
+            parsed = {}
             if response.choices:
-                raw_text = response.choices[0].message.content or ""
+                message = response.choices[0].message
+                if message.tool_calls:
+                    try:
+                        parsed = json.loads(message.tool_calls[0].function.arguments)
+                    except json.JSONDecodeError:
+                        pass
+
+                # Fallback: try content as JSON
+                if not parsed and message.content:
+                    try:
+                        cleaned = message.content.strip()
+                        if cleaned.startswith("```"):
+                            lines = cleaned.split("\n")
+                            cleaned = "\n".join(lines[1:])
+                            if cleaned.endswith("```"):
+                                cleaned = cleaned[:-3]
+                            cleaned = cleaned.strip()
+                        parsed = json.loads(cleaned)
+                    except json.JSONDecodeError:
+                        pass
 
             usage_data = response.usage
             usage = ProviderUsage(
@@ -262,27 +327,12 @@ class DeepSeekAdapter(BaseLlmAdapter):
             )
             self._total_tokens += usage.total_tokens
 
-            parsed = {}
-            parse_error = None
-            if raw_text.strip():
-                try:
-                    cleaned = raw_text.strip()
-                    if cleaned.startswith("```"):
-                        lines = cleaned.split("\n")
-                        cleaned = "\n".join(lines[1:])
-                        if cleaned.endswith("```"):
-                            cleaned = cleaned[:-3]
-                        cleaned = cleaned.strip()
-                    parsed = json.loads(cleaned)
-                except json.JSONDecodeError:
-                    parse_error = "Response is not valid JSON"
-
-            success = bool(parsed) and parse_error is None
+            success = bool(parsed)
             failure = None
             if not success:
                 failure = ProviderFailure(
-                    failure_code=FailureCode.INVALID_JSON if parse_error else FailureCode.EMPTY_RESPONSE,
-                    failure_message=parse_error or "Empty or invalid structured response",
+                    failure_code=FailureCode.EMPTY_RESPONSE,
+                    failure_message="No tool_call or valid JSON in response",
                     retry_count=0,
                 )
 

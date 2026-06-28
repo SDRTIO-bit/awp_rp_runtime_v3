@@ -230,13 +230,18 @@ class TestDeepSeekAdapter:
             assert receipt.success is False
             assert receipt.failure["failure_code"] == FailureCode.SERVER_ERROR
 
-    def test_structured_json_success(self):
-        """Test 6: Director structured output via JSON."""
+    def test_structured_tool_call_success(self):
+        """Test 6: Director structured output via function calling."""
         adapter = DeepSeekAdapter(max_retries=1)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
             mock_client = MagicMock()
+            mock_tool_call = MagicMock()
+            mock_tool_call.function.arguments = '{"turn_goal": "test", "scene_focus": "scene"}'
+            mock_message = MagicMock()
+            mock_message.tool_calls = [mock_tool_call]
+            mock_message.content = None
             mock_choice = MagicMock()
-            mock_choice.message.content = '{"turn_goal": "test", "scene_focus": "scene"}'
+            mock_choice.message = mock_message
             mock_usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
             mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
             mock_client.chat.completions.create.return_value = mock_resp
@@ -252,8 +257,11 @@ class TestDeepSeekAdapter:
         adapter = DeepSeekAdapter(max_retries=0)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
             mock_client = MagicMock()
+            mock_message = MagicMock()
+            mock_message.tool_calls = None
+            mock_message.content = ""
             mock_choice = MagicMock()
-            mock_choice.message.content = ""
+            mock_choice.message = mock_message
             mock_usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
             mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
             mock_client.chat.completions.create.return_value = mock_resp
