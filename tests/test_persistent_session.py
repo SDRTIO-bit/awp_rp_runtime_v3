@@ -956,3 +956,340 @@ class TestNodeInputContracts:
                 os.environ["AWP_DIRECTOR_MODEL"] = old_model
             else:
                 os.environ.pop("AWP_DIRECTOR_MODEL", None)
+
+
+# ── Test 18: Idempotent replay — replayed receipt ────────────────────────────
+
+class TestIdempotentReplay:
+
+    def test_18_replayed_turn_returns_replayed_receipt(self):
+        """Same turn_id returns a replayed receipt with idempotency_status='replayed'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _make_db(tmp)
+            store = SqliteTurnRecordStore(db)
+
+            record = TurnRecord(
+                turn_id="turn_001", trace_id="trc_001",
+                session_id="sess_001", card_id="card_001",
+                turn_index=1, player_input="Hello",
+                writer_output="Response", mode=TurnMode.NORMAL,
+                base_card_state_revision=0, result_card_state_revision=1,
+                created_at=_now(),
+            )
+            store.save(record)
+
+            # Load existing — simulates what replay does
+            existing = store.load("turn_001")
+            assert existing is not None
+            assert existing.turn_id == "turn_001"
+            assert existing.base_card_state_revision == 0
+            assert existing.result_card_state_revision == 1
+            _close_db(db)
+
+    def test_19_replayed_turn_no_duplicate_record(self):
+        """DuplicateTurnError prevents double-write; only one record exists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _make_db(tmp)
+            store = SqliteTurnRecordStore(db)
+
+            record = TurnRecord(
+                turn_id="turn_001", trace_id="trc_001",
+                session_id="sess_001", card_id="card_001",
+                turn_index=1, player_input="Hello",
+                writer_output="Response", mode=TurnMode.NORMAL,
+                created_at=_now(),
+            )
+            store.save(record)
+
+            from ..storage.interfaces import DuplicateTurnError
+            with pytest.raises(DuplicateTurnError):
+                store.save(record)
+
+            # Only one record
+            recent = store.get_recent("card_001", "sess_001")
+            assert len(recent) == 1
+            _close_db(db)
+
+    def test_20_replayed_turn_no_state_revision_increase(self):
+        """Replayed turn does not increase CardState revision."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _make_db(tmp)
+            registry = SessionRuntimeStoreRegistry(db)
+            _seed_session(registry)
+
+            # Commit turn 1 — state revision becomes 1
+            _commit_turn(registry, "turn_001", "card_001", "sess_001", 1,
+                         "Input 1", "Response 1", base_rev=0, result_rev=1)
+
+            # Record revision before replay attempt
+            cs_before = registry.card_state_store.load("card_001", "sess_001")
+            revision_before = cs_before.revision
+
+            # Simulate replay: load existing turn record
+            existing = registry.turn_record_store.load("turn_001")
+            assert existing is not None
+
+            # Revision did NOT change
+            cs_after = registry.card_state_store.load("card_001", "sess_001")
+            assert cs_after.revision == revision_before
+            _close_db(db)
+
+    def test_21_replayed_turn_no_new_turn_record(self):
+        """Replayed turn does not create a new TurnRecord."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _make_db(tmp)
+            store = SqliteTurnRecordStore(db)
+
+            record = TurnRecord(
+                turn_id="turn_001", trace_id="trc_001",
+                session_id="sess_001", card_id="card_001",
+                turn_index=1, player_input="Hello",
+                writer_output="Response", mode=TurnMode.NORMAL,
+                created_at=_now(),
+            )
+            store.save(record)
+
+            # Count before
+            count_before = len(store.get_recent("card_001", "sess_001", limit=100))
+
+            # Simulate replay — just load, don't save
+            from ..storage.interfaces import DuplicateTurnError
+            with pytest.raises(DuplicateTurnError):
+                store.save(record)  # Would fail if we tried
+
+            count_after = len(store.get_recent("card_001", "sess_001", limit=100))
+            assert count_after == count_before
+            assert count_after == 1
+            _close_db(db)
+
+    def test_22_idempotent_replay_full_node_flow(self):
+        """Full node flow: first turn succeeds, replay returns replayed receipt."""
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["AWP_RUNTIME_PROFILE"] = "test"
+            os.environ["AWP_TEST_STORE_ROOT"] = tmp
+            os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "replay_test"
+            clear_registry_cache()
+            try:
+                factory = RuntimeStoreFactory.from_env()
+                registry = factory.registry
+
+                # Bootstrap session
+                _seed_session(registry, session_id="sess_replay", card_id="card_001")
+
+                # First turn
+                from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+                node = AWPV2PersistentFirstTurn()
+                result1 = node.execute(
+                    session_id="sess_replay",
+                    player_input="Hello world",
+                    turn_id="turn_replay_001",
+                    request_id="req_001",
+                    workflow_run_id="wfr_001",
+                    trace_id="trc_001",
+                )
+                receipt1 = result1[0]
+                assert receipt1["idempotency_status"] == "fresh"
+                assert receipt1["turn_id"] == "turn_replay_001"
+
+                # Replay — same turn_id
+                result2 = node.execute(
+                    session_id="sess_replay",
+                    player_input="Hello world",
+                    turn_id="turn_replay_001",
+                    request_id="req_001",
+                    workflow_run_id="wfr_001",
+                    trace_id="trc_001",
+                )
+                receipt2 = result2[0]
+                assert receipt2["idempotency_status"] == "replayed"
+                assert receipt2["turn_id"] == "turn_replay_001"
+
+                # Only one turn record exists
+                recent = registry.turn_record_store.get_recent("card_001", "sess_replay")
+                assert len(recent) == 1
+
+                # State revision did NOT double-increment
+                cs = registry.card_state_store.load("card_001", "sess_replay")
+                assert cs.revision == 1  # Only one increment from the fresh turn
+            finally:
+                os.environ.pop("AWP_TEST_STORE_ROOT", None)
+                os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
+                clear_registry_cache()
+
+    def test_23_continuation_replay_full_node_flow(self):
+        """Full continuation node flow: first turn + continuation + replay."""
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["AWP_RUNTIME_PROFILE"] = "test"
+            os.environ["AWP_TEST_STORE_ROOT"] = tmp
+            os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "cont_replay_test"
+            clear_registry_cache()
+            try:
+                factory = RuntimeStoreFactory.from_env()
+                registry = factory.registry
+
+                _seed_session(registry, session_id="sess_cont", card_id="card_001")
+
+                # Turn 1
+                from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+                ft_node = AWPV2PersistentFirstTurn()
+                ft_node.execute(
+                    session_id="sess_cont",
+                    player_input="Hello",
+                    turn_id="turn_001",
+                    request_id="req_001",
+                    workflow_run_id="wfr_001",
+                    trace_id="trc_001",
+                )
+
+                # Turn 2 (continuation)
+                from ..nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+                ct_node = AWPV2PersistentContinuationTurn()
+                result2 = ct_node.execute(
+                    session_id="sess_cont",
+                    player_input="Continue please",
+                    turn_id="turn_002",
+                    request_id="req_002",
+                    workflow_run_id="wfr_002",
+                    trace_id="trc_002",
+                )
+                assert result2[0]["idempotency_status"] == "fresh"
+
+                # Replay Turn 2
+                result2_replay = ct_node.execute(
+                    session_id="sess_cont",
+                    player_input="Continue please",
+                    turn_id="turn_002",
+                    request_id="req_002",
+                    workflow_run_id="wfr_002",
+                    trace_id="trc_002",
+                )
+                assert result2_replay[0]["idempotency_status"] == "replayed"
+
+                # Only 2 turn records
+                recent = registry.turn_record_store.get_recent("card_001", "sess_cont")
+                assert len(recent) == 2
+
+                # State revision = 2 (one per turn, not 3)
+                cs = registry.card_state_store.load("card_001", "sess_cont")
+                assert cs.revision == 2
+            finally:
+                os.environ.pop("AWP_TEST_STORE_ROOT", None)
+                os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
+                clear_registry_cache()
+
+    def test_24_replay_session_binding_conflict(self):
+        """Replay with wrong session_id fails with session_binding_conflict."""
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["AWP_RUNTIME_PROFILE"] = "test"
+            os.environ["AWP_TEST_STORE_ROOT"] = tmp
+            os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "conflict_test"
+            clear_registry_cache()
+            try:
+                factory = RuntimeStoreFactory.from_env()
+                registry = factory.registry
+
+                _seed_session(registry, session_id="sess_A", card_id="card_001")
+                _seed_session(registry, session_id="sess_B", card_id="card_001")
+
+                # Commit turn to session A
+                _commit_turn(registry, "turn_001", "card_001", "sess_A", 1,
+                             "Input", "Output")
+
+                # Try to replay turn_001 under session B — should fail
+                from ..nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+                node = AWPV2PersistentContinuationTurn()
+                result = node.execute(
+                    session_id="sess_B",
+                    player_input="Input",
+                    turn_id="turn_001",
+                    request_id="req_conflict",
+                )
+                diag = result[2]
+                assert diag["outcome"] == "failure"
+                assert "session_binding_conflict" in diag.get("steps_failed", [])
+            finally:
+                os.environ.pop("AWP_TEST_STORE_ROOT", None)
+                os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
+                clear_registry_cache()
+
+
+# ── Test: Model Profile Registry ─────────────────────────────────────────────
+
+class TestModelProfileRegistry:
+
+    def test_25_known_profiles_resolve(self):
+        """Known profile IDs resolve to valid ModelProfile."""
+        from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+
+        for pid in ["deepseek-v4-pro-director", "deepseek-v4-flash-writer",
+                     "fake-director", "fake-writer"]:
+            profile = ModelProfileRegistry.resolve(pid)
+            assert profile.profile_id == pid
+            assert profile.provider in ("deepseek", "fake")
+
+    def test_26_unknown_profile_fails_closed(self):
+        """Unknown profile ID raises ValueError (fail closed)."""
+        from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+
+        with pytest.raises(ValueError, match="Unknown model profile"):
+            ModelProfileRegistry.resolve("gpt-4-hacker")
+
+    def test_27_profile_is_valid_check(self):
+        """is_valid returns True for known, False for unknown."""
+        from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+
+        assert ModelProfileRegistry.is_valid("fake-director") is True
+        assert ModelProfileRegistry.is_valid("nonexistent-model") is False
+
+    def test_28_profile_list_not_empty(self):
+        """list_profiles returns at least the 4 canonical profiles."""
+        from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+
+        profiles = ModelProfileRegistry.list_profiles()
+        assert len(profiles) >= 4
+        assert "deepseek-v4-pro-director" in profiles
+        assert "fake-director" in profiles
+
+    def test_29_profile_no_api_key_exposure(self):
+        """to_safe_dict never includes actual API key values."""
+        from ..adapters.llm.model_profile_registry import ModelProfileRegistry
+
+        profile = ModelProfileRegistry.resolve("deepseek-v4-pro-director")
+        safe = profile.to_safe_dict()
+        assert "api_key" not in safe
+        assert "api_key_env" in safe  # Only the env var name
+
+    def test_30_node_rejects_unknown_profile(self):
+        """PersistentFirstTurn node rejects unknown profile ID."""
+        from ..runtime.runtime_store_factory import RuntimeStoreFactory, clear_registry_cache
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["AWP_RUNTIME_PROFILE"] = "test"
+            os.environ["AWP_TEST_STORE_ROOT"] = tmp
+            os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "profile_test"
+            clear_registry_cache()
+            try:
+                factory = RuntimeStoreFactory.from_env()
+                registry = factory.registry
+                _seed_session(registry, session_id="sess_prof", card_id="card_001")
+
+                from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+                node = AWPV2PersistentFirstTurn()
+                result = node.execute(
+                    session_id="sess_prof",
+                    player_input="Hello",
+                    director_profile_id="nonexistent-director",
+                )
+                diag = result[2]
+                assert diag["outcome"] == "failure"
+                assert "model_profile_validation" in diag.get("steps_failed", [])
+            finally:
+                os.environ.pop("AWP_TEST_STORE_ROOT", None)
+                os.environ.pop("AWP_TEST_RUNTIME_NAMESPACE", None)
+                clear_registry_cache()

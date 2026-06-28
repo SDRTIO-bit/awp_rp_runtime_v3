@@ -4,6 +4,9 @@ Replaces AWPV2FirstTurnExecution for the canonical persistent path.
 All stores come from RuntimeStoreFactory. No Fake stores. No dbPath input.
 Uses SessionRuntimeLoad + RoundSnapshotBuilder for context assembly.
 Commits to SQLite: CardState, TurnRecord, D6 Memory (test fixture or no-op).
+
+Idempotent replay: same sessionId + turnId + requestId returns the existing
+completed receipt without re-calling Provider or re-writing state.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from ..contracts.round_snapshot import RoundSnapshot
 from ..contracts.card_state import CardState
 from ..contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
 from ..contracts.card_state_patch import CardStatePatch
-from ..contracts.turn_record import TurnRecord
+from ..contracts.turn_record import TurnRecord, TurnMode
 from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from ..contracts.director_plan import DirectorPlan
 from ..contracts.final_turn_brief import FinalTurnBrief
@@ -34,6 +37,7 @@ from ..runtime.session_runtime_load import SessionRuntimeLoad
 from ..runtime.round_snapshot_builder import RoundSnapshotBuilder
 from ..runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
 from ..runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
+from ..adapters.llm.model_profile_registry import ModelProfileRegistry
 
 
 def _now() -> str:
@@ -76,9 +80,6 @@ class _FakeWriterAdapter:
         return WriterDraft(
             draft_id="fake_draft_001",
             text=text,
-            writer_model="fake_writer_v1",
-            prompt_tokens=0,
-            completion_tokens=0,
         )
 
 
@@ -118,6 +119,8 @@ class AWPV2PersistentFirstTurn:
     RoundSnapshotBuilder is the canonical context entry point.
     State/Turn/Memory committed to SQLite.
     No dbPath input. Profile + namespace resolved from env.
+    Idempotent replay: DuplicateTurnError → replayed receipt.
+    Model profiles: director_profile_id / writer_profile_id replace free strings.
     """
 
     @classmethod
@@ -134,8 +137,8 @@ class AWPV2PersistentFirstTurn:
                 "attempt_id": ("STRING", {"default": ""}),
                 "request_id": ("STRING", {"default": ""}),
                 "run_id": ("STRING", {"default": ""}),
-                "director_model_ref": ("STRING", {"default": ""}),
-                "writer_model_ref": ("STRING", {"default": ""}),
+                "director_profile_id": ("STRING", {"default": "fake-director"}),
+                "writer_profile_id": ("STRING", {"default": "fake-writer"}),
             },
         }
 
@@ -165,8 +168,8 @@ class AWPV2PersistentFirstTurn:
         attempt_id: str = "",
         request_id: str = "",
         run_id: str = "",
-        director_model_ref: str = "",
-        writer_model_ref: str = "",
+        director_profile_id: str = "fake-director",
+        writer_profile_id: str = "fake-writer",
     ) -> tuple:
         now = _now()
         seed = f"{session_id}:{now}:{run_id}"
@@ -182,9 +185,111 @@ class AWPV2PersistentFirstTurn:
         if not attempt_id:
             attempt_id = f"att_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
+        # ── Validate model profiles ──────────────────────────────────────
+        try:
+            dir_profile = ModelProfileRegistry.resolve(director_profile_id)
+        except ValueError as e:
+            diag = FirstTurnDiagnostics(
+                diagnostics_id=_id("ftd", request_id),
+                request_id=request_id, trace_id=trace_id,
+                session_id=session_id,
+                outcome="failure",
+                failure_message=str(e),
+                steps_failed=["model_profile_validation"],
+            )
+            return ({}, {}, diag.to_dict(), {}, {}, {})
+
+        try:
+            wrt_profile = ModelProfileRegistry.resolve(writer_profile_id)
+        except ValueError as e:
+            diag = FirstTurnDiagnostics(
+                diagnostics_id=_id("ftd", request_id),
+                request_id=request_id, trace_id=trace_id,
+                session_id=session_id,
+                outcome="failure",
+                failure_message=str(e),
+                steps_failed=["model_profile_validation"],
+            )
+            return ({}, {}, diag.to_dict(), {}, {}, {})
+
         # ── Resolve factory from env ─────────────────────────────────────
         factory = RuntimeStoreFactory.from_env()
         registry = factory.registry
+
+        # ── IDEMPOTENT REPLAY CHECK ──────────────────────────────────────
+        existing_record = registry.turn_record_store.load(turn_id)
+        if existing_record is not None:
+            if existing_record.session_id != session_id:
+                diag = FirstTurnDiagnostics(
+                    diagnostics_id=_id("ftd", request_id),
+                    request_id=request_id, trace_id=trace_id,
+                    session_id=session_id,
+                    outcome="failure",
+                    failure_message=(
+                        f"Turn '{turn_id}' belongs to session "
+                        f"'{existing_record.session_id}', not '{session_id}'"
+                    ),
+                    steps_failed=["session_binding_conflict"],
+                )
+                return ({}, {}, diag.to_dict(), {}, {}, {})
+
+            binding = registry.card_session_binding_store.load(session_id)
+            cs = registry.card_state_store.load(
+                binding.logical_card_id if binding else "", session_id
+            )
+
+            diag = FirstTurnDiagnostics(
+                diagnostics_id=_id("ftd", request_id),
+                request_id=request_id, trace_id=trace_id,
+                session_id=session_id,
+                outcome="success",
+                steps_completed=["idempotent_replay"],
+                agent_dispositions={"replay": "replayed"},
+                turn_record_commit_status="replayed",
+                card_state_commit_status="replayed",
+            )
+
+            replayed_receipt = FirstTurnReceipt(
+                receipt_id=_id("ftr_replay", request_id),
+                request_id=request_id,
+                workflow_run_id=workflow_run_id,
+                trace_id=existing_record.trace_id,
+                turn_id=existing_record.turn_id,
+                attempt_id="",
+                session_id=session_id,
+                logical_card_id=binding.logical_card_id if binding else "",
+                card_version=binding.card_version if binding else 0,
+                source_hash=binding.source_hash if binding else "",
+                quality_verdict="accept",
+                base_card_state_revision=existing_record.base_card_state_revision,
+                result_card_state_revision=existing_record.result_card_state_revision,
+                card_state_commit_status="accepted",
+                turn_record_id=existing_record.turn_id,
+                turn_index=existing_record.turn_index,
+                turn_record_commit_status="committed",
+                memory_curation_status="noop",
+                idempotency_status="replayed",
+                created_at=now,
+            )
+
+            first_turn_ctx = {
+                "turn_id": existing_record.turn_id,
+                "turn_index": existing_record.turn_index,
+                "turn_kind": "first",
+                "session_id": session_id,
+                "logical_card_id": binding.logical_card_id if binding else "",
+                "idempotency_status": "replayed",
+                "created_at": now,
+            }
+
+            return (
+                replayed_receipt.to_dict(),
+                first_turn_ctx,
+                diag.to_dict(),
+                cs.to_dict() if cs else {},
+                existing_record.to_dict(),
+                {},
+            )
 
         diag = FirstTurnDiagnostics(
             diagnostics_id=_id("ftd", request_id),
@@ -356,7 +461,7 @@ class AWPV2PersistentFirstTurn:
             session_id=session_id, card_id=binding.logical_card_id,
             turn_index=next_turn_index,
             player_input=player_input, writer_output=candidate_text,
-            mode="normal",
+            mode=TurnMode.NORMAL,
             base_card_state_revision=base_revision,
             result_card_state_revision=result_revision,
             quality_decision_ref=turn_id,
@@ -368,6 +473,58 @@ class AWPV2PersistentFirstTurn:
             registry.turn_record_store.save(turn_record)
             diag.turn_record_commit_status = "committed"
         except Exception as e:
+            # Idempotent replay: DuplicateTurnError → return existing receipt
+            from ..storage.interfaces import DuplicateTurnError
+            if isinstance(e, DuplicateTurnError):
+                existing = registry.turn_record_store.load(turn_id)
+                if existing:
+                    replayed_receipt = FirstTurnReceipt(
+                        receipt_id=_id("ftr_replay", request_id),
+                        request_id=request_id,
+                        workflow_run_id=workflow_run_id,
+                        trace_id=existing.trace_id,
+                        turn_id=existing.turn_id,
+                        attempt_id="",
+                        session_id=session_id,
+                        logical_card_id=binding.logical_card_id,
+                        card_version=binding.card_version,
+                        source_hash=binding.source_hash,
+                        quality_verdict="accept",
+                        base_card_state_revision=existing.base_card_state_revision,
+                        result_card_state_revision=existing.result_card_state_revision,
+                        card_state_commit_status="accepted",
+                        turn_record_id=existing.turn_id,
+                        turn_index=existing.turn_index,
+                        turn_record_commit_status="committed",
+                        memory_curation_status="noop",
+                        idempotency_status="replayed",
+                        created_at=now,
+                    )
+                    diag.turn_record_commit_status = "replayed"
+                    diag.card_state_commit_status = "replayed"
+                    diag.outcome = "success"
+                    diag.steps_completed.append("idempotent_replay")
+                    diag.step_timings_ms["total"] = _ms_since(t_start)
+
+                    first_turn_ctx = {
+                        "turn_id": existing.turn_id,
+                        "turn_index": existing.turn_index,
+                        "turn_kind": "first",
+                        "session_id": session_id,
+                        "logical_card_id": binding.logical_card_id,
+                        "idempotency_status": "replayed",
+                        "created_at": now,
+                    }
+
+                    return (
+                        replayed_receipt.to_dict(),
+                        first_turn_ctx,
+                        diag.to_dict(),
+                        cs.to_dict(),
+                        existing.to_dict(),
+                        snapshot.to_dict(),
+                    )
+
             diag.turn_record_commit_status = "failed"
             diag.steps_failed.append("turn_commit")
             diag.outcome = "failure"
@@ -461,7 +618,7 @@ class AWPV2PersistentFirstTurn:
             memory_curation_status=memory_status,
             active_memory_write_count=active_write_count,
             rag_memory_write_count=rag_write_count,
-            idempotency_status="new",
+            idempotency_status="fresh",
             created_at=now,
         )
 
@@ -483,6 +640,7 @@ class AWPV2PersistentFirstTurn:
             },
             "workflow_run_id": workflow_run_id,
             "trace_id": trace_id,
+            "idempotency_status": "fresh",
             "created_at": now,
         }
 

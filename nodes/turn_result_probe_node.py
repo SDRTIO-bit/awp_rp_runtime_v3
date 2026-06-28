@@ -87,6 +87,7 @@ class AWPV2TurnResultProbe:
             diagnostic_status=diag.get("outcome", "success"),
             failure_code=diag.get("failure_code", ""),
             failure_message=diag.get("failure_message", ""),
+            idempotency_status=receipt.get("idempotency_status", ""),
             created_at=receipt.get("created_at", diag.get("created_at", "")),
         )
 

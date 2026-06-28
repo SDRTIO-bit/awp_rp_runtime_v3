@@ -67,6 +67,9 @@ class TurnResultProjection:
     failure_code: str = ""
     failure_message: str = ""  # Sanitized, no secrets
 
+    # Idempotency
+    idempotency_status: str = ""  # "fresh", "replayed", "conflict", "recovery_required"
+
     # Timestamps
     created_at: str = ""
 
@@ -96,6 +99,7 @@ class TurnResultProjection:
             "diagnostic_status": self.diagnostic_status,
             "failure_code": self.failure_code,
             "failure_message": self.failure_message,
+            "idempotency_status": self.idempotency_status,
             "created_at": self.created_at,
         }
 
@@ -126,5 +130,6 @@ class TurnResultProjection:
             diagnostic_status=data.get("diagnostic_status", ""),
             failure_code=data.get("failure_code", ""),
             failure_message=data.get("failure_message", ""),
+            idempotency_status=data.get("idempotency_status", ""),
             created_at=data.get("created_at", ""),
         )
