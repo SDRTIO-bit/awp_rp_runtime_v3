@@ -145,4 +145,4 @@ def get_deepseek_base_url() -> str:
 
     Defaults to https://api.deepseek.com/v1
     """
-    return os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    return os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic")
