@@ -52,6 +52,32 @@ class FirstTurnDiagnostics:
     # Memory curation
     memory_curation_status: str = ""
     memory_curation_reason: str = ""
+    # Provider / profile evidence (LSS-V1)
+    director_profile_id: str = ""
+    writer_profile_id: str = ""
+    director_provider_type: str = ""  # "fake" | "deepseek"
+    writer_provider_type: str = ""
+    director_model: str = ""
+    writer_model: str = ""
+    director_call_success: bool = False
+    writer_call_success: bool = False
+    director_failure_code: str = ""
+    writer_failure_code: str = ""
+    # Memory-use evidence (LSS-V1) — IDs only, never raw content/keys
+    l1_turn_ids_recalled: list[str] = field(default_factory=list)
+    l2_memory_ids_recalled: list[str] = field(default_factory=list)
+    l3_memory_ids_recalled: list[str] = field(default_factory=list)
+    worldbook_entry_ids_considered: list[str] = field(default_factory=list)
+    worldbook_entry_ids_activated: list[str] = field(default_factory=list)
+    round_snapshot_id: str = ""
+    director_plan_ref: str = ""  # plan_id or hash
+    card_state_revision_before: int = 0
+    card_state_revision_after: int = 0
+    turn_record_id: str = ""
+    memory_commit_ids: list[str] = field(default_factory=list)
+    active_memory_committed_ids: list[str] = field(default_factory=list)
+    rag_memory_committed_ids: list[str] = field(default_factory=list)
+    trace_persisted: bool = False
     # Outcome
     outcome: str = ""  # success | failure | quality_rejected
     failure_code: str = ""
@@ -85,6 +111,30 @@ class FirstTurnDiagnostics:
             "turn_record_commit_status": self.turn_record_commit_status,
             "memory_curation_status": self.memory_curation_status,
             "memory_curation_reason": self.memory_curation_reason,
+            "director_profile_id": self.director_profile_id,
+            "writer_profile_id": self.writer_profile_id,
+            "director_provider_type": self.director_provider_type,
+            "writer_provider_type": self.writer_provider_type,
+            "director_model": self.director_model,
+            "writer_model": self.writer_model,
+            "director_call_success": self.director_call_success,
+            "writer_call_success": self.writer_call_success,
+            "director_failure_code": self.director_failure_code,
+            "writer_failure_code": self.writer_failure_code,
+            "l1_turn_ids_recalled": list(self.l1_turn_ids_recalled),
+            "l2_memory_ids_recalled": list(self.l2_memory_ids_recalled),
+            "l3_memory_ids_recalled": list(self.l3_memory_ids_recalled),
+            "worldbook_entry_ids_considered": list(self.worldbook_entry_ids_considered),
+            "worldbook_entry_ids_activated": list(self.worldbook_entry_ids_activated),
+            "round_snapshot_id": self.round_snapshot_id,
+            "director_plan_ref": self.director_plan_ref,
+            "card_state_revision_before": self.card_state_revision_before,
+            "card_state_revision_after": self.card_state_revision_after,
+            "turn_record_id": self.turn_record_id,
+            "memory_commit_ids": list(self.memory_commit_ids),
+            "active_memory_committed_ids": list(self.active_memory_committed_ids),
+            "rag_memory_committed_ids": list(self.rag_memory_committed_ids),
+            "trace_persisted": self.trace_persisted,
             "outcome": self.outcome,
             "failure_code": self.failure_code,
             "failure_message": self.failure_message,
@@ -119,6 +169,30 @@ class FirstTurnDiagnostics:
             turn_record_commit_status=data.get("turn_record_commit_status", ""),
             memory_curation_status=data.get("memory_curation_status", ""),
             memory_curation_reason=data.get("memory_curation_reason", ""),
+            director_profile_id=data.get("director_profile_id", ""),
+            writer_profile_id=data.get("writer_profile_id", ""),
+            director_provider_type=data.get("director_provider_type", ""),
+            writer_provider_type=data.get("writer_provider_type", ""),
+            director_model=data.get("director_model", ""),
+            writer_model=data.get("writer_model", ""),
+            director_call_success=data.get("director_call_success", False),
+            writer_call_success=data.get("writer_call_success", False),
+            director_failure_code=data.get("director_failure_code", ""),
+            writer_failure_code=data.get("writer_failure_code", ""),
+            l1_turn_ids_recalled=list(data.get("l1_turn_ids_recalled", [])),
+            l2_memory_ids_recalled=list(data.get("l2_memory_ids_recalled", [])),
+            l3_memory_ids_recalled=list(data.get("l3_memory_ids_recalled", [])),
+            worldbook_entry_ids_considered=list(data.get("worldbook_entry_ids_considered", [])),
+            worldbook_entry_ids_activated=list(data.get("worldbook_entry_ids_activated", [])),
+            round_snapshot_id=data.get("round_snapshot_id", ""),
+            director_plan_ref=data.get("director_plan_ref", ""),
+            card_state_revision_before=data.get("card_state_revision_before", 0),
+            card_state_revision_after=data.get("card_state_revision_after", 0),
+            turn_record_id=data.get("turn_record_id", ""),
+            memory_commit_ids=list(data.get("memory_commit_ids", [])),
+            active_memory_committed_ids=list(data.get("active_memory_committed_ids", [])),
+            rag_memory_committed_ids=list(data.get("rag_memory_committed_ids", [])),
+            trace_persisted=data.get("trace_persisted", False),
             outcome=data.get("outcome", ""),
             failure_code=data.get("failure_code", ""),
             failure_message=data.get("failure_message", ""),

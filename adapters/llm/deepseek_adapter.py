@@ -357,7 +357,6 @@ class DeepSeekAdapter(BaseLlmAdapter):
             max_tokens=max_tokens,
             temperature=0.3,
             tools=[DIRECTOR_TOOL_OPENAI],
-            tool_choice={"type": "function", "function": {"name": "submit_director_plan"}},
         )
         parsed = {}
         if resp.choices:

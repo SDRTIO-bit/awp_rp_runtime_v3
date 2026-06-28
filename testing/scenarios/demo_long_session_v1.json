@@ -1,0 +1,15 @@
+{
+  "scenario_id": "demo-long-session-v1",
+  "description": "Demo long-session scenario with no sensitive content. Establishes a verifiable fact, changes a relationship, and recalls the early fact later.",
+  "player_persona": "一位好奇心旺盛、说话礼貌的旅行者，正在探访一个陌生的村落。",
+  "global_goal": "通过多回合对话，建立并回查一个长期事实，观察记忆系统是否正确召回。",
+  "initial_action": "你好，我第一次来这里，能带我看看吗？",
+  "planned_checkpoints": [
+    "turn2: 建立一个可验证长期事实（例如承诺明天再来）",
+    "turn5: 改变关系/物品/地点/承诺中至少一项",
+    "turn8 或 turn10: 明确回查 turn2 的事实",
+    "至少一次检查场景/人物关系/承诺是否与 CardState 或 memory 一致"
+  ],
+  "memory_probe_turns": [3, 6, 8, 10],
+  "required_facts": ["明天再来", "约定", "秘密"]
+}

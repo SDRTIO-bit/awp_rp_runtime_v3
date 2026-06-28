@@ -935,17 +935,19 @@ class TestNodeInputContracts:
             os.environ["DEEPSEEK_API_KEY"] = "sk-test-fake-key"
             os.environ["AWP_DIRECTOR_MODEL"] = "deepseek-v4-pro"
 
-            # Fake adapters still work independently
-            from ..nodes.persistent_first_turn_node import _FakeDirectorAdapter
+            # Fake adapters still work independently via the factory
+            from ..runtime.provider_adapter_factory import DirectorAdapterFactory
             from ..contracts.round_snapshot import RoundSnapshot as RS
-            adapter = _FakeDirectorAdapter()
+            adapter, outcome = DirectorAdapterFactory.build("fake-director")
+            assert outcome.built
+            assert outcome.is_real is False
             # Create minimal snapshot
             snap = RS(
                 snapshot_id="s", trace_id="t", card_id="c",
                 session_id="s", base_card_state_revision=0,
                 player_input="test", created_at=_now(),
             )
-            plan, _, _ = adapter.plan(snap)
+            plan = adapter.generate_plan(snap)
             assert plan.turn_goal  # Works regardless of env
         finally:
             if old_key is not None:

@@ -75,6 +75,33 @@ _register(ModelProfile(
     token_hard_limit=50_000,
 ))
 
+# Simulated player profile (low-cost model, isolated token budget).
+# Used ONLY by the user-simulation harness, never by the RP turn pipeline.
+_register(ModelProfile(
+    profile_id="simulated-player-v1",
+    provider="deepseek",
+    model="deepseek-v4-flash",
+    base_url="https://api.deepseek.com",
+    timeout_seconds=60,
+    default_max_tokens=1000,
+    max_retries=1,
+    api_key_env="DEEPSEEK_API_KEY",
+    token_hard_limit=20_000,
+))
+
+# Fake simulated player for offline harness tests
+_register(ModelProfile(
+    profile_id="fake-player",
+    provider="fake",
+    model="fake_player_v1",
+    base_url="",
+    timeout_seconds=5,
+    default_max_tokens=0,
+    max_retries=0,
+    api_key_env="",
+    token_hard_limit=0,
+))
+
 # Fake profiles for testing
 _register(ModelProfile(
     profile_id="fake-director",

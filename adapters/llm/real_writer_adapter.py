@@ -31,9 +31,15 @@ class RealWriterV2Adapter:
         trace_id: str = "",
         turn_id: str = "",
         attempt_id: str = "",
+        snapshot: Any = None,
     ) -> tuple[str, ProviderAttemptReceipt]:
-        """Generate narrative text from writer input bundle."""
-        prompt = self._build_writer_prompt(bundle)
+        """Generate narrative text from writer input bundle.
+
+        snapshot is an optional RoundSnapshot for player_input, scene_location,
+        and worldbook context. It is never stored or logged — only used to build
+        the prompt.
+        """
+        prompt = self._build_writer_prompt(bundle, snapshot)
 
         text, receipt = self._llm.generate_text(
             prompt,
@@ -47,30 +53,45 @@ class RealWriterV2Adapter:
 
         return text, receipt
 
-    def _build_writer_prompt(self, bundle: WriterInputBundle) -> str:
+    def _build_writer_prompt(self, bundle: WriterInputBundle, snapshot: Any = None) -> str:
         """Build prompt for Writer text generation.
 
         Contains only safe summary data, never full card text or API keys.
+        Uses the optional snapshot for player_input, scene, and worldbook context.
         """
-        brief = bundle.final_turn_brief
-        snapshot = bundle.round_snapshot
+        brief_dict = bundle.final_turn_brief
+        brief = None
+        turn_goal = ""
+        scene_focus = ""
+        must_preserve = []
+        must_not_do = []
+        constraints = []
+        opportunities = []
 
-        turn_goal = brief.turn_goal if brief else ""
-        scene_focus = brief.scene_focus if brief else ""
-        must_preserve = brief.must_preserve_facts if brief else []
-        must_not_do = brief.must_not_do if brief else []
-        constraints = brief.writer_constraints if brief else []
-        opportunities = brief.narrative_opportunities if brief else []
+        if isinstance(brief_dict, dict):
+            turn_goal = brief_dict.get("turn_goal", "")
+            scene_focus = brief_dict.get("scene_focus", "")
+            must_preserve = brief_dict.get("must_preserve_facts", [])
+            must_not_do = brief_dict.get("must_not_do", [])
+            constraints = brief_dict.get("writer_constraints", [])
+            opportunities = brief_dict.get("narrative_opportunities", [])
+        elif brief_dict is not None:
+            brief = brief_dict
+            turn_goal = brief.turn_goal if hasattr(brief, 'turn_goal') else ""
+            scene_focus = brief.scene_focus if hasattr(brief, 'scene_focus') else ""
+            must_preserve = brief.must_preserve_facts if hasattr(brief, 'must_preserve_facts') else []
+            must_not_do = brief.must_not_do if hasattr(brief, 'must_not_do') else []
+            constraints = brief.writer_constraints if hasattr(brief, 'writer_constraints') else []
+            opportunities = brief.narrative_opportunities if hasattr(brief, 'narrative_opportunities') else []
 
-        player_input = snapshot.player_input[:500] if snapshot else ""
+        player_input = ""
         scene_location = ""
-        if snapshot and hasattr(snapshot.card_state, 'scene_state'):
-            scene_location = getattr(snapshot.card_state.scene_state, 'location', '')
-
-        # Worldbook context (safe summaries only)
         wb_summaries = []
-        if snapshot:
-            for entry in snapshot.active_worldbook_entries[:5]:
+        if snapshot is not None:
+            player_input = getattr(snapshot, 'player_input', '')[:500]
+            if hasattr(snapshot, 'card_state') and hasattr(snapshot.card_state, 'scene_state'):
+                scene_location = getattr(snapshot.card_state.scene_state, 'location', '')
+            for entry in getattr(snapshot, 'active_worldbook_entries', [])[:5]:
                 if isinstance(entry, dict):
                     title = entry.get("title", "")
                     content_preview = entry.get("content", "")[:100]
@@ -80,7 +101,7 @@ class RealWriterV2Adapter:
 
         # Opening context
         opening_text = ""
-        if bundle.opening_context:
+        if hasattr(bundle, 'opening_context') and bundle.opening_context:
             opening_text = bundle.opening_context.get("safe_display_content", "")[:300]
 
         parts = [
