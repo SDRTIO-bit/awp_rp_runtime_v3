@@ -10,6 +10,7 @@ The SPA static files are served at /awp/.
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -85,12 +86,8 @@ try:
     async def get_session(request):
         """Get a single session's details."""
         session_id = request.match_info["session_id"]
-        factory = _factory()
-        registry = factory.registry
-
-        binding = registry.card_session_binding_store.load(session_id)
-        if not binding:
-            return _json({"error": "Session not found"}, 404)
+        mode = request.query.get("mode", "")
+        workflow = request.query.get("workflow", "")
 
         turns = registry.turn_record_store.list_by_session(session_id)
         opening = None
@@ -211,31 +208,194 @@ try:
             return _json({"error": "Session not found"}, 404)
 
         try:
-            from ..nodes.continue_turn_execution_node import AWPV2ContinueTurn
+            from .execution_dispatcher import ExecutionDispatcher
 
-            node = AWPV2ContinueTurn()
-            result = node.execute(
-                session_id=session_id,
-                director_profile_id="deepseek-v4-flash-director",
-                writer_profile_id="deepseek-v4-pro-writer",
+            result = ExecutionDispatcher().execute_continue(
+                session_id,
+                mode=mode,
+                workflow=workflow,
             )
-
-            receipt = result[0] if len(result) > 0 else {}
-            diagnostics = result[2] if len(result) > 2 else {}
-            turn_record = result[4] if len(result) > 4 else {}
-
-            success = diagnostics.get("outcome") == "success"
-            return _json({
-                "success": success,
-                "turn_id": receipt.get("turn_id", ""),
-                "turn_index": receipt.get("turn_index", 0),
-                "quality": receipt.get("quality_verdict", ""),
-                "writer_output": turn_record.get("writer_output", "")[:500] if turn_record else "",
-            })
+            return _json(result)
         except Exception as e:
             return _json({"error": f"Continue failed: {str(e)[:200]}"}, 500)
 
     # ── SPA static file serving ──────────────────────────────────────────
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/sessions/{session_id}/turn")
+    async def post_turn(request):
+        session_id = request.match_info["session_id"]
+        body = await request.json()
+        player_input = body.get("player_input", "")
+        mode = request.query.get("mode", "")
+        workflow = request.query.get("workflow", "")
+        if not player_input:
+            return _json({"error": "player_input required"}, 400)
+
+        try:
+            from .execution_dispatcher import ExecutionDispatcher
+
+            result = ExecutionDispatcher().execute_turn(
+                session_id,
+                player_input,
+                mode=mode,
+                workflow=workflow,
+            )
+            return _json(result)
+        except Exception as e:
+            return _json({"error": f"Turn failed: {str(e)[:200]}"}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/sessions/{session_id}/first-turn")
+    async def post_first_turn(request):
+        session_id = request.match_info["session_id"]
+        body = await request.json()
+        player_input = body.get("player_input", "")
+        mode = request.query.get("mode", "")
+        workflow = request.query.get("workflow", "")
+
+        try:
+            from .execution_dispatcher import ExecutionDispatcher
+
+            result = ExecutionDispatcher().execute_first_turn(
+                session_id,
+                player_input,
+                mode=mode,
+                workflow=workflow,
+            )
+            return _json(result)
+        except Exception as e:
+            return _json({"error": f"First turn failed: {str(e)[:200]}"}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/cards/import")
+    async def import_card(request):
+        body = await request.json()
+        source_path = body.get("source_path", "")
+        if not source_path:
+            return _json({"error": "source_path required"}, 400)
+
+        try:
+            from ..nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+
+            session_id = body.get("session_id") or f"imp-{uuid.uuid4().hex[:12]}"
+            binding, _opening, _worldbook, _receipt, diagnostics = (
+                AWPV2PersistentBootstrap().execute(
+                    source_path=source_path,
+                    session_id=session_id,
+                    greeting_id=body.get("greeting_id", "g0"),
+                    request_id=body.get("request_id", f"imp-{uuid.uuid4().hex[:12]}"),
+                )
+            )
+            return _json({
+                "success": diagnostics.get("commit_status") == "success",
+                "session_id": binding.get("session_id", ""),
+                "card_id": binding.get("logical_card_id", ""),
+                "diagnostics": diagnostics,
+            })
+        except Exception as e:
+            return _json({"error": f"Import failed: {str(e)[:200]}"}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/cards/{card_id}/greetings")
+    async def list_greetings(request):
+        card_id = request.match_info["card_id"]
+        factory = _factory()
+        card = factory.registry.card_definition_store.get_latest(card_id)
+        if not card:
+            return _json({"error": "Card not found"}, 404)
+
+        greetings = []
+        for greeting in card.greetings or []:
+            content = (
+                greeting.get("safe_display_content", "")
+                or greeting.get("content", "")
+                or ""
+            )
+            greetings.append({
+                "greeting_id": greeting.get("greeting_id", ""),
+                "label": greeting.get("label", ""),
+                "is_default": bool(greeting.get("is_default", False)),
+                "preview": content[:120],
+            })
+        return _json(greetings)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/sessions")
+    async def create_session(request):
+        body = await request.json()
+        card_id = body.get("card_id", "")
+        greeting_id = body.get("greeting_id", "")
+        if not card_id:
+            return _json({"error": "card_id required"}, 400)
+        if not greeting_id:
+            return _json({"error": "greeting_id required"}, 400)
+
+        factory = _factory()
+        registry = factory.registry
+        card = registry.card_definition_store.get_latest(card_id)
+        if not card:
+            return _json({"error": "Card not found"}, 404)
+
+        try:
+            from ..contracts.card_session_bootstrap_request import (
+                CardSessionBootstrapRequest,
+            )
+            from ..runtime.card_session_bootstrap_pipeline import (
+                CardSessionBootstrapPipeline,
+            )
+
+            session_id = body.get("session_id") or f"sess-{uuid.uuid4().hex[:12]}"
+            request_id = body.get("request_id") or f"req-{uuid.uuid4().hex[:12]}"
+            bootstrap_request = CardSessionBootstrapRequest(
+                request_id=request_id,
+                workflow_run_id=f"wr-{request_id}",
+                trace_id=f"tr-{request_id}",
+                session_id=session_id,
+                logical_card_id=card.logical_card_id,
+                card_version=card.card_version,
+                greeting_id=greeting_id,
+                expected_source_hash=card.source_hash,
+            )
+            pipeline = CardSessionBootstrapPipeline(
+                definition_store=registry.card_definition_store,
+                binding_store=registry.card_session_binding_store,
+                opening_store=registry.opening_record_store,
+                worldbook_store=registry.worldbook_binding_store,
+                receipt_store=registry.bootstrap_receipt_store,
+            )
+            receipt, failure, diagnostics = pipeline.bootstrap(bootstrap_request)
+            if failure:
+                return _json({"error": failure.failure_message}, 400)
+
+            registry.card_state_store.initialize(card.logical_card_id, session_id)
+            return _json({
+                "session_id": receipt.session_id if receipt else session_id,
+                "card_id": card.logical_card_id,
+                "greeting_id": greeting_id,
+                "diagnostics": diagnostics.to_dict(),
+            })
+        except Exception as e:
+            return _json({"error": f"Create session failed: {str(e)[:200]}"}, 500)
+
+    @server.PromptServer.instance.routes.delete("/awp/api/v1/cards/{card_id}")
+    async def delete_card(request):
+        card_id = request.match_info["card_id"]
+        try:
+            from .session_deletion_service import SessionDeletionService
+
+            factory = _factory()
+            SessionDeletionService(factory.registry).delete_card(card_id)
+            return _json({"success": True})
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.delete("/awp/api/v1/sessions/{session_id}")
+    async def delete_session(request):
+        session_id = request.match_info["session_id"]
+        try:
+            from .session_deletion_service import SessionDeletionService
+
+            factory = _factory()
+            SessionDeletionService(factory.registry).delete_session(session_id)
+            return _json({"success": True})
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
 
     @server.PromptServer.instance.routes.get("/awp")
     async def serve_spa_index(request):

@@ -30,6 +30,9 @@ def make_card_definition(logical_card_id: str = "card-1") -> CardDefinition:
                 "greeting_id": "g0",
                 "label": "Default",
                 "content": "Hello.",
+                "safe_display_content": "Hello.",
+                "content_hash": "hash-g0",
+                "index": 0,
                 "is_default": True,
             }
         ],
