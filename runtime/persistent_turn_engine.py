@@ -101,6 +101,47 @@ def _plan_hash(plan: Any) -> str:
     return hashlib.sha256(str(blob).encode("utf-8")).hexdigest()[:16]
 
 
+def _provider_failure(
+    receipt: dict[str, Any],
+    default_code: str,
+    default_message: str,
+) -> tuple[str, str]:
+    """Extract provider failure code/message from a receipt dict."""
+    failure = receipt.get("failure", {}) if isinstance(receipt, dict) else {}
+    if not isinstance(failure, dict):
+        failure = {}
+    code = (
+        receipt.get("failure_code")
+        or failure.get("failure_code")
+        or default_code
+    )
+    message = (
+        receipt.get("failure_message")
+        or failure.get("failure_message")
+        or default_message
+    )
+    return str(code), str(message)
+
+
+_DELEGATION_ROLE_TO_AGENT = {
+    "history_recall": "d1_history_recall",
+    "history-recall": "d1_history_recall",
+    "opportunity": "d2_opportunity",
+    "world_life": "d3_world_life",
+    "world-life": "d3_world_life",
+    "emotion_relationship": "d4_emotion_rel",
+    "emotion-relationship": "d4_emotion_rel",
+    "emotion_rel": "d4_emotion_rel",
+    "continuity": "d5_continuity",
+}
+
+
+def _delegation_agent_name(role: Any) -> str:
+    """Normalize Director delegation role IDs to runtime trigger names."""
+    key = str(role or "").strip()
+    return _DELEGATION_ROLE_TO_AGENT.get(key, key)
+
+
 class PersistentTurnEngine:
     """Runs one accepted turn with full evidence capture.
 
@@ -120,10 +161,13 @@ class PersistentTurnEngine:
         binding: Any,
         turn_id: str,
         trace_id: str,
+        requested_agents: set[str] | None = None,
     ) -> tuple[list, list[str], list[dict[str, Any]]]:
         """Evaluate D1-D5 trigger policies and collect suggestions.
 
-        Runs deterministic trigger rules (no LLM calls). Returns
+        Runs deterministic trigger rules (no LLM calls). When requested_agents
+        is provided, Director delegation controls which agents execute; trigger
+        policies become diagnostics only. Returns
         (agent_suggestions, triggered_agent_names, trigger_diagnostics).
         """
         import uuid as _uuid
@@ -132,19 +176,31 @@ class PersistentTurnEngine:
         suggestions: list = []
         triggered: list[str] = []
         trigger_diagnostics: list[dict[str, Any]] = []
+        director_controlled = requested_agents is not None
+
+        def _director_requested(agent_name: str) -> bool:
+            return True if requested_agents is None else agent_name in requested_agents
+
+        def _should_run(agent_name: str, policy_should_trigger: bool) -> bool:
+            return _director_requested(agent_name) if director_controlled else bool(policy_should_trigger)
 
         # ── D1: History Recall ─────────────────────────────────────────
         try:
             from ..runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy
             hr_trigger = HistoryRecallTriggerPolicy().evaluate(snapshot, director_plan)
+            director_requested = _director_requested("d1_history_recall")
+            should_run = _should_run("d1_history_recall", hr_trigger.should_trigger)
             trigger_diagnostics.append({
                 "agent": "d1_history_recall",
-                "should_trigger": bool(hr_trigger.should_trigger),
+                "should_trigger": bool(should_run),
+                "policy_should_trigger": bool(hr_trigger.should_trigger),
+                "director_requested": bool(director_requested),
                 "reasons": list(getattr(hr_trigger, "trigger_reasons", []) or []),
                 "error": "",
             })
-            if hr_trigger.should_trigger:
+            if should_run:
                 triggered.append("d1_history_recall")
+                reasons = list(hr_trigger.trigger_reasons[:3]) or ["Director delegated history recall"]
                 s = AgentSuggestion(
                     suggestion_id=f"d1_{_uuid.uuid4().hex[:8]}",
                     trace_id=trace_id,
@@ -153,7 +209,7 @@ class PersistentTurnEngine:
                     kind=SuggestionKind.HISTORICAL_CONFLICT if hr_trigger.risk_level.value in ("high",) else SuggestionKind.IDENTITY_CLARIFICATION,
                     priority=0.8,
                     confidence=0.7,
-                    summary=f"[D1-History] {', '.join(hr_trigger.trigger_reasons[:3])}",
+                    summary=f"[D1-History] {', '.join(reasons)}",
                     recommendations=hr_trigger.suggested_recall_kinds,
                     risk_flags=[hr_trigger.risk_level.value],
                 )
@@ -170,14 +226,19 @@ class PersistentTurnEngine:
         try:
             from ..runtime.opportunity_trigger_policy import OpportunityTriggerPolicy
             op_trigger = OpportunityTriggerPolicy().evaluate(snapshot, director_plan)
+            director_requested = _director_requested("d2_opportunity")
+            should_run = _should_run("d2_opportunity", op_trigger.should_trigger)
             trigger_diagnostics.append({
                 "agent": "d2_opportunity",
-                "should_trigger": bool(op_trigger.should_trigger),
+                "should_trigger": bool(should_run),
+                "policy_should_trigger": bool(op_trigger.should_trigger),
+                "director_requested": bool(director_requested),
                 "reasons": list(getattr(op_trigger, "trigger_reasons", []) or []),
                 "error": "",
             })
-            if op_trigger.should_trigger:
+            if should_run:
                 triggered.append("d2_opportunity")
+                reasons = list(op_trigger.trigger_reasons[:3]) or ["Director delegated opportunity analysis"]
                 s = AgentSuggestion(
                     suggestion_id=f"d2_{_uuid.uuid4().hex[:8]}",
                     trace_id=trace_id,
@@ -186,7 +247,7 @@ class PersistentTurnEngine:
                     kind=SuggestionKind.NARRATIVE_OPPORTUNITY,
                     priority=0.6,
                     confidence=0.6,
-                    summary=f"[D2-Opportunity] {', '.join(op_trigger.trigger_reasons[:3])}",
+                    summary=f"[D2-Opportunity] {', '.join(reasons)}",
                 )
                 suggestions.append(s)
         except Exception as e:
@@ -201,14 +262,19 @@ class PersistentTurnEngine:
         try:
             from ..runtime.world_life_trigger_policy import WorldLifeTriggerPolicy
             wl_trigger = WorldLifeTriggerPolicy().evaluate(snapshot, director_plan)
+            director_requested = _director_requested("d3_world_life")
+            should_run = _should_run("d3_world_life", wl_trigger.should_trigger)
             trigger_diagnostics.append({
                 "agent": "d3_world_life",
-                "should_trigger": bool(wl_trigger.should_trigger),
+                "should_trigger": bool(should_run),
+                "policy_should_trigger": bool(wl_trigger.should_trigger),
+                "director_requested": bool(director_requested),
                 "reasons": list(getattr(wl_trigger, "trigger_reasons", []) or []),
                 "error": "",
             })
-            if wl_trigger.should_trigger:
+            if should_run:
                 triggered.append("d3_world_life")
+                reasons = list(wl_trigger.trigger_reasons[:3]) or ["Director delegated world-life analysis"]
                 s = AgentSuggestion(
                     suggestion_id=f"d3_{_uuid.uuid4().hex[:8]}",
                     trace_id=trace_id,
@@ -217,7 +283,7 @@ class PersistentTurnEngine:
                     kind=SuggestionKind.WORLD_DETAIL,
                     priority=0.5,
                     confidence=0.5,
-                    summary=f"[D3-WorldLife] {', '.join(wl_trigger.trigger_reasons[:3])}",
+                    summary=f"[D3-WorldLife] {', '.join(reasons)}",
                 )
                 suggestions.append(s)
         except Exception as e:
@@ -232,14 +298,19 @@ class PersistentTurnEngine:
         try:
             from ..runtime.emotion_relationship_trigger_policy import EmotionRelationshipTriggerPolicy
             er_trigger = EmotionRelationshipTriggerPolicy().evaluate(snapshot, director_plan)
+            director_requested = _director_requested("d4_emotion_rel")
+            should_run = _should_run("d4_emotion_rel", er_trigger.should_trigger)
             trigger_diagnostics.append({
                 "agent": "d4_emotion_rel",
-                "should_trigger": bool(er_trigger.should_trigger),
+                "should_trigger": bool(should_run),
+                "policy_should_trigger": bool(er_trigger.should_trigger),
+                "director_requested": bool(director_requested),
                 "reasons": list(getattr(er_trigger, "trigger_reasons", []) or []),
                 "error": "",
             })
-            if er_trigger.should_trigger:
+            if should_run:
                 triggered.append("d4_emotion_rel")
+                reasons = list(er_trigger.trigger_reasons[:3]) or ["Director delegated emotion relationship analysis"]
                 s = AgentSuggestion(
                     suggestion_id=f"d4_{_uuid.uuid4().hex[:8]}",
                     trace_id=trace_id,
@@ -248,7 +319,7 @@ class PersistentTurnEngine:
                     kind=SuggestionKind.RELATIONSHIP_SHIFT,
                     priority=0.7,
                     confidence=0.6,
-                    summary=f"[D4-Emotion] {', '.join(er_trigger.trigger_reasons[:3])}",
+                    summary=f"[D4-Emotion] {', '.join(reasons)}",
                 )
                 suggestions.append(s)
         except Exception as e:
@@ -263,14 +334,19 @@ class PersistentTurnEngine:
         try:
             from ..runtime.continuity_trigger_policy import ContinuityTriggerPolicy
             ct_trigger = ContinuityTriggerPolicy().evaluate(snapshot, director_plan)
+            director_requested = _director_requested("d5_continuity")
+            should_run = _should_run("d5_continuity", ct_trigger.should_trigger)
             trigger_diagnostics.append({
                 "agent": "d5_continuity",
-                "should_trigger": bool(ct_trigger.should_trigger),
+                "should_trigger": bool(should_run),
+                "policy_should_trigger": bool(ct_trigger.should_trigger),
+                "director_requested": bool(director_requested),
                 "reasons": list(getattr(ct_trigger, "trigger_reasons", []) or []),
                 "error": "",
             })
-            if ct_trigger.should_trigger:
+            if should_run:
                 triggered.append("d5_continuity")
+                reasons = list(ct_trigger.trigger_reasons[:3]) or ["Director delegated continuity analysis"]
                 s = AgentSuggestion(
                     suggestion_id=f"d5_{_uuid.uuid4().hex[:8]}",
                     trace_id=trace_id,
@@ -279,7 +355,7 @@ class PersistentTurnEngine:
                     kind=SuggestionKind.CONTINUITY_FACT_CONSTRAINT,
                     priority=0.9,
                     confidence=0.8,
-                    summary=f"[D5-Continuity] {', '.join(ct_trigger.trigger_reasons[:3])}",
+                    summary=f"[D5-Continuity] {', '.join(reasons)}",
                 )
                 suggestions.append(s)
         except Exception as e:
@@ -403,13 +479,15 @@ class PersistentTurnEngine:
             workflow_run_id, trace_id, turn_id, attempt_id,
         )
         if director_plan is None:
-            fc = dir_receipt.get("failure_code", "DIRECTOR_FAILED")
+            fc, msg = _provider_failure(
+                dir_receipt, "DIRECTOR_FAILED", "director failed"
+            )
             diag.director_failure_code = fc
             diag.director_call_success = False
             diag.steps_failed.append("director")
             diag.outcome = "failure"
             diag.failure_code = "DIRECTOR_" + fc
-            diag.failure_message = dir_receipt.get("failure_message", "director failed")
+            diag.failure_message = msg
             _add_trace_event(trace, "director", "director", success=False,
                              duration_ms=_ms_since(step_start),
                              error=diag.failure_message,
@@ -500,16 +578,59 @@ class PersistentTurnEngine:
                                   "model": dir_outcome.model})
         diag.steps_completed.append("director")
 
-        # ── Sub-Agent rule triggers (D1-D5, deterministic) ───────────────
+        # ── Director-controlled sub-agent delegation ─────────────────────
         agent_suggestions: list = []
         agent_triggers: list[str] = []
         agent_trigger_diagnostics: list[dict[str, Any]] = []
+        requested_agents: set[str] | None = None
+        delegation_plan = None
+        delegation_source = "trigger_policy_fallback"
 
-        # Evaluate D1-D5 trigger policies — these are pure rules, no LLM calls.
-        # Produced AgentSuggestion.summary is merged into Writer guidance below.
+        try:
+            try:
+                raw_delegation_plan = dir_adapter.generate_delegation_plan(
+                    snapshot, director_plan,
+                    workflow_run_id=workflow_run_id,
+                    trace_id=trace_id,
+                    turn_id=turn_id,
+                    attempt_id=attempt_id,
+                )
+            except TypeError:
+                raw_delegation_plan = dir_adapter.generate_delegation_plan(
+                    snapshot, director_plan
+                )
+
+            delegation_plan = (
+                raw_delegation_plan[0]
+                if isinstance(raw_delegation_plan, tuple)
+                else raw_delegation_plan
+            )
+            tasks = list(getattr(delegation_plan, "tasks", []) or [])
+            requested_agents = {
+                _delegation_agent_name(getattr(task, "role", ""))
+                for task in tasks
+                if _delegation_agent_name(getattr(task, "role", ""))
+            }
+            delegation_source = "director_plan"
+            if requested_agents:
+                director_plan.delegation_plan_ref = getattr(delegation_plan, "plan_id", "")
+            diag.steps_completed.append("director_delegation")
+            effects["delegation"]["source"] = delegation_source
+            effects["delegation"]["plan_id"] = getattr(delegation_plan, "plan_id", "")
+            effects["delegation"]["director_requested"] = sorted(requested_agents or [])
+        except Exception as e:
+            requested_agents = None
+            effects["delegation"]["source"] = "trigger_policy_fallback"
+            effects["delegation"]["delegation_error"] = str(e)[:200]
+            _add_trace_event(trace, "director_delegation", "director",
+                             success=False, error=str(e)[:200])
+
+        # Evaluate D1-D5 policies. With Director delegation, policies are
+        # diagnostics only and Director-requested agents execute.
         try:
             agent_suggestions, agent_triggers, agent_trigger_diagnostics = self._run_sub_agent_triggers(
-                snapshot, director_plan, binding, turn_id, trace_id
+                snapshot, director_plan, binding, turn_id, trace_id,
+                requested_agents=requested_agents,
             )
         except Exception as e:
             _add_trace_event(trace, "sub_agents", "trigger_policies",
@@ -521,14 +642,16 @@ class PersistentTurnEngine:
                 "error": str(e)[:200],
             })
 
-        # ── Deepen triggered sub-agent summaries with cheap LLM calls ─────
+        # ── Deepen triggered sub-agent summaries with concurrent LLM calls ──
         # Each triggered agent gets one DeepSeek Flash call (thinking disabled)
-        # to produce concrete, context-specific analysis.
+        # to produce concrete, context-specific analysis. These calls are
+        # independent and should run concurrently.
         if agent_suggestions and dir_outcome.is_real:
             try:
                 from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
                 from ..adapters.llm.model_profile_registry import ModelProfileRegistry
                 from .sub_agent_llm_runner import run_sub_agent_llm
+                from concurrent.futures import ThreadPoolExecutor, as_completed
                 import os as _os
 
                 # Build a flash-adapter for sub-agent LLM calls
@@ -537,21 +660,33 @@ class PersistentTurnEngine:
                     flash_profile = ModelProfileRegistry.resolve("deepseek-v4-flash-writer")
                     api_key_env = flash_profile.api_key_env or "DEEPSEEK_API_KEY"
                     if _os.environ.get(api_key_env, ""):
-                        flash_adapter = DeepSeekAdapter(
-                            model=flash_model,
-                            default_max_tokens=500,
-                            timeout_seconds=60,
-                            max_retries=2,
-                        )
-                        for sug in agent_suggestions:
+                        max_workers = min(len(agent_suggestions), 5)
+                        effects["delegation"]["parallelism"] = max_workers
+
+                        def _run_one(sug):
                             role = getattr(sug, "role", "") or ""
+                            flash_adapter = DeepSeekAdapter(
+                                model=flash_model,
+                                default_max_tokens=500,
+                                timeout_seconds=60,
+                                max_retries=2,
+                            )
                             llm_text = run_sub_agent_llm(
                                 role, snapshot, flash_adapter,
                                 trace_id=trace_id, turn_id=turn_id,
                                 attempt_id=attempt_id,
                             )
-                            if llm_text:
-                                sug.summary = f"[{role}] {llm_text}"
+                            return sug, role, llm_text
+
+                        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                            futures = [
+                                pool.submit(_run_one, sug)
+                                for sug in agent_suggestions
+                            ]
+                            for future in as_completed(futures):
+                                sug, role, llm_text = future.result()
+                                if llm_text:
+                                    sug.summary = f"[{role}] {llm_text}"
                 except Exception:
                     # If flash adapter fails, keep the rule-generated summary
                     pass
@@ -564,10 +699,11 @@ class PersistentTurnEngine:
             effects["delegation"]["requested"] = agent_triggers
             effects["delegation"]["trigger_diagnostics"] = agent_trigger_diagnostics
             diag.steps_completed.append(f"agents:{','.join(agent_triggers)}")
-            _add_trace_event(trace, "sub_agents", "trigger_policies",
+            _add_trace_event(trace, "sub_agents", delegation_source,
                              success=True,
                              details={"triggered": agent_triggers,
-                                       "suggestions": len(agent_suggestions)})
+                                      "suggestions": len(agent_suggestions),
+                                      "parallelism": effects["delegation"].get("parallelism", 0)})
         else:
             effects["delegation"]["trigger_diagnostics"] = agent_trigger_diagnostics
 
@@ -635,13 +771,15 @@ class PersistentTurnEngine:
             snapshot=snapshot,
         )
         if not candidate_text.strip():
-            fc = wrt_receipt.get("failure_code", "WRITER_FAILED")
+            fc, msg = _provider_failure(
+                wrt_receipt, "WRITER_FAILED", "writer produced empty text"
+            )
             diag.writer_failure_code = fc
             diag.writer_call_success = False
             diag.steps_failed.append("writer")
             diag.outcome = "failure"
             diag.failure_code = "WRITER_" + fc
-            diag.failure_message = wrt_receipt.get("failure_message", "writer produced empty text")
+            diag.failure_message = msg
             _add_trace_event(trace, "writer", "writer", success=False,
                              duration_ms=_ms_since(step_start),
                              error=diag.failure_message,

@@ -8,7 +8,7 @@ from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
 
 
 _FLASH_MODEL = "deepseek-v4-flash"
-_EXTRA_ENABLE_THINKING = {"thinking": {"type": "enabled"}}
+_EXTRA_DISABLE_THINKING = {"thinking": {"type": "disabled"}}
 
 _STABLE_SUB_AGENT_CONTRACT = """You are a read-only analysis sub-agent for an interactive roleplay runtime.
 Keep this fixed contract above volatile turn data so provider prefix caching can be reused across D1-D5 calls.
@@ -149,7 +149,7 @@ def run_sub_agent_llm(
         max_tokens=500,
         provider_role=f"sub_agent_{role}",
         model=_FLASH_MODEL,
-        extra_body=_EXTRA_ENABLE_THINKING,
+        extra_body=_EXTRA_DISABLE_THINKING,
         trace_id=trace_id,
         turn_id=turn_id,
         attempt_id=attempt_id,

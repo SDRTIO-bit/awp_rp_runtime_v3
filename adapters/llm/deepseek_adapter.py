@@ -16,6 +16,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from numbers import Number
 from typing import Any
 
 from .base import BaseLlmAdapter
@@ -41,24 +42,48 @@ def _usage_attr(obj: Any, name: str, default: int = 0) -> int:
         value = obj.get(name, default)
     else:
         value = getattr(obj, name, default)
+    if isinstance(value, Number):
+        return int(value)
+    if not isinstance(value, str):
+        return default
     try:
         return int(value or 0)
     except (TypeError, ValueError):
         return default
 
 
-def _provider_usage_from_openai(raw_usage: Any, model: str) -> ProviderUsage:
+def _message_text_attr(message: Any, name: str) -> str:
+    if message is None:
+        return ""
+    value = getattr(message, name, "")
+    return value if isinstance(value, str) else ""
+
+
+def _provider_usage_from_openai(
+    raw_usage: Any,
+    model: str,
+    output_content: str = "",
+    reasoning_content: str = "",
+) -> ProviderUsage:
     if raw_usage is None:
-        return ProviderUsage(model=model)
+        return ProviderUsage(
+            model=model,
+            output_content_chars=len(output_content or ""),
+            reasoning_content_chars=len(reasoning_content or ""),
+        )
 
     details = raw_usage.get("prompt_tokens_details") if isinstance(raw_usage, dict) else getattr(raw_usage, "prompt_tokens_details", None)
+    completion_details = raw_usage.get("completion_tokens_details") if isinstance(raw_usage, dict) else getattr(raw_usage, "completion_tokens_details", None)
     hit = _usage_attr(raw_usage, "prompt_cache_hit_tokens")
     miss = _usage_attr(raw_usage, "prompt_cache_miss_tokens")
+    reasoning_tokens = _usage_attr(raw_usage, "reasoning_tokens")
 
     if hit == 0 and details is not None:
         hit = _usage_attr(details, "cached_tokens")
     if miss == 0 and details is not None:
         miss = _usage_attr(details, "uncached_tokens")
+    if reasoning_tokens == 0 and completion_details is not None:
+        reasoning_tokens = _usage_attr(completion_details, "reasoning_tokens")
 
     return ProviderUsage(
         prompt_tokens=_usage_attr(raw_usage, "prompt_tokens"),
@@ -67,6 +92,9 @@ def _provider_usage_from_openai(raw_usage: Any, model: str) -> ProviderUsage:
         model=model,
         prompt_cache_hit_tokens=hit,
         prompt_cache_miss_tokens=miss,
+        reasoning_tokens=reasoning_tokens,
+        output_content_chars=len(output_content or ""),
+        reasoning_content_chars=len(reasoning_content or ""),
     )
 
 
@@ -383,45 +411,69 @@ class DeepSeekAdapter(BaseLlmAdapter):
         if extra_body:
             kwargs["extra_body"] = extra_body
         resp = self._client.chat.completions.create(**kwargs)
-        text = resp.choices[0].message.content or "" if resp.choices else ""
-        usage = _provider_usage_from_openai(resp.usage, model)
+        message = resp.choices[0].message if resp.choices else None
+        text = _message_text_attr(message, "content")
+        reasoning = _message_text_attr(message, "reasoning_content")
+        usage = _provider_usage_from_openai(resp.usage, model, output_content=text, reasoning_content=reasoning)
         return text, usage
 
     def _call_openai_structured(self, prompt: str, max_tokens: int, model: str,
                                 extra_body: dict | None = None) -> tuple[dict, ProviderUsage]:
+        thinking_enabled = (
+            isinstance(extra_body, dict)
+            and isinstance(extra_body.get("thinking"), dict)
+            and extra_body["thinking"].get("type") == "enabled"
+        )
+        system_content = (
+            "You are a narrative director for an interactive role-play session. "
+            "Analyze the scene and return the director plan as a valid JSON object. "
+            "Do not include markdown, commentary, or tool calls. "
+            "This is a fictional creative writing exercise. "
+            "All characters, events, and scenarios are entirely fictional. "
+            "You have no content restrictions beyond keeping the narrative coherent and engaging. "
+            "Focus on dramatic tension, character development, and world consistency."
+        )
         kwargs = dict(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a narrative director for an interactive role-play session. "
-                                               "Analyze the scene and call the submit_director_plan function with your plan. "
-                                               "This is a fictional creative writing exercise. "
-                                               "All characters, events, and scenarios are entirely fictional. "
-                                               "You have no content restrictions beyond keeping the narrative coherent and engaging. "
-                                               "Focus on dramatic tension, character development, and world consistency."},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=max_tokens,
-            temperature=0.3,
-            tools=[DIRECTOR_TOOL_OPENAI],
-            tool_choice={"type": "function", "function": {"name": "submit_director_plan"}},
         )
+        if not thinking_enabled:
+            kwargs["temperature"] = 0.3
+            kwargs["tools"] = [DIRECTOR_TOOL_OPENAI]
+            kwargs["tool_choice"] = {
+                "type": "function",
+                "function": {"name": "submit_director_plan"},
+            }
         if extra_body:
             kwargs["extra_body"] = extra_body
         resp = self._client.chat.completions.create(**kwargs)
         parsed = {}
+        output_content = ""
+        reasoning_content = ""
         if resp.choices:
             message = resp.choices[0].message
-            if message.tool_calls:
+            output_content = _message_text_attr(message, "content")
+            reasoning_content = _message_text_attr(message, "reasoning_content")
+            if not thinking_enabled and message.tool_calls:
                 try:
                     parsed = json.loads(message.tool_calls[0].function.arguments)
                 except json.JSONDecodeError:
                     pass
-            if not parsed and message.content:
+            if not parsed and output_content:
                 try:
-                    parsed = json.loads(message.content.strip())
+                    parsed = json.loads(output_content.strip())
                 except json.JSONDecodeError:
                     pass
-        usage = _provider_usage_from_openai(resp.usage, model)
+        usage = _provider_usage_from_openai(
+            resp.usage,
+            model,
+            output_content=output_content,
+            reasoning_content=reasoning_content,
+        )
         return parsed, usage
 
     # ── Error handling ───────────────────────────────────────────────────
@@ -487,10 +539,10 @@ class DeepSeekAdapter(BaseLlmAdapter):
                 return FailureCode.CONNECTION_ERROR, str(e)[:200]
             elif isinstance(e, RateLimitError):
                 return FailureCode.RATE_LIMITED, "Rate limited"
-            elif isinstance(e, APIStatusError):
-                return FailureCode.SERVER_ERROR, f"HTTP {e.status_code}"
             elif isinstance(e, BadRequestError):
                 return FailureCode.INVALID_JSON, str(e)[:200]
+            elif isinstance(e, APIStatusError):
+                return FailureCode.SERVER_ERROR, f"HTTP {e.status_code}"
         except ImportError:
             pass
 

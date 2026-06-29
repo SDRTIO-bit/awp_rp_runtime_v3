@@ -71,6 +71,9 @@ class ProviderUsage:
     model: str = ""
     prompt_cache_hit_tokens: int = 0
     prompt_cache_miss_tokens: int = 0
+    reasoning_tokens: int = 0
+    output_content_chars: int = 0
+    reasoning_content_chars: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -82,6 +85,9 @@ class ProviderUsage:
             "model": self.model,
             "prompt_cache_hit_tokens": self.prompt_cache_hit_tokens,
             "prompt_cache_miss_tokens": self.prompt_cache_miss_tokens,
+            "reasoning_tokens": self.reasoning_tokens,
+            "output_content_chars": self.output_content_chars,
+            "reasoning_content_chars": self.reasoning_content_chars,
         }
 
     @classmethod
@@ -93,6 +99,9 @@ class ProviderUsage:
             model=data.get("model", ""),
             prompt_cache_hit_tokens=data.get("prompt_cache_hit_tokens", 0),
             prompt_cache_miss_tokens=data.get("prompt_cache_miss_tokens", 0),
+            reasoning_tokens=data.get("reasoning_tokens", 0),
+            output_content_chars=data.get("output_content_chars", 0),
+            reasoning_content_chars=data.get("reasoning_content_chars", 0),
         )
 
 

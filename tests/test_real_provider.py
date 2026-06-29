@@ -59,6 +59,9 @@ class TestProviderContracts:
             model="deepseek-chat",
             prompt_cache_hit_tokens=80,
             prompt_cache_miss_tokens=20,
+            reasoning_tokens=12,
+            output_content_chars=23,
+            reasoning_content_chars=34,
         )
         d = u.to_dict()
         u2 = ProviderUsage.from_dict(d)
@@ -67,6 +70,9 @@ class TestProviderContracts:
         assert u2.model == "deepseek-chat"
         assert u2.prompt_cache_hit_tokens == 80
         assert u2.prompt_cache_miss_tokens == 20
+        assert u2.reasoning_tokens == 12
+        assert u2.output_content_chars == 23
+        assert u2.reasoning_content_chars == 34
 
     def test_failure_schema_id(self):
         f = ProviderFailure()
@@ -266,6 +272,37 @@ class TestDeepSeekAdapter:
                 "function": {"name": "submit_director_plan"},
             }
 
+    def test_structured_thinking_uses_json_without_tool_choice(self):
+        """Thinking mode is incompatible with DeepSeek tool_choice."""
+        adapter = DeepSeekAdapter(max_retries=1)
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
+            mock_client = MagicMock()
+            mock_message = MagicMock()
+            mock_message.tool_calls = None
+            mock_message.content = '{"turn_goal": "think", "scene_focus": "scene"}'
+            mock_choice = MagicMock()
+            mock_choice.message = mock_message
+            mock_usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+            mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
+            mock_client.chat.completions.create.return_value = mock_resp
+            adapter._client = mock_client
+
+            parsed, receipt = adapter.generate_structured(
+                "test",
+                {"required": ["turn_goal"]},
+                turn_id="t1",
+                attempt_id="a1",
+                extra_body={"thinking": {"type": "enabled"}},
+            )
+
+            assert receipt.success is True
+            assert parsed.get("turn_goal") == "think"
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert "tools" not in call_kwargs
+            assert "tool_choice" not in call_kwargs
+            assert "temperature" not in call_kwargs
+            assert call_kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+
     def test_structured_empty_final_fail(self):
         """Test 7: Empty structured output -> fail closed."""
         adapter = DeepSeekAdapter(max_retries=0)
@@ -314,6 +351,42 @@ class TestDeepSeekAdapter:
             assert receipt.success is True
             assert receipt.usage["prompt_cache_hit_tokens"] == 60
             assert receipt.usage["prompt_cache_miss_tokens"] == 40
+
+    def test_openai_usage_extracts_reasoning_stats_without_text(self):
+        """Thinking output should be observable without storing raw reasoning text."""
+        adapter = DeepSeekAdapter(max_retries=0)
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
+            mock_client = MagicMock()
+            mock_message = MagicMock()
+            mock_message.content = '{"turn_goal": "think", "scene_focus": "scene"}'
+            mock_message.reasoning_content = "hidden chain"
+            mock_message.tool_calls = None
+            mock_choice = MagicMock()
+            mock_choice.message = mock_message
+            mock_completion_details = MagicMock(reasoning_tokens=77)
+            mock_usage = MagicMock(
+                prompt_tokens=100,
+                completion_tokens=90,
+                total_tokens=190,
+                completion_tokens_details=mock_completion_details,
+            )
+            mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
+            mock_client.chat.completions.create.return_value = mock_resp
+            adapter._client = mock_client
+
+            parsed, receipt = adapter.generate_structured(
+                "test",
+                {"required": ["turn_goal"]},
+                turn_id="t1",
+                attempt_id="a1",
+                extra_body={"thinking": {"type": "enabled"}},
+            )
+
+            assert parsed["turn_goal"] == "think"
+            assert receipt.usage["reasoning_tokens"] == 77
+            assert receipt.usage["output_content_chars"] == len(mock_message.content)
+            assert receipt.usage["reasoning_content_chars"] == len(mock_message.reasoning_content)
+            assert "hidden chain" not in json.dumps(receipt.to_dict())
 
 
 # ── Trace & Usage Tests ─────────────────────────────────────────────────────

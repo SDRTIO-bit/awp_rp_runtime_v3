@@ -426,6 +426,38 @@ class TestTurnEvolutionCurator:
         assert prefix1 == prefix2
         assert p1.index("当前输入A") > p1.index("=== TURN PACKET")
 
+    def test_17e_director_prompt_puts_constant_worldbook_in_stable_prefix(self):
+        """Constant worldbook belongs to Director's cacheable prefix."""
+        from ..adapters.llm.real_director_adapter import RealDirectorV2Adapter
+        from ..contracts.card_state import CardState
+
+        adapter = RealDirectorV2Adapter(object(), model="test")
+        snapshot = RoundSnapshot(
+            player_input="当前输入",
+            card_state=CardState(),
+            active_worldbook_entries=[
+                {
+                    "title": "稳定设定",
+                    "content_excerpt": "STABLE_LORE_" + "A" * 1200,
+                    "entry_kind": "constant",
+                    "activation_reason": "constant",
+                },
+                {
+                    "title": "动态设定",
+                    "content_excerpt": "DYNAMIC_LORE_" + "B" * 1200,
+                    "entry_kind": "selective",
+                    "activation_reason": "matched_primary_keywords",
+                },
+            ],
+        )
+
+        prompt = adapter._build_plan_prompt(snapshot)
+        prefix = prompt.split("=== TURN PACKET", 1)[0]
+        volatile = prompt.split("=== TURN PACKET", 1)[1]
+        assert "STABLE_LORE_" in prefix
+        assert "DYNAMIC_LORE_" not in prefix
+        assert "DYNAMIC_LORE_" in volatile
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Full engine integration tests
@@ -652,7 +684,20 @@ class TestP1EngineIntegration:
         delegation_plan, receipt = adapter.generate_delegation_plan(snapshot, plan)
 
         assert delegation_plan is not None
-        assert len(delegation_plan.tasks) <= 2  # Max 2 tasks
+        assert len(delegation_plan.tasks) <= 3  # Max 3 tasks
+
+    def test_22a_delegation_role_ids_normalize_for_runtime(self):
+        """Director role ids should map to production D1-D5 trigger names."""
+        from ..runtime.persistent_turn_engine import _delegation_agent_name
+
+        assert _delegation_agent_name("history_recall") == "d1_history_recall"
+        assert _delegation_agent_name("history-recall") == "d1_history_recall"
+        assert _delegation_agent_name("opportunity") == "d2_opportunity"
+        assert _delegation_agent_name("world_life") == "d3_world_life"
+        assert _delegation_agent_name("world-life") == "d3_world_life"
+        assert _delegation_agent_name("emotion_relationship") == "d4_emotion_rel"
+        assert _delegation_agent_name("emotion-relationship") == "d4_emotion_rel"
+        assert _delegation_agent_name("continuity") == "d5_continuity"
 
     def test_22b_real_director_plan_uses_thinking_mode(self):
         """Director should enable provider thinking mode for its tool call."""
@@ -683,6 +728,7 @@ class TestP1EngineIntegration:
 
         assert plan.turn_goal == "test"
         assert llm.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+        assert llm.kwargs["max_tokens"] == 1200
 
     def test_22c_sub_agent_prompt_uses_stable_prefix_and_tool_results(self):
         """Sub-agent prompt should cache shared contract while using read-only tool results."""
@@ -721,8 +767,8 @@ class TestP1EngineIntegration:
         assert "worldbook_lookup" in turn_packet
         assert "input A" in turn_packet
 
-    def test_22d_sub_agent_llm_enables_thinking_mode(self):
-        """Sub-agent Flash calls should use thinking enabled."""
+    def test_22d_sub_agent_llm_disables_thinking_mode(self):
+        """Sub-agent Flash calls should keep thinking disabled."""
         from types import SimpleNamespace
         from ..runtime.sub_agent_llm_runner import run_sub_agent_llm
 
@@ -748,7 +794,7 @@ class TestP1EngineIntegration:
         text = run_sub_agent_llm("opportunity", snapshot, adapter)
 
         assert text == "Specific analysis."
-        assert adapter.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+        assert adapter.kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
 
     def test_22e_real_director_generates_read_only_tool_plan(self):
         """Director should configure bounded read-only tools for context enrichment."""

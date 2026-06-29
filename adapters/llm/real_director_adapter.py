@@ -59,6 +59,7 @@ class RealDirectorV2Adapter:
 
         parsed, receipt = self._llm.generate_structured(
             prompt, schema,
+            max_tokens=1200,
             provider_role="director",
             workflow_run_id=workflow_run_id,
             trace_id=trace_id,
@@ -162,10 +163,11 @@ class RealDirectorV2Adapter:
         turn_id: str = "",
         attempt_id: str = "",
     ) -> tuple[DelegationPlan, ProviderAttemptReceipt]:
-        """Generate DelegationPlan — P1: Director can request 0-2 sub-agent tasks.
+        """Generate DelegationPlan — Director controls pre-writer sub-agents.
 
-        Uses structured output to decide which sub-agents (D1-D5) to invoke.
-        Default: 0 tasks (no delegation). Max: 2 per turn to control cost.
+        Uses DirectorPlan + snapshot signals to decide which D1-D5 agents to
+        invoke. Max 3 per turn to control cost; the engine executes them
+        concurrently.
         """
         receipt = ProviderAttemptReceipt(
             provider_role="director",
@@ -180,6 +182,15 @@ class RealDirectorV2Adapter:
         tasks: list[DelegationTask] = []
         recent_turn_count = len(snapshot.recent_turn_records)
         active_mem_count = len(snapshot.active_memories)
+        has_worldbook = bool(snapshot.active_worldbook_entries)
+        scene = getattr(snapshot.card_state, "scene_state", None)
+        active_npc_count = len(getattr(scene, "active_npcs", []) or []) if scene else 0
+
+        tool_allowlist = [
+            "accepted_turn_lookup", "active_memory_lookup", "rag_memory_lookup",
+            "worldbook_lookup", "scene_context_lookup", "relationship_context_lookup",
+            "timeline_lookup", "entity_alias_lookup",
+        ]
 
         # D1: History Recall — useful when there are prior turns to check
         if recent_turn_count >= 2:
@@ -191,11 +202,52 @@ class RealDirectorV2Adapter:
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
+                tool_allowlist=tool_allowlist,
+                input_field_allowlist=[
+                    "player_input", "recent_turn_records", "active_memories",
+                    "rag_recall", "active_worldbook_entries", "card_state",
+                ],
                 expected_suggestion_kinds=["identity_clarification", "historical_conflict"],
             ))
 
+        # D2: Opportunity — useful when the Director found possible beats.
+        if plan.narrative_opportunities or plan.unresolved_threads or plan.relationship_tensions:
+            tasks.append(DelegationTask(
+                task_id=f"d2_{uuid.uuid4().hex[:8]}",
+                role="opportunity",
+                priority=0.6,
+                purpose="Find dramatic opportunities grounded in established facts",
+                max_tokens=500,
+                timeout_ms=20000,
+                failure_policy="skip",
+                tool_allowlist=tool_allowlist,
+                input_field_allowlist=[
+                    "player_input", "recent_turn_records", "active_memories",
+                    "rag_recall", "active_worldbook_entries", "card_state",
+                ],
+                expected_suggestion_kinds=["narrative_opportunity"],
+            ))
+
+        # D3: World Life — useful when worldbook or NPC context is active.
+        if has_worldbook or active_npc_count > 0:
+            tasks.append(DelegationTask(
+                task_id=f"d3_{uuid.uuid4().hex[:8]}",
+                role="world_life",
+                priority=0.5,
+                purpose="Add world presence, environment, and NPC-side texture",
+                max_tokens=500,
+                timeout_ms=20000,
+                failure_policy="skip",
+                tool_allowlist=tool_allowlist,
+                input_field_allowlist=[
+                    "player_input", "recent_turn_records", "active_memories",
+                    "rag_recall", "active_worldbook_entries", "card_state",
+                ],
+                expected_suggestion_kinds=["world_detail"],
+            ))
+
         # D4: Emotion/Relationship — useful when relationship context matters
-        if active_mem_count > 0 or recent_turn_count >= 1:
+        if active_mem_count > 0 or recent_turn_count >= 1 or plan.relationship_tensions:
             tasks.append(DelegationTask(
                 task_id=f"d4_{uuid.uuid4().hex[:8]}",
                 role="emotion_relationship",
@@ -204,6 +256,11 @@ class RealDirectorV2Adapter:
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
+                tool_allowlist=tool_allowlist,
+                input_field_allowlist=[
+                    "player_input", "recent_turn_records", "active_memories",
+                    "rag_recall", "active_worldbook_entries", "card_state",
+                ],
                 expected_suggestion_kinds=["relationship_shift"],
             ))
 
@@ -217,13 +274,18 @@ class RealDirectorV2Adapter:
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
+                tool_allowlist=tool_allowlist,
+                input_field_allowlist=[
+                    "player_input", "recent_turn_records", "active_memories",
+                    "rag_recall", "active_worldbook_entries", "card_state",
+                ],
                 expected_suggestion_kinds=["continuity_fact_constraint"],
             ))
 
-        # Cap at 2 tasks per turn to control cost
+        # Cap at 3 tasks per turn to control cost
         # Prioritize by priority score (higher = more important)
         tasks.sort(key=lambda t: -t.priority)
-        tasks = tasks[:2]
+        tasks = tasks[:3]
 
         return DelegationPlan(
             plan_id=f"del_{uuid.uuid4().hex[:12]}",
@@ -233,7 +295,7 @@ class RealDirectorV2Adapter:
             card_id=snapshot.card_id,
             session_id=snapshot.session_id,
             tasks=tasks,
-            max_task_count=2,
+            max_task_count=3,
             total_token_budget=3000,
             total_time_budget_ms=60000,
         ), receipt
@@ -251,15 +313,32 @@ class RealDirectorV2Adapter:
 
         recent_turn_count = len(snapshot.recent_turn_records)
 
-        # ── Worldbook context (top 5, truncated) ────────────────────────
-        wb_lines = []
+        stable_worldbook_lines = []
+        dynamic_worldbook_lines = []
         for entry in (snapshot.active_worldbook_entries or [])[:5]:
             if not isinstance(entry, dict):
                 continue
             title = str(entry.get("title", "") or entry.get("entry_id", "Untitled"))
-            content = str(entry.get("content_excerpt", "") or "")[:120]
-            wb_lines.append(f"- {title}: {content}")
-        wb_block = "\n".join(wb_lines) if wb_lines else "(none)"
+            content = str(entry.get("content_excerpt", "") or "")[:160]
+            activation_reason = str(entry.get("activation_reason", "") or "")
+            matched = entry.get("matched_keywords", [])
+            matched_text = ", ".join(str(item) for item in matched[:5]) if isinstance(matched, list) else ""
+            line = f"- {title}: {content}"
+            if activation_reason:
+                line += f" (reason: {activation_reason})"
+            if matched_text:
+                line += f" (matched: {matched_text})"
+            is_constant = (
+                bool(entry.get("constant", False))
+                or str(entry.get("entry_kind", "") or "") == "constant"
+                or activation_reason == "constant"
+            )
+            if is_constant:
+                stable_worldbook_lines.append(line)
+            else:
+                dynamic_worldbook_lines.append(line[:240])
+        stable_worldbook_block = "\n".join(stable_worldbook_lines) if stable_worldbook_lines else "(none)"
+        dynamic_worldbook_block = "\n".join(dynamic_worldbook_lines) if dynamic_worldbook_lines else "(none)"
 
         # ── Recent turns (last 2-3, truncated) ──────────────────────────
         turn_lines = []
@@ -289,17 +368,20 @@ class RealDirectorV2Adapter:
             f"First identify hard evidence, then risks, then delegation/tool needs, then writer intent.\n"
             f"Respect established facts, character continuity, worldbook constraints, and player agency.\n"
             f"Use tools only through the runtime ToolPlan; do not invent tool results.\n"
+            f"Keep private reasoning concise. Return compact JSON only; keep each list to 5 items or fewer.\n"
             f"Respond with JSON containing: turn_goal, scene_focus, must_preserve_facts, "
             f"must_not_do, narrative_opportunities, writer_constraints, active_character_refs, "
             f"relationship_tensions, unresolved_threads, pacing_guidance, risk_flags.\n\n"
+            f"Stable worldbook context:\n"
+            f"{stable_worldbook_block}\n\n"
             f"=== TURN PACKET (volatile; changes every turn) ===\n"
             f"Current scene: {scene_location}\n"
             f"Player input: {player_input}\n"
             f"Recent turns count: {recent_turn_count}\n"
             f"Active worldbook entries: {len(snapshot.active_worldbook_entries)}\n"
             f"Active memories: {len(snapshot.active_memories)}\n\n"
-            f"=== Active Worldbook Context ===\n"
-            f"{wb_block}\n\n"
+            f"=== Dynamic Worldbook Context ===\n"
+            f"{dynamic_worldbook_block}\n\n"
             f"=== Recent Turns ===\n"
             f"{recent_turns_block}\n\n"
             f"=== Active Memories ===\n"
