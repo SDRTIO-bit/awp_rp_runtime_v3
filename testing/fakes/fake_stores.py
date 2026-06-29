@@ -176,6 +176,16 @@ class FakeTurnRecordStore(TurnRecordStore):
         max_idx = max(self._records[tid].turn_index for tid in turn_ids if tid in self._records)
         return max_idx + 1
 
+    def list_by_session(self, session_id: str) -> list[TurnRecord]:
+        result = []
+        for (card_id, sid), turn_ids in self._by_session.items():
+            if sid == session_id:
+                for tid in turn_ids:
+                    if tid in self._records:
+                        result.append(self._records[tid])
+        result.sort(key=lambda r: r.turn_index)
+        return result
+
 
 class FakeRoundSnapshotStore(RoundSnapshotStore):
 
