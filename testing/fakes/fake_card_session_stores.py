@@ -25,6 +25,13 @@ class FakeCardSessionBindingStore(CardSessionBindingStore):
     def exists(self, session_id: str) -> bool:
         return session_id in self._data
 
+    def list_all(self) -> list[CardSessionBinding]:
+        return sorted(
+            self._data.values(),
+            key=lambda binding: getattr(binding, "created_at", ""),
+            reverse=True,
+        )
+
 
 class FakeOpeningRecordStore(OpeningRecordStore):
     def __init__(self):

@@ -283,6 +283,10 @@ class WorkflowBuilder:
 
     def patch(self, template: dict[str, Any], variables: dict[str, str]) -> dict[str, Any]:
         """Deep-copy template and replace {{var}} placeholders with values."""
+        variables = {
+            "writer_preset_path": "",
+            **variables,
+        }
         raw = json.dumps(template, ensure_ascii=False)
         for key, val in variables.items():
             raw = raw.replace("{{" + key + "}}", str(val))

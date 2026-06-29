@@ -1,0 +1,32 @@
+{
+  "name": "official_memory_runtime_v2",
+  "nodes": [
+    {"id": 1, "type": "AWPV2CardStateInit"},
+    {"id": 2, "type": "AWPV2AcceptedTurnWindow"},
+    {"id": 3, "type": "AWPV2ActiveMemoryRecall"},
+    {"id": 4, "type": "AWPV2RagMemoryRecall"},
+    {"id": 5, "type": "AWPV2MemoryContextAssembler"},
+    {"id": 6, "type": "AWPV2RoundSnapshot"},
+    {"id": 7, "type": "AWPV2QualityGate"},
+    {"id": 8, "type": "AWPV2CardStateCommit"},
+    {"id": 9, "type": "AWPV2TurnRecordCommit"},
+    {"id": 10, "type": "AWPV2MemoryCommitPlan"},
+    {"id": 11, "type": "AWPV2ActiveMemoryCommit"},
+    {"id": 12, "type": "AWPV2RagMemoryCommit"},
+    {"id": 13, "type": "AWPV2MemoryDiagnostics"}
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "JSON"],
+    [2, 2, 0, 3, 0, "JSON"],
+    [3, 3, 0, 4, 0, "JSON"],
+    [4, 4, 0, 5, 0, "JSON"],
+    [5, 5, 0, 6, 0, "JSON"],
+    [6, 6, 0, 7, 0, "JSON"],
+    [7, 7, 0, 8, 0, "JSON"],
+    [8, 8, 0, 9, 0, "JSON"],
+    [9, 9, 0, 10, 0, "JSON"],
+    [10, 10, 0, 11, 0, "JSON"],
+    [11, 10, 0, 12, 0, "JSON"],
+    [12, 12, 0, 13, 0, "JSON"]
+  ]
+}

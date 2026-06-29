@@ -1,4 +1,4 @@
-"""QualityPipelineRuntime — unified quality checking pipeline.
+﻿"""QualityPipelineRuntime — unified quality checking pipeline.
 
 Runs all quality gates and aggregates results.
 Only accepted drafts can proceed to state/memory commits.
@@ -66,7 +66,7 @@ class SceneGate:
                 issue_id=f"qi_{uuid.uuid4().hex[:8]}",
                 gate_name="scene",
                 category=IssueCategory.SCENE,
-                severity=IssueSeverity.WARNING,
+                severity=IssueSeverity.ERROR,
                 description=f"Scene location '{scene_location}' not reflected in draft",
                 fixable=True,
                 fix_guidance=f"Reference the scene location '{scene_location}'",
@@ -88,10 +88,8 @@ class SceneGate:
 class LengthGate:
     """Checks minimum and maximum text length.
 
-    NOTE: This is a DIAGNOSTIC gate — it flags short text as a warning,
-    NOT an error, so it never blocks the turn from completing.
-    The Writer-specific 1000-char check is handled separately
-    in PersistentTurnEngine._quality_check.
+    Short text is a blocking error here. The writer-specific 1000-character
+    policy is handled separately in PersistentTurnEngine._quality_check.
     """
 
     def __init__(self, min_length: int = 250, max_length: int = 10000):
@@ -107,7 +105,7 @@ class LengthGate:
                 issue_id=f"qi_{uuid.uuid4().hex[:8]}",
                 gate_name="length",
                 category=IssueCategory.LENGTH,
-                severity=IssueSeverity.WARNING,
+                severity=IssueSeverity.ERROR,
                 description=f"Text length {length} below minimum {self.min_length}",
                 fixable=True,
                 fix_guidance=f"Expand the text to at least {self.min_length} characters",
@@ -147,7 +145,7 @@ class FormatGate:
         # Check for JSON leaks — look for actual JSON object patterns,
         # not just any brace+colon (which triggers on {{user}}, XML tags, etc.)
         import re as _re
-        _json_like = _re.compile(r'\{\s*"[^"]+"\s*:\s*["\d\[{]')
+        _json_like = _re.compile(r'\{\s*"[^"]+"\s*:\s*(?:"|-?\d|\[|\{|true|false|null)')
         _m = _json_like.search(text)
         if _m:
             issues.append(QualityIssue(

@@ -1,0 +1,18 @@
+{
+  "name": "official_stateful_turn_v2",
+  "nodes": [
+    {"id": 1, "type": "AWPV2CardStateInit"},
+    {"id": 2, "type": "AWPV2RoundSnapshot"},
+    {"id": 3, "type": "AWPV2QualityGate"},
+    {"id": 4, "type": "AWPV2CardStateCommit"},
+    {"id": 5, "type": "AWPV2TurnRecordCommit"},
+    {"id": 6, "type": "AWPV2ExecutionTrace"}
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "JSON"],
+    [2, 2, 0, 3, 0, "JSON"],
+    [3, 3, 0, 4, 0, "JSON"],
+    [4, 4, 0, 5, 0, "JSON"],
+    [5, 5, 0, 6, 0, "JSON"]
+  ]
+}
