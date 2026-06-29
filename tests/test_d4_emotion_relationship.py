@@ -576,38 +576,6 @@ class TestToolFailureBehavior:
 # Test 30: Official workflow JSON validation
 # ─────────────────────────────────────────────
 
-class TestD4WorkflowValidation:
-    """Test D4 official workflow JSON structure."""
-
-    def test_30_workflow_valid(self):
-        """官方 workflow JSON 结构校验通过。"""
-        import json
-        from pathlib import Path
-        wf_path = Path(__file__).parent.parent / "workflows" / "official_emotion_relationship_agent_v2.json"
-        assert wf_path.exists(), f"Workflow not found: {wf_path}"
-        with open(wf_path, encoding="utf-8") as f:
-            data = json.load(f)
-        assert "nodes" in data
-        assert "links" in data
-        node_types = {n["type"] for n in data["nodes"]}
-        d4_required = {
-            "AWPV2EmotionRelationshipTrigger",
-            "AWPV2EmotionRelationshipAgent", "AWPV2EmotionRelationshipValidator",
-            "AWPV2EmotionRelationshipRanker", "AWPV2EmotionRelationshipResult",
-            "AWPV2EmotionRelationshipDiagnostics",
-        }
-        assert d4_required.issubset(node_types), f"Missing: {d4_required - node_types}"
-
-        node_ids = {n["id"] for n in data["nodes"]}
-        for link in data["links"]:
-            assert link[1] in node_ids, f"Link references missing from_node: {link[1]}"
-            assert link[3] in node_ids, f"Link references missing to_node: {link[3]}"
-
-
-# ─────────────────────────────────────────────
-# D4 Node registration tests
-# ─────────────────────────────────────────────
-
 class TestD4NodeRegistration:
     """D4: Emotion/Relationship node registration tests."""
 

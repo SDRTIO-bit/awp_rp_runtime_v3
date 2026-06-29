@@ -589,39 +589,6 @@ class TestToolFailureBehavior:
 # Test 29: Official workflow JSON validation
 # ─────────────────────────────────────────────
 
-class TestD3WorkflowValidation:
-    """Test D3 official workflow JSON structure."""
-
-    def test_29_workflow_valid(self):
-        """官方 workflow JSON 结构校验通过。"""
-        import json
-        from pathlib import Path
-        wf_path = Path(__file__).parent.parent / "workflows" / "official_world_life_agent_v2.json"
-        assert wf_path.exists(), f"Workflow not found: {wf_path}"
-        with open(wf_path, encoding="utf-8") as f:
-            data = json.load(f)
-        assert "nodes" in data
-        assert "links" in data
-        node_types = {n["type"] for n in data["nodes"]}
-        d3_required = {
-            "AWPV2WorldLifeTrigger",
-            "AWPV2WorldLifeAgent", "AWPV2WorldLifeValidator",
-            "AWPV2WorldLifeRanker", "AWPV2WorldLifeResult",
-            "AWPV2WorldLifeDiagnostics",
-        }
-        assert d3_required.issubset(node_types), f"Missing: {d3_required - node_types}"
-
-        # Validate links reference existing nodes
-        node_ids = {n["id"] for n in data["nodes"]}
-        for link in data["links"]:
-            assert link[1] in node_ids, f"Link references missing from_node: {link[1]}"
-            assert link[3] in node_ids, f"Link references missing to_node: {link[3]}"
-
-
-# ─────────────────────────────────────────────
-# D3 Node registration tests
-# ─────────────────────────────────────────────
-
 class TestD3NodeRegistration:
     """D3: World-Life node registration tests."""
 

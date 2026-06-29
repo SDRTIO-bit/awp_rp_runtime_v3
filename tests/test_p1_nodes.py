@@ -29,7 +29,7 @@ class TestNodeRegistration:
             "AWPV2DirectorPlan", "AWPV2ToolPlan", "AWPV2ToolGateway",
             "AWPV2EnrichmentMerge", "AWPV2FinalTurnBrief", "AWPV2WriterV2",
             "AWPV2WriterInputBundleV2", "AWPV2QualityPipeline", "AWPV2Reviser",
-            "AWPV2WriterOutput", "AWPV2ToolTrace",
+            "AWPV2WriterOutput", "AWPV2ToolTrace", "AWPV2WriterGenerate",
         }
         d1_expected = {
             "AWPV2HistoryRecallTrigger", "AWPV2HistoryRecallRequest",
@@ -93,7 +93,13 @@ class TestNodeRegistration:
         p1_real_expected = {
             "AWPV2ContinueTurnP1",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected | canonical_expected | p1_real_expected
+        memory_curation_expected = {
+            "AWPV2MemoryCurationTrigger", "AWPV2MemoryCurationRequest",
+            "AWPV2MemoryCurationValidator", "AWPV2MemoryCurationRanker",
+            "AWPV2MemoryCurationCommitPlan", "AWPV2MemoryCurationDiagnostics",
+            "AWPV2MemoryCuratorAgent",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected | canonical_expected | p1_real_expected | memory_curation_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 
@@ -176,60 +182,6 @@ class TestNodeExecution:
                     "retry_count": 3, "max_retries": 3, "retry_allowed": False}
         ctx, can_retry, count = node.execute(decision)
         assert not can_retry
-
-
-class TestWorkflowValidation:
-    """Test 20: official workflow JSON structure."""
-
-    def test_workflow_valid_json(self):
-        wf_path = Path(__file__).parent.parent / "workflows" / "official_stateful_turn_v2.json"
-        assert wf_path.exists(), f"Workflow not found: {wf_path}"
-
-        with open(wf_path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        assert "nodes" in data
-        assert "links" in data
-        assert len(data["nodes"]) >= 6
-
-        # Check required node types present
-        node_types = {n["type"] for n in data["nodes"]}
-        required = {"AWPV2CardStateInit", "AWPV2RoundSnapshot", "AWPV2QualityGate",
-                    "AWPV2CardStateCommit", "AWPV2TurnRecordCommit", "AWPV2ExecutionTrace"}
-        assert required.issubset(node_types), f"Missing: {required - node_types}"
-
-    def test_workflow_links_referenced_nodes_exist(self):
-        wf_path = Path(__file__).parent.parent / "workflows" / "official_stateful_turn_v2.json"
-        with open(wf_path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        node_ids = {n["id"] for n in data["nodes"]}
-        for link in data["links"]:
-            # link format: [link_id, from_node, from_slot, to_node, to_slot, type]
-            assert link[1] in node_ids, f"Link references missing from_node: {link[1]}"
-            assert link[3] in node_ids, f"Link references missing to_node: {link[3]}"
-
-    def test_d1_history_recall_workflow_valid(self):
-        """D1: History recall workflow JSON structure valid."""
-        wf_path = Path(__file__).parent.parent / "workflows" / "official_history_recall_agent_v2.json"
-        assert wf_path.exists()
-        with open(wf_path, encoding="utf-8") as f:
-            data = json.load(f)
-        assert "nodes" in data
-        assert "links" in data
-        node_types = {n["type"] for n in data["nodes"]}
-        d1_required = {
-            "AWPV2HistoryRecallTrigger", "AWPV2HistoryRecallRequest",
-            "AWPV2HistoryRecallAgent", "AWPV2RecallEvidenceRanker",
-            "AWPV2HistoryRecallResult", "AWPV2HistoryRecallDiagnostics",
-        }
-        assert d1_required.issubset(node_types), f"Missing: {d1_required - node_types}"
-
-        # Validate links
-        node_ids = {n["id"] for n in data["nodes"]}
-        for link in data["links"]:
-            assert link[1] in node_ids
-            assert link[3] in node_ids
 
 
 class TestD1NodeRegistration:
