@@ -13,6 +13,7 @@ from ..storage.sqlite.round_snapshot_store import SqliteRoundSnapshotStore
 from ..storage.sqlite.active_memory_store import SqliteActiveMemoryStore
 from ..storage.sqlite.rag_memory_store import SqliteRagMemoryStore
 from ..storage.sqlite.trace_store import SqliteTraceStore
+from ..storage.sqlite.card_definition_store import SqliteCardDefinitionStore
 from ..storage.sqlite.session_stores import (
     SqliteCardSessionBindingStore,
     SqliteOpeningRecordStore,
@@ -44,6 +45,8 @@ class SessionRuntimeStoreRegistry:
         # L2+L3: memory stores
         self.active_memory_store = SqliteActiveMemoryStore(db)
         self.rag_memory_store = SqliteRagMemoryStore(db)
+        # Card catalog
+        self.card_definition_store = SqliteCardDefinitionStore(db)
 
     @property
     def db(self) -> Database:
