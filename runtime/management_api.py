@@ -397,6 +397,44 @@ try:
         except Exception as e:
             return _json({"error": str(e)[:200]}, 500)
 
+    @server.PromptServer.instance.routes.get("/awp/api/v1/workflows")
+    async def list_workflows(request):
+        from testing.api_workflow_loader import APIWorkflowLoader
+
+        loader = APIWorkflowLoader()
+        result = []
+        for name in loader.list_workflows():
+            workflow = loader.load(name)
+            class_types = sorted({
+                node_def.get("class_type", "")
+                for node_def in workflow.values()
+                if isinstance(node_def, dict)
+            })
+            result.append({
+                "name": name,
+                "node_count": len(workflow),
+                "class_types": class_types,
+            })
+        return _json(result)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/presets/writer")
+    async def list_writer_presets(request):
+        from ..presets.writer_preset_loader import WriterPresetLoader
+
+        return _json(WriterPresetLoader().list_presets())
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/presets/writer/{name}")
+    async def get_writer_preset(request):
+        from ..presets.writer_preset_loader import WriterPresetLoader
+
+        name = request.match_info["name"]
+        loader = WriterPresetLoader()
+        content = loader.load(name)
+        path = loader.get_preset_path(name)
+        if not content and not path:
+            return _json({"error": "Preset not found"}, 404)
+        return _json({"name": name, "content": content, "path": path})
+
     @server.PromptServer.instance.routes.get("/awp")
     async def serve_spa_index(request):
         """Serve the SPA index.html."""
