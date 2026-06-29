@@ -69,6 +69,8 @@ class ProviderUsage:
     completion_tokens: int = 0
     total_tokens: int = 0
     model: str = ""
+    prompt_cache_hit_tokens: int = 0
+    prompt_cache_miss_tokens: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -78,6 +80,8 @@ class ProviderUsage:
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "model": self.model,
+            "prompt_cache_hit_tokens": self.prompt_cache_hit_tokens,
+            "prompt_cache_miss_tokens": self.prompt_cache_miss_tokens,
         }
 
     @classmethod
@@ -87,6 +91,8 @@ class ProviderUsage:
             completion_tokens=data.get("completion_tokens", 0),
             total_tokens=data.get("total_tokens", 0),
             model=data.get("model", ""),
+            prompt_cache_hit_tokens=data.get("prompt_cache_hit_tokens", 0),
+            prompt_cache_miss_tokens=data.get("prompt_cache_miss_tokens", 0),
         )
 
 

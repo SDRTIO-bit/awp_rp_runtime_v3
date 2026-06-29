@@ -7,6 +7,7 @@ values. The evaluator only supports safe comparison operators — no eval/exec.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -19,6 +20,17 @@ from .condition_evaluator import ConditionEvaluator, ConditionEvaluationError
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "")
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 @dataclass(frozen=True)
@@ -43,7 +55,13 @@ class VersionLockedWorldbookResolver:
         budget: ResolverBudget | None = None,
     ):
         self._defs = definition_store
-        self._budget = budget or ResolverBudget()
+        if budget is None:
+            default_budget = ResolverBudget()
+            budget = ResolverBudget(
+                max_entry_chars=_env_int("AWP_WORLDBOOK_MAX_ENTRY_CHARS", default_budget.max_entry_chars),
+                max_total_chars=_env_int("AWP_WORLDBOOK_MAX_TOTAL_CHARS", default_budget.max_total_chars),
+            )
+        self._budget = budget
 
     def resolve(
         self,

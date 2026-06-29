@@ -219,7 +219,9 @@ class TurnEvolutionCurator:
             "- path 格式: variables.KEY, event_flags.KEY, scene_state.FIELD\n"
             "  例如: {\"op\": \"increment\", \"path\": \"variables.trust\", \"value\": 1}\n"
             "- memory_candidates 中 content 必须 30-80 字。\n"
-            "- 只保存真正重要的承诺、冲突、秘密、关系变化、目标。\n\n"
+            "- 只保存真正重要的承诺、冲突、秘密、关系变化、目标。\n"
+            "- 必须返回 memory_candidates_active 和 memory_candidates_rag；即使没有候选也必须返回空数组。\n"
+            "- active 记忆用于未来几轮立即影响角色反应；rag 记忆用于长期检索。\n\n"
             "=== 当前状态 ===\n"
             f"revision: {current_revision}\n"
             f"variables: {json.dumps(variables, ensure_ascii=False)[:500]}\n"
@@ -241,7 +243,19 @@ class TurnEvolutionCurator:
             + ("\n".join(sug_lines) if sug_lines else "(无)") + "\n\n"
             "用 JSON 回答。如果不需要状态变化，设 is_no_state_change=true。\n"
             "如果需要变化，在 state_update_proposal.operations 中列出。\n"
-            "每项 operation 格式: {\"op\": \"...\", \"path\": \"...\", \"value\": ..., \"reason\": \"...\"}"
+            "每项 operation 格式: {\"op\": \"...\", \"path\": \"...\", \"value\": ..., \"reason\": \"...\"}\n"
+            "必须使用这个顶层结构：\n"
+            "{\n"
+            "  \"is_no_state_change\": false,\n"
+            "  \"state_update_proposal\": {\"operations\": [], \"reasoning_summary\": \"...\"},\n"
+            "  \"memory_candidates_active\": [\n"
+            "    {\"kind\": \"promise|conflict|secret|relationship|goal\", \"content\": \"30-80字重要记忆\", \"importance\": 0.7, \"entity_refs\": [\"角色名\"], \"tags\": [\"tag\"], \"reason\": \"保存原因\"}\n"
+            "  ],\n"
+            "  \"memory_candidates_rag\": [\n"
+            "    {\"content\": \"适合长期检索的本回合事实摘要\", \"importance\": 0.5, \"tags\": [\"turn\"], \"reason\": \"保存原因\"}\n"
+            "  ]\n"
+            "}\n"
+            "没有对应记忆时，memory_candidates_active 和 memory_candidates_rag 必须是 []。"
         )
 
         return prompt
@@ -365,7 +379,7 @@ class TurnEvolutionCurator:
         is_no_change = parsed.get("is_no_state_change", False)
 
         # Parse state proposal
-        raw_proposal = parsed.get("state_update_proposal", {})
+        raw_proposal = parsed.get("state_update_proposal", {}) or {}
         operations = []
         for op in raw_proposal.get("operations", []):
             # Normalize field names: LLM may return type/key instead of op/path
@@ -406,7 +420,7 @@ class TurnEvolutionCurator:
 
         # Parse active memory candidates
         active_candidates = []
-        for mc in parsed.get("memory_candidates_active", []):
+        for mc in (parsed.get("memory_candidates_active", []) or []):
             content = str(mc.get("content", ""))[:80]
             if not content:
                 continue
@@ -423,7 +437,7 @@ class TurnEvolutionCurator:
 
         # Parse RAG candidates
         rag_candidates = []
-        for rc in parsed.get("memory_candidates_rag", []):
+        for rc in (parsed.get("memory_candidates_rag", []) or []):
             content = str(rc.get("content", ""))[:200]
             if not content:
                 continue

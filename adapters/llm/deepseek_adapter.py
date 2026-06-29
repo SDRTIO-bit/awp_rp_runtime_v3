@@ -34,6 +34,42 @@ def _id(prefix: str, seed: str) -> str:
     return f"{prefix}_{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
 
+def _usage_attr(obj: Any, name: str, default: int = 0) -> int:
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        value = obj.get(name, default)
+    else:
+        value = getattr(obj, name, default)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
+def _provider_usage_from_openai(raw_usage: Any, model: str) -> ProviderUsage:
+    if raw_usage is None:
+        return ProviderUsage(model=model)
+
+    details = raw_usage.get("prompt_tokens_details") if isinstance(raw_usage, dict) else getattr(raw_usage, "prompt_tokens_details", None)
+    hit = _usage_attr(raw_usage, "prompt_cache_hit_tokens")
+    miss = _usage_attr(raw_usage, "prompt_cache_miss_tokens")
+
+    if hit == 0 and details is not None:
+        hit = _usage_attr(details, "cached_tokens")
+    if miss == 0 and details is not None:
+        miss = _usage_attr(details, "uncached_tokens")
+
+    return ProviderUsage(
+        prompt_tokens=_usage_attr(raw_usage, "prompt_tokens"),
+        completion_tokens=_usage_attr(raw_usage, "completion_tokens"),
+        total_tokens=_usage_attr(raw_usage, "total_tokens"),
+        model=model,
+        prompt_cache_hit_tokens=hit,
+        prompt_cache_miss_tokens=miss,
+    )
+
+
 # OpenAI function calling tool schema
 DIRECTOR_TOOL_OPENAI = {
     "type": "function",
@@ -348,12 +384,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
             kwargs["extra_body"] = extra_body
         resp = self._client.chat.completions.create(**kwargs)
         text = resp.choices[0].message.content or "" if resp.choices else ""
-        usage = ProviderUsage(
-            prompt_tokens=resp.usage.prompt_tokens if resp.usage else 0,
-            completion_tokens=resp.usage.completion_tokens if resp.usage else 0,
-            total_tokens=resp.usage.total_tokens if resp.usage else 0,
-            model=model,
-        )
+        usage = _provider_usage_from_openai(resp.usage, model)
         return text, usage
 
     def _call_openai_structured(self, prompt: str, max_tokens: int, model: str,
@@ -372,6 +403,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
             max_tokens=max_tokens,
             temperature=0.3,
             tools=[DIRECTOR_TOOL_OPENAI],
+            tool_choice={"type": "function", "function": {"name": "submit_director_plan"}},
         )
         if extra_body:
             kwargs["extra_body"] = extra_body
@@ -389,12 +421,7 @@ class DeepSeekAdapter(BaseLlmAdapter):
                     parsed = json.loads(message.content.strip())
                 except json.JSONDecodeError:
                     pass
-        usage = ProviderUsage(
-            prompt_tokens=resp.usage.prompt_tokens if resp.usage else 0,
-            completion_tokens=resp.usage.completion_tokens if resp.usage else 0,
-            total_tokens=resp.usage.total_tokens if resp.usage else 0,
-            model=model,
-        )
+        usage = _provider_usage_from_openai(resp.usage, model)
         return parsed, usage
 
     # ── Error handling ───────────────────────────────────────────────────

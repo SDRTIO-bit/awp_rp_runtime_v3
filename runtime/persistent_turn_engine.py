@@ -120,22 +120,29 @@ class PersistentTurnEngine:
         binding: Any,
         turn_id: str,
         trace_id: str,
-    ) -> tuple[list, list[str]]:
+    ) -> tuple[list, list[str], list[dict[str, Any]]]:
         """Evaluate D1-D5 trigger policies and collect suggestions.
 
         Runs deterministic trigger rules (no LLM calls). Returns
-        (agent_suggestions, triggered_agent_names).
+        (agent_suggestions, triggered_agent_names, trigger_diagnostics).
         """
         import uuid as _uuid
         from ..contracts.agent_suggestion import AgentSuggestion, SuggestionKind
 
         suggestions: list = []
         triggered: list[str] = []
+        trigger_diagnostics: list[dict[str, Any]] = []
 
         # ── D1: History Recall ─────────────────────────────────────────
         try:
             from ..runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy
             hr_trigger = HistoryRecallTriggerPolicy().evaluate(snapshot, director_plan)
+            trigger_diagnostics.append({
+                "agent": "d1_history_recall",
+                "should_trigger": bool(hr_trigger.should_trigger),
+                "reasons": list(getattr(hr_trigger, "trigger_reasons", []) or []),
+                "error": "",
+            })
             if hr_trigger.should_trigger:
                 triggered.append("d1_history_recall")
                 s = AgentSuggestion(
@@ -151,13 +158,24 @@ class PersistentTurnEngine:
                     risk_flags=[hr_trigger.risk_level.value],
                 )
                 suggestions.append(s)
-        except ImportError:
-            pass
+        except Exception as e:
+            trigger_diagnostics.append({
+                "agent": "d1_history_recall",
+                "should_trigger": False,
+                "reasons": [],
+                "error": str(e)[:200],
+            })
 
         # ── D2: Opportunity ───────────────────────────────────────────
         try:
             from ..runtime.opportunity_trigger_policy import OpportunityTriggerPolicy
             op_trigger = OpportunityTriggerPolicy().evaluate(snapshot, director_plan)
+            trigger_diagnostics.append({
+                "agent": "d2_opportunity",
+                "should_trigger": bool(op_trigger.should_trigger),
+                "reasons": list(getattr(op_trigger, "trigger_reasons", []) or []),
+                "error": "",
+            })
             if op_trigger.should_trigger:
                 triggered.append("d2_opportunity")
                 s = AgentSuggestion(
@@ -171,13 +189,24 @@ class PersistentTurnEngine:
                     summary=f"[D2-Opportunity] {', '.join(op_trigger.trigger_reasons[:3])}",
                 )
                 suggestions.append(s)
-        except ImportError:
-            pass
+        except Exception as e:
+            trigger_diagnostics.append({
+                "agent": "d2_opportunity",
+                "should_trigger": False,
+                "reasons": [],
+                "error": str(e)[:200],
+            })
 
         # ── D3: World Life ────────────────────────────────────────────
         try:
             from ..runtime.world_life_trigger_policy import WorldLifeTriggerPolicy
             wl_trigger = WorldLifeTriggerPolicy().evaluate(snapshot, director_plan)
+            trigger_diagnostics.append({
+                "agent": "d3_world_life",
+                "should_trigger": bool(wl_trigger.should_trigger),
+                "reasons": list(getattr(wl_trigger, "trigger_reasons", []) or []),
+                "error": "",
+            })
             if wl_trigger.should_trigger:
                 triggered.append("d3_world_life")
                 s = AgentSuggestion(
@@ -191,13 +220,24 @@ class PersistentTurnEngine:
                     summary=f"[D3-WorldLife] {', '.join(wl_trigger.trigger_reasons[:3])}",
                 )
                 suggestions.append(s)
-        except ImportError:
-            pass
+        except Exception as e:
+            trigger_diagnostics.append({
+                "agent": "d3_world_life",
+                "should_trigger": False,
+                "reasons": [],
+                "error": str(e)[:200],
+            })
 
         # ── D4: Emotion Relationship ──────────────────────────────────
         try:
             from ..runtime.emotion_relationship_trigger_policy import EmotionRelationshipTriggerPolicy
             er_trigger = EmotionRelationshipTriggerPolicy().evaluate(snapshot, director_plan)
+            trigger_diagnostics.append({
+                "agent": "d4_emotion_rel",
+                "should_trigger": bool(er_trigger.should_trigger),
+                "reasons": list(getattr(er_trigger, "trigger_reasons", []) or []),
+                "error": "",
+            })
             if er_trigger.should_trigger:
                 triggered.append("d4_emotion_rel")
                 s = AgentSuggestion(
@@ -211,13 +251,24 @@ class PersistentTurnEngine:
                     summary=f"[D4-Emotion] {', '.join(er_trigger.trigger_reasons[:3])}",
                 )
                 suggestions.append(s)
-        except ImportError:
-            pass
+        except Exception as e:
+            trigger_diagnostics.append({
+                "agent": "d4_emotion_rel",
+                "should_trigger": False,
+                "reasons": [],
+                "error": str(e)[:200],
+            })
 
         # ── D5: Continuity ────────────────────────────────────────────
         try:
             from ..runtime.continuity_trigger_policy import ContinuityTriggerPolicy
             ct_trigger = ContinuityTriggerPolicy().evaluate(snapshot, director_plan)
+            trigger_diagnostics.append({
+                "agent": "d5_continuity",
+                "should_trigger": bool(ct_trigger.should_trigger),
+                "reasons": list(getattr(ct_trigger, "trigger_reasons", []) or []),
+                "error": "",
+            })
             if ct_trigger.should_trigger:
                 triggered.append("d5_continuity")
                 s = AgentSuggestion(
@@ -231,10 +282,15 @@ class PersistentTurnEngine:
                     summary=f"[D5-Continuity] {', '.join(ct_trigger.trigger_reasons[:3])}",
                 )
                 suggestions.append(s)
-        except ImportError:
-            pass
+        except Exception as e:
+            trigger_diagnostics.append({
+                "agent": "d5_continuity",
+                "should_trigger": False,
+                "reasons": [],
+                "error": str(e)[:200],
+            })
 
-        return suggestions, triggered
+        return suggestions, triggered, trigger_diagnostics
 
     def execute(
         self,
@@ -289,6 +345,7 @@ class PersistentTurnEngine:
             "delegation": {
                 "requested": [],
                 "executed": [],
+                "trigger_diagnostics": [],
             },
         }
 
@@ -360,6 +417,13 @@ class PersistentTurnEngine:
             self._persist_trace(trace, diag)
             return self._failure_return(diag, trace, card_state, snapshot, effects)
 
+        director_plan.plan_id = getattr(director_plan, "plan_id", "") or _id("dp", turn_id)
+        director_plan.trace_id = trace_id
+        director_plan.snapshot_id = snapshot.snapshot_id
+        director_plan.card_id = binding.logical_card_id
+        director_plan.session_id = session_id
+        director_plan.base_card_state_revision = snapshot.base_card_state_revision
+
         diag.director_call_success = True
         diag.director_plan_ref = getattr(director_plan, "plan_id", "") or _plan_hash(director_plan)
         brief = FinalTurnBrief(
@@ -375,6 +439,60 @@ class PersistentTurnEngine:
             active_character_refs=director_plan.active_character_refs,
             narrative_opportunities=director_plan.narrative_opportunities,
         )
+
+        # Director read-only tools: bounded ToolPlan -> ToolGateway -> FinalTurnBrief.
+        # This keeps tool execution deterministic and auditable while giving the
+        # first planning agent real context enrichment before Writer runs.
+        try:
+            try:
+                raw_tool_plan = dir_adapter.generate_tool_plan(
+                    snapshot, director_plan,
+                    workflow_run_id=workflow_run_id,
+                    trace_id=trace_id,
+                    turn_id=turn_id,
+                    attempt_id=attempt_id,
+                )
+            except TypeError:
+                raw_tool_plan = dir_adapter.generate_tool_plan(snapshot, director_plan)
+
+            tool_plan = raw_tool_plan[0] if isinstance(raw_tool_plan, tuple) else raw_tool_plan
+            if tool_plan and getattr(tool_plan, "requests", None):
+                from .tool_registry import ToolRegistry
+                from .tool_permission_policy import ToolPermissionPolicy
+                from .tool_budget_runtime import ToolBudgetRuntime
+                from .tool_gateway import ToolGateway
+                from .snapshot_tool_runner import SnapshotToolRunner
+                from .enrichment_merger import EnrichmentMerger
+                from .final_turn_brief_runtime import FinalTurnBriefRuntime
+
+                tool_plan.tool_plan_id = tool_plan.tool_plan_id or _id("tp", turn_id)
+                tool_plan.trace_id = trace_id
+                tool_plan.snapshot_id = snapshot.snapshot_id
+                tool_plan.director_plan_id = director_plan.plan_id
+                tool_plan.card_id = binding.logical_card_id
+                tool_plan.session_id = session_id
+                director_plan.tool_plan_ref = tool_plan.tool_plan_id
+
+                registry = ToolRegistry()
+                gateway = ToolGateway(
+                    registry,
+                    ToolPermissionPolicy(registry),
+                    ToolBudgetRuntime(),
+                    SnapshotToolRunner(),
+                )
+                tool_bundle = gateway.execute(tool_plan, snapshot, trace)
+                enrichment = EnrichmentMerger().merge(tool_bundle)
+                brief = FinalTurnBriefRuntime().produce(director_plan, enrichment, snapshot)
+                diag.steps_completed.append("director_tools")
+                effects["delegation"]["director_tools"] = {
+                    "requested": [req.tool_id for req in tool_plan.requests],
+                    "successful": list(tool_bundle.successful_request_ids),
+                    "degraded": list(tool_bundle.degraded_request_ids),
+                    "failed": list(tool_bundle.failed_request_ids),
+                }
+        except Exception as e:
+            _add_trace_event(trace, "director_tools", "tool_gateway",
+                             success=False, error=str(e)[:200])
         _add_trace_event(trace, "director", "director", success=True,
                          duration_ms=_ms_since(step_start),
                          details={"plan_ref": diag.director_plan_ref,
@@ -385,16 +503,23 @@ class PersistentTurnEngine:
         # ── Sub-Agent rule triggers (D1-D5, deterministic) ───────────────
         agent_suggestions: list = []
         agent_triggers: list[str] = []
+        agent_trigger_diagnostics: list[dict[str, Any]] = []
 
         # Evaluate D1-D5 trigger policies — these are pure rules, no LLM calls.
         # Produced AgentSuggestion.summary is merged into Writer guidance below.
         try:
-            agent_suggestions, agent_triggers = self._run_sub_agent_triggers(
+            agent_suggestions, agent_triggers, agent_trigger_diagnostics = self._run_sub_agent_triggers(
                 snapshot, director_plan, binding, turn_id, trace_id
             )
         except Exception as e:
             _add_trace_event(trace, "sub_agents", "trigger_policies",
                              success=False, error=str(e)[:200])
+            agent_trigger_diagnostics.append({
+                "agent": "trigger_policies",
+                "should_trigger": False,
+                "reasons": [],
+                "error": str(e)[:200],
+            })
 
         # ── Deepen triggered sub-agent summaries with cheap LLM calls ─────
         # Each triggered agent gets one DeepSeek Flash call (thinking disabled)
@@ -437,11 +562,14 @@ class PersistentTurnEngine:
         if agent_suggestions:
             effects["delegation"]["executed"] = agent_triggers
             effects["delegation"]["requested"] = agent_triggers
+            effects["delegation"]["trigger_diagnostics"] = agent_trigger_diagnostics
             diag.steps_completed.append(f"agents:{','.join(agent_triggers)}")
             _add_trace_event(trace, "sub_agents", "trigger_policies",
                              success=True,
                              details={"triggered": agent_triggers,
-                                      "suggestions": len(agent_suggestions)})
+                                       "suggestions": len(agent_suggestions)})
+        else:
+            effects["delegation"]["trigger_diagnostics"] = agent_trigger_diagnostics
 
         # Build merge result from agent suggestions
         merge_result = None

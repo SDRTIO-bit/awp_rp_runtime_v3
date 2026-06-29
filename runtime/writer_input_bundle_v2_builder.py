@@ -39,6 +39,7 @@ class WriterInputBundleV2Builder:
                 if item.suggestion and item.suggestion.summary:
                     accepted_guidance.append(item.suggestion.summary)
             accepted_guidance.extend(merge_result.writer_guidance)
+        accepted_guidance.extend(final_brief.accepted_tool_findings[:8])
 
         # Build writer constraints from FinalTurnBrief
         writer_constraints = list(final_brief.writer_constraints)

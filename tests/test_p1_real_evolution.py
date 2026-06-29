@@ -252,6 +252,180 @@ class TestTurnEvolutionCurator:
         validated = curator._validate_proposal(proposal, request.pre_turn_card_state)
         assert validated.is_no_state_change is True
 
+    def test_17b_curator_prompt_requires_memory_candidate_arrays(self):
+        """LLM curator prompt should explicitly require both memory candidate arrays."""
+        curator = TurnEvolutionCurator(llm_adapter=object())
+        request = CuratorRequest(
+            request_id="r7", turn_id="t7", session_id="s1",
+            player_input="她答应以后会等我回来。",
+            accepted_writer_output="她低声答应会等你回来，这个承诺改变了两人的关系。",
+            pre_turn_card_state={"variables": {}, "event_flags": {}, "scene_state": {}, "revision": 0},
+            base_card_state_revision=0,
+        )
+
+        prompt = curator._build_curator_prompt(request)
+
+        assert "memory_candidates_active" in prompt
+        assert "memory_candidates_rag" in prompt
+        assert "即使没有候选也必须返回空数组" in prompt
+
+    def test_17c_writer_prompt_keeps_player_input_after_stable_prefix(self):
+        """Writer prompt should keep volatile turn data behind a stable prefix."""
+        from ..adapters.llm.real_writer_adapter import RealWriterV2Adapter
+        from ..contracts.writer_input_bundle import WriterInputBundle
+
+        adapter = RealWriterV2Adapter(object(), preset_text="FIXED STYLE PRESET")
+        base = dict(
+            final_turn_brief={
+                "turn_goal": "推进当前场景",
+                "scene_focus": "院子",
+                "must_preserve_facts": ["周语晴在院中"],
+            },
+            opening_context={"safe_display_content": "开场背景"},
+            recent_turns_context=[{"turn_index": 1, "player_input": "旧输入", "writer_output": "旧输出"}],
+            worldbook_context=[{"title": "桃花村", "content_excerpt": "固定村庄设定"}],
+            card_state_context={"scene_state": {"location": "院子"}},
+        )
+        p1 = adapter._build_writer_prompt(WriterInputBundle(player_input="当前输入A", **base))
+        p2 = adapter._build_writer_prompt(WriterInputBundle(player_input="当前输入B", **base))
+
+        prefix1 = p1.split("=== TURN PACKET", 1)[0]
+        prefix2 = p2.split("=== TURN PACKET", 1)[0]
+        assert prefix1 == prefix2
+        assert p1.index("FIXED STYLE PRESET") < p1.index("=== TURN PACKET")
+        assert p1.index("当前输入A") > p1.index("=== TURN PACKET")
+
+    def test_17c1_writer_prompt_keeps_director_plan_after_stable_prefix(self):
+        """DirectorPlan fields change every turn and must not precede stable lore."""
+        from ..adapters.llm.real_writer_adapter import RealWriterV2Adapter
+        from ..contracts.writer_input_bundle import WriterInputBundle
+
+        adapter = RealWriterV2Adapter(object(), preset_text="FIXED STYLE PRESET")
+        base = dict(
+            player_input="当前输入",
+            opening_context={"safe_display_content": "开场背景"},
+            worldbook_context=[{
+                "title": "常开设定",
+                "content_excerpt": "STABLE_LORE_" + "A" * 1200,
+                "entry_kind": "constant",
+                "activation_reason": "constant",
+            }],
+            card_state_context={"scene_state": {"location": "院子"}},
+        )
+        p1 = adapter._build_writer_prompt(WriterInputBundle(
+            final_turn_brief={
+                "turn_goal": "目标A",
+                "scene_focus": "焦点A",
+                "must_preserve_facts": ["事实A"],
+                "writer_constraints": ["约束A"],
+                "narrative_opportunities": ["机会A"],
+            },
+            **base,
+        ))
+        p2 = adapter._build_writer_prompt(WriterInputBundle(
+            final_turn_brief={
+                "turn_goal": "目标B",
+                "scene_focus": "焦点B",
+                "must_preserve_facts": ["事实B"],
+                "writer_constraints": ["约束B"],
+                "narrative_opportunities": ["机会B"],
+            },
+            **base,
+        ))
+
+        prefix1 = p1.split("=== TURN PACKET", 1)[0]
+        prefix2 = p2.split("=== TURN PACKET", 1)[0]
+        turn_packet = p1.split("=== TURN PACKET", 1)[1]
+        assert prefix1 == prefix2
+        assert "STABLE_LORE_" in prefix1
+        assert "目标A" in turn_packet
+        assert "事实A" in turn_packet
+        assert "约束A" in turn_packet
+        assert "机会A" in turn_packet
+
+    def test_17c2_writer_prompt_puts_constant_worldbook_in_stable_prefix(self):
+        """Constant worldbook belongs to the cacheable prefix, dynamic lore does not."""
+        from ..adapters.llm.real_writer_adapter import RealWriterV2Adapter
+        from ..contracts.writer_input_bundle import WriterInputBundle
+
+        adapter = RealWriterV2Adapter(object(), preset_text="FIXED STYLE PRESET")
+        prompt = adapter._build_writer_prompt(WriterInputBundle(
+            player_input="当前输入",
+            final_turn_brief={"turn_goal": "推进", "scene_focus": "院子"},
+            worldbook_context=[
+                {
+                    "title": "常开设定",
+                    "content_excerpt": "STABLE_LORE_" + "A" * 1200,
+                    "entry_kind": "constant",
+                    "activation_reason": "constant",
+                },
+                {
+                    "title": "动态设定",
+                    "content_excerpt": "DYNAMIC_LORE_" + "B" * 1200,
+                    "entry_kind": "selective",
+                    "activation_reason": "matched_primary_keywords",
+                },
+            ],
+            card_state_context={"scene_state": {"location": "院子"}},
+        ))
+
+        stable_prefix = prompt.split("=== TURN PACKET", 1)[0]
+        turn_packet = prompt.split("=== TURN PACKET", 1)[1]
+        assert "STABLE_LORE_" in stable_prefix
+        assert "DYNAMIC_LORE_" not in stable_prefix
+        assert "DYNAMIC_LORE_" in turn_packet
+
+    def test_17c3_writer_revise_prompt_preserves_original_prompt_prefix(self):
+        """Revision calls must not put volatile text before the cacheable writer prefix."""
+        from ..adapters.llm.real_writer_adapter import RealWriterV2Adapter
+
+        adapter = RealWriterV2Adapter(object(), preset_text="FIXED STYLE PRESET")
+        original_prompt = (
+            "=== WRITER STYLE & CONSTRAINT PRESET (highest priority) ===\n"
+            "FIXED STYLE PRESET\n"
+            "=== END PRESET ===\n\n"
+            "=== STABLE WRITER CONTRACT ===\n"
+            "Stable worldbook context:\n"
+            "STABLE_LORE_" + "A" * 1200 + "\n"
+            "=== TURN PACKET (volatile; changes every turn) ===\n"
+            "Player said: 当前输入"
+        )
+
+        revise_prompt = adapter._build_revise_prompt(
+            original_prompt=original_prompt,
+            current_text="短输出",
+            issues=["WORD_COUNT_LOW"],
+            attempt=1,
+        )
+
+        assert revise_prompt.startswith(original_prompt)
+        assert revise_prompt.index("STABLE_LORE_") < revise_prompt.index("=== TURN PACKET")
+        assert revise_prompt.index("=== REVISION REQUEST") > revise_prompt.index("Player said: 当前输入")
+
+    def test_17d_director_prompt_keeps_player_input_after_stable_prefix(self):
+        """Director prompt should put volatile turn data after the stable instruction block."""
+        from ..adapters.llm.real_director_adapter import RealDirectorV2Adapter
+        from ..contracts.card_state import CardState
+
+        adapter = RealDirectorV2Adapter(object(), model="test")
+        s1 = RoundSnapshot(
+            player_input="当前输入A",
+            card_state=CardState(),
+            active_worldbook_entries=[{"title": "桃花村", "content_excerpt": "固定设定"}],
+        )
+        s2 = RoundSnapshot(
+            player_input="当前输入B",
+            card_state=CardState(),
+            active_worldbook_entries=[{"title": "桃花村", "content_excerpt": "固定设定"}],
+        )
+        p1 = adapter._build_plan_prompt(s1)
+        p2 = adapter._build_plan_prompt(s2)
+
+        prefix1 = p1.split("=== TURN PACKET", 1)[0]
+        prefix2 = p2.split("=== TURN PACKET", 1)[0]
+        assert prefix1 == prefix2
+        assert p1.index("当前输入A") > p1.index("=== TURN PACKET")
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Full engine integration tests
@@ -479,6 +653,204 @@ class TestP1EngineIntegration:
 
         assert delegation_plan is not None
         assert len(delegation_plan.tasks) <= 2  # Max 2 tasks
+
+    def test_22b_real_director_plan_uses_thinking_mode(self):
+        """Director should enable provider thinking mode for its tool call."""
+        from ..adapters.llm.real_director_adapter import RealDirectorV2Adapter
+        from ..contracts.round_snapshot import RoundSnapshot
+        from ..contracts.card_state import CardState
+
+        class MockLLM:
+            def __init__(self):
+                self.kwargs = {}
+
+            def generate_structured(self, prompt, schema, **kwargs):
+                self.kwargs = kwargs
+                receipt = type('Receipt', (), {'success': True, 'to_dict': lambda self: {}})()
+                return {"turn_goal": "test", "scene_focus": "tavern"}, receipt
+
+        llm = MockLLM()
+        adapter = RealDirectorV2Adapter(llm, model="test")
+        snapshot = RoundSnapshot(
+            snapshot_id="snap1", trace_id="t1",
+            card_id="c1", session_id="s1",
+            base_card_state_revision=0,
+            card_state=CardState(),
+            player_input="hello",
+        )
+
+        plan, receipt = adapter.generate_plan(snapshot)
+
+        assert plan.turn_goal == "test"
+        assert llm.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+
+    def test_22c_sub_agent_prompt_uses_stable_prefix_and_tool_results(self):
+        """Sub-agent prompt should cache shared contract while using read-only tool results."""
+        from types import SimpleNamespace
+        from ..runtime.sub_agent_llm_runner import _build_prompt
+
+        snapshot_a = SimpleNamespace(
+            player_input="input A",
+            card_state=SimpleNamespace(scene_state=SimpleNamespace(
+                location="yard", time_of_day="morning", weather="clear", active_npcs=["npc1"],
+            )),
+            recent_turn_records=[SimpleNamespace(turn_index=1, player_input="p1", writer_output="w1")],
+            active_memories=[{"summary": "promise"}],
+            rag_recall=[{"summary": "old fact"}],
+            active_worldbook_entries=[{"title": "village", "content_excerpt": "stable lore"}],
+        )
+        snapshot_b = SimpleNamespace(
+            player_input="input B",
+            card_state=snapshot_a.card_state,
+            recent_turn_records=snapshot_a.recent_turn_records,
+            active_memories=snapshot_a.active_memories,
+            rag_recall=snapshot_a.rag_recall,
+            active_worldbook_entries=snapshot_a.active_worldbook_entries,
+        )
+
+        p1 = _build_prompt("opportunity", snapshot_a)
+        p2 = _build_prompt("world_life", snapshot_b)
+        prefix1 = p1.split("=== TURN PACKET", 1)[0]
+        prefix2 = p2.split("=== TURN PACKET", 1)[0]
+        turn_packet = p1.split("=== TURN PACKET", 1)[1]
+
+        assert prefix1 == prefix2
+        assert "AVAILABLE READ-ONLY TOOLS" in prefix1
+        assert "accepted_turn_lookup" in prefix1
+        assert "READ-ONLY TOOL RESULTS" in turn_packet
+        assert "worldbook_lookup" in turn_packet
+        assert "input A" in turn_packet
+
+    def test_22d_sub_agent_llm_enables_thinking_mode(self):
+        """Sub-agent Flash calls should use thinking enabled."""
+        from types import SimpleNamespace
+        from ..runtime.sub_agent_llm_runner import run_sub_agent_llm
+
+        class MockAdapter:
+            def __init__(self):
+                self.kwargs = {}
+
+            def generate_text(self, prompt, **kwargs):
+                self.kwargs = kwargs
+                receipt = type('Receipt', (), {'success': True})()
+                return "Specific analysis.", receipt
+
+        adapter = MockAdapter()
+        snapshot = SimpleNamespace(
+            player_input="hello",
+            card_state=SimpleNamespace(scene_state=SimpleNamespace()),
+            recent_turn_records=[],
+            active_memories=[],
+            rag_recall=[],
+            active_worldbook_entries=[],
+        )
+
+        text = run_sub_agent_llm("opportunity", snapshot, adapter)
+
+        assert text == "Specific analysis."
+        assert adapter.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+
+    def test_22e_real_director_generates_read_only_tool_plan(self):
+        """Director should configure bounded read-only tools for context enrichment."""
+        from ..adapters.llm.real_director_adapter import RealDirectorV2Adapter
+        from ..contracts.director_plan import DirectorPlan
+        from ..contracts.round_snapshot import RoundSnapshot
+        from ..contracts.card_state import CardState
+
+        adapter = RealDirectorV2Adapter(object(), model="test")
+        snapshot = RoundSnapshot(
+            snapshot_id="snap1", trace_id="t1",
+            card_id="c1", session_id="s1",
+            base_card_state_revision=0,
+            card_state=CardState(),
+            player_input="hello",
+            active_worldbook_entries=[{"entry_id": "wb1", "title": "world", "content_excerpt": "lore"}],
+            active_memories=[{"memory_id": "m1", "summary": "promise"}],
+            rag_recall=[{"memory_id": "r1", "summary": "old fact"}],
+        )
+        plan = DirectorPlan(plan_id="dp1", turn_goal="continue", scene_focus="yard")
+
+        tool_plan, receipt = adapter.generate_tool_plan(snapshot, plan)
+        tool_ids = [request.tool_id for request in tool_plan.requests]
+
+        assert receipt.success is True
+        assert tool_ids[0] == "scene_context_lookup"
+        assert "worldbook_lookup" in tool_ids
+        assert "active_memory_lookup" in tool_ids
+        assert "rag_memory_lookup" in tool_ids
+        assert len(tool_ids) <= 5
+
+    def test_22f_snapshot_tool_runner_returns_current_snapshot_data(self):
+        """Director tools should read current RoundSnapshot data, not fake defaults."""
+        from types import SimpleNamespace
+        from ..contracts.card_state import CardState
+        from ..contracts.tool_plan import ToolPlan, PlannedToolRequest
+        from ..contracts.execution_trace import ExecutionTrace
+        from ..runtime.tool_registry import ToolRegistry
+        from ..runtime.tool_permission_policy import ToolPermissionPolicy
+        from ..runtime.tool_budget_runtime import ToolBudgetRuntime
+        from ..runtime.tool_gateway import ToolGateway
+        from ..runtime.snapshot_tool_runner import SnapshotToolRunner
+
+        snapshot = SimpleNamespace(
+            card_id="c1",
+            session_id="s1",
+            card_state=CardState(card_id="c1", session_id="s1"),
+            active_worldbook_entries=[{
+                "entry_id": "wb1", "title": "Village", "content_excerpt": "current lore",
+            }],
+            recent_turn_records=[
+                SimpleNamespace(turn_id="t1", turn_index=1, player_input="p", writer_output="w"),
+            ],
+            active_memories=[{"memory_id": "m1", "kind": "promise", "summary": "current memory"}],
+            rag_recall=[{"memory_id": "r1", "summary": "current rag"}],
+        )
+        plan = ToolPlan(
+            tool_plan_id="tp1", trace_id="trace1", snapshot_id="snap1",
+            card_id="c1", session_id="s1",
+            requests=[
+                PlannedToolRequest(request_id="req_wb", tool_id="worldbook_lookup"),
+                PlannedToolRequest(request_id="req_mem", tool_id="active_memory_lookup"),
+            ],
+        )
+        registry = ToolRegistry()
+        gateway = ToolGateway(
+            registry,
+            ToolPermissionPolicy(registry),
+            ToolBudgetRuntime(),
+            SnapshotToolRunner(),
+        )
+
+        bundle = gateway.execute(plan, snapshot, ExecutionTrace(trace_id="trace1"))
+
+        assert bundle.successful_request_ids == ["req_wb", "req_mem"]
+        wb_result = bundle.results[0].structured_data["entries"][0]
+        mem_result = bundle.results[1].structured_data["memories"][0]
+        assert wb_result["content_excerpt"] == "current lore"
+        assert mem_result["summary"] == "current memory"
+
+    def test_22g_writer_bundle_includes_director_tool_findings_as_guidance(self):
+        """Writer should receive accepted Director tool findings as guidance."""
+        from ..contracts.final_turn_brief import FinalTurnBrief
+        from ..contracts.round_snapshot import RoundSnapshot
+        from ..contracts.card_state import CardState
+        from ..runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+
+        snapshot = RoundSnapshot(
+            snapshot_id="snap1", trace_id="t1",
+            card_id="c1", session_id="s1",
+            base_card_state_revision=0,
+            card_state=CardState(card_id="c1", session_id="s1"),
+            player_input="hello",
+        )
+        brief = FinalTurnBrief(
+            brief_id="ftb1",
+            accepted_tool_findings=["[worldbook_lookup] entries: 1 items"],
+        )
+
+        bundle = WriterInputBundleV2Builder().build(snapshot, brief)
+
+        assert "[worldbook_lookup] entries: 1 items" in bundle.accepted_guidance
 
     def test_23_continue_turn_uses_continue_instruction(self):
         """AWPV2ContinueTurn should use CONTINUE_INSTRUCTION, not empty input."""

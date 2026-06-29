@@ -52,12 +52,21 @@ class TestProviderContracts:
         assert u.schema_id == "awp.rp.provider-usage.v1"
 
     def test_usage_roundtrip(self):
-        u = ProviderUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150, model="deepseek-chat")
+        u = ProviderUsage(
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150,
+            model="deepseek-chat",
+            prompt_cache_hit_tokens=80,
+            prompt_cache_miss_tokens=20,
+        )
         d = u.to_dict()
         u2 = ProviderUsage.from_dict(d)
         assert u2.prompt_tokens == 100
         assert u2.total_tokens == 150
         assert u2.model == "deepseek-chat"
+        assert u2.prompt_cache_hit_tokens == 80
+        assert u2.prompt_cache_miss_tokens == 20
 
     def test_failure_schema_id(self):
         f = ProviderFailure()
@@ -251,6 +260,11 @@ class TestDeepSeekAdapter:
             )
             assert receipt.success is True
             assert parsed.get("turn_goal") == "test"
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["tool_choice"] == {
+                "type": "function",
+                "function": {"name": "submit_director_plan"},
+            }
 
     def test_structured_empty_final_fail(self):
         """Test 7: Empty structured output -> fail closed."""
@@ -271,6 +285,35 @@ class TestDeepSeekAdapter:
             )
             assert parsed == {}
             assert receipt.success is False
+
+    def test_openai_usage_extracts_prompt_cache_fields(self):
+        """DeepSeek OpenAI-compatible usage should preserve prompt cache tokens."""
+        adapter = DeepSeekAdapter(max_retries=0)
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
+            mock_client = MagicMock()
+            mock_message = MagicMock()
+            mock_message.content = "ok"
+            mock_choice = MagicMock()
+            mock_choice.message = mock_message
+            mock_details = MagicMock(cached_tokens=70, uncached_tokens=30)
+            mock_usage = MagicMock(
+                prompt_tokens=100,
+                completion_tokens=5,
+                total_tokens=105,
+                prompt_cache_hit_tokens=60,
+                prompt_cache_miss_tokens=40,
+                prompt_tokens_details=mock_details,
+            )
+            mock_resp = MagicMock(choices=[mock_choice], usage=mock_usage)
+            mock_client.chat.completions.create.return_value = mock_resp
+            adapter._client = mock_client
+
+            text, receipt = adapter.generate_text("test", turn_id="t1", attempt_id="a1")
+
+            assert text == "ok"
+            assert receipt.success is True
+            assert receipt.usage["prompt_cache_hit_tokens"] == 60
+            assert receipt.usage["prompt_cache_miss_tokens"] == 40
 
 
 # ── Trace & Usage Tests ─────────────────────────────────────────────────────
