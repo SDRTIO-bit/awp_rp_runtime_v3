@@ -61,6 +61,8 @@ def make_turn_record(
     card_id: str = "card-1",
     turn_id: str = "t1",
     turn_index: int = 1,
+    player_input: str = "Hello",
+    writer_output: str = "World",
 ) -> TurnRecord:
     return TurnRecord(
         turn_id=turn_id,
@@ -68,14 +70,15 @@ def make_turn_record(
         card_id=card_id,
         session_id=session_id,
         turn_index=turn_index,
-        player_input="Hello",
-        writer_output="World",
+        player_input=player_input,
+        writer_output=writer_output,
     )
 
 
 def make_opening_record(
     session_id: str = "s1",
     logical_card_id: str = "card-1",
+    content: str = "Hello.",
 ) -> OpeningRecord:
     return OpeningRecord(
         opening_record_id=f"op-{session_id}",
@@ -83,7 +86,7 @@ def make_opening_record(
         logical_card_id=logical_card_id,
         card_version=1,
         greeting_id="g0",
-        safe_display_content="Hello.",
+        safe_display_content=content,
     )
 
 

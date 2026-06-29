@@ -165,3 +165,39 @@ def test_delete_session_and_card_endpoints_cascade(tmp_path, monkeypatch):
     assert card_response.status == 200
     assert reg.card_definition_store.get_latest("c1") is None
     assert reg.card_session_binding_store.list_by_card("c1") == []
+
+
+def test_continue_endpoint_dispatches_mode_and_workflow(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    calls = {}
+    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+
+    def fake_execute_continue(self, session_id, mode="", workflow=""):
+        calls["session_id"] = session_id
+        calls["mode"] = mode
+        calls["workflow"] = workflow
+        return {"success": True, "writer_output": "continued"}
+
+    monkeypatch.setattr(ExecutionDispatcher, "execute_continue", fake_execute_continue)
+
+    handler = routes.handlers[("POST", "/awp/api/v1/sessions/{session_id}/continue")]
+    response = asyncio.run(
+        handler(
+            _Request(
+                match_info={"session_id": "s1"},
+                query={"mode": "python", "workflow": "continue_world"},
+            )
+        )
+    )
+
+    assert response.status == 200
+    assert _data(response)["writer_output"] == "continued"
+    assert calls == {
+        "session_id": "s1",
+        "mode": "python",
+        "workflow": "continue_world",
+    }

@@ -86,8 +86,12 @@ try:
     async def get_session(request):
         """Get a single session's details."""
         session_id = request.match_info["session_id"]
-        mode = request.query.get("mode", "")
-        workflow = request.query.get("workflow", "")
+        factory = _factory()
+        registry = factory.registry
+
+        binding = registry.card_session_binding_store.load(session_id)
+        if not binding:
+            return _json({"error": "Session not found"}, 404)
 
         turns = registry.turn_record_store.list_by_session(session_id)
         opening = None
@@ -200,6 +204,8 @@ try:
     async def continue_session(request):
         """Continue a session — triggers AWPV2ContinueTurn."""
         session_id = request.match_info["session_id"]
+        mode = request.query.get("mode", "")
+        workflow = request.query.get("workflow", "")
         factory = _factory()
         registry = factory.registry
 
