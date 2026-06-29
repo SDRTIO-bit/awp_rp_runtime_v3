@@ -37,6 +37,7 @@ from .tool_gateway_node import AWPV2ToolGateway
 from .enrichment_merge_node import AWPV2EnrichmentMerge
 from .final_turn_brief_node import AWPV2FinalTurnBrief
 from .writer_output_node import AWPV2WriterOutput as AWPV2WriterV2
+from .writer_v2_node import AWPV2WriterGenerate
 from .writer_input_bundle_v2_node import AWPV2WriterInputBundleV2
 from .quality_pipeline_node import AWPV2QualityPipeline
 from .reviser_node import AWPV2Reviser
@@ -86,6 +87,15 @@ from .continuity_validator_node import AWPV2ContinuityValidator
 from .continuity_ranker_node import AWPV2ContinuityRanker
 from .continuity_result_node import AWPV2ContinuityResult
 from .continuity_diagnostics_node import AWPV2ContinuityDiagnostics
+
+# D6: Memory Curation nodes
+from .memory_curation_trigger_node import AWPV2MemoryCurationTrigger
+from .memory_curation_request_node import AWPV2MemoryCurationRequest
+from .memory_curator_agent_node import AWPV2MemoryCuratorAgent
+from .memory_curation_validator_node import AWPV2MemoryCurationValidator
+from .memory_curation_ranker_node import AWPV2MemoryCurationRanker
+from .memory_curation_diagnostics_node import AWPV2MemoryCurationDiagnostics
+from .memory_curation_commit_plan_node import AWPV2MemoryCurationCommitPlan
 
 # P-CardImport nodes
 from .card_source_load_node import AWPV2CardSourceLoad
@@ -211,6 +221,14 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2ContinuityRanker": AWPV2ContinuityRanker,
     "AWPV2ContinuityResult": AWPV2ContinuityResult,
     "AWPV2ContinuityDiagnostics": AWPV2ContinuityDiagnostics,
+    # D6: Memory Curation
+    "AWPV2MemoryCurationTrigger": AWPV2MemoryCurationTrigger,
+    "AWPV2MemoryCurationRequest": AWPV2MemoryCurationRequest,
+    "AWPV2MemoryCuratorAgent": AWPV2MemoryCuratorAgent,
+    "AWPV2MemoryCurationValidator": AWPV2MemoryCurationValidator,
+    "AWPV2MemoryCurationRanker": AWPV2MemoryCurationRanker,
+    "AWPV2MemoryCurationDiagnostics": AWPV2MemoryCurationDiagnostics,
+    "AWPV2MemoryCurationCommitPlan": AWPV2MemoryCurationCommitPlan,
     # P-CardImport
     "AWPV2CardSourceLoad": AWPV2CardSourceLoad,
     "AWPV2CardPayloadParse": AWPV2CardPayloadParse,
@@ -254,6 +272,8 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2PersistentContinuationTurn": AWPV2PersistentContinuationTurn,
     # P1: Real Continue (world-advance)
     "AWPV2ContinueTurnP1": AWPV2ContinueTurnP1,
+    # Writer V2 (explicit C1 pipeline)
+    "AWPV2WriterGenerate": AWPV2WriterGenerate,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -333,6 +353,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2ContinuityRanker": "AWP V2 连续性排序",
     "AWPV2ContinuityResult": "AWP V2 连续性结果",
     "AWPV2ContinuityDiagnostics": "AWP V2 连续性诊断",
+    # D6: Memory Curation
+    "AWPV2MemoryCurationTrigger": "AWP V2 记忆治理触发",
+    "AWPV2MemoryCurationRequest": "AWP V2 记忆治理请求",
+    "AWPV2MemoryCuratorAgent": "AWP V2 记忆治理Agent",
+    "AWPV2MemoryCurationValidator": "AWP V2 记忆治理验证",
+    "AWPV2MemoryCurationRanker": "AWP V2 记忆治理排序",
+    "AWPV2MemoryCurationDiagnostics": "AWP V2 记忆治理诊断",
+    "AWPV2MemoryCurationCommitPlan": "AWP V2 记忆治理提交计划",
     # P-CardImport
     "AWPV2CardSourceLoad": "AWP V2 角色卡源读取",
     "AWPV2CardPayloadParse": "AWP V2 角色卡结构解析",
@@ -376,6 +404,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2PersistentContinuationTurn": "AWP V2 Persistent Continuation Turn",
     # P1: Real Continue (world-advance)
     "AWPV2ContinueTurnP1": "AWP V2 Continue Turn (World Advance)",
+    # Writer V2 (explicit C1 pipeline)
+    "AWPV2WriterGenerate": "AWP V2 Writer 生成",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
