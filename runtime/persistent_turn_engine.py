@@ -31,9 +31,11 @@ from ..contracts.card_state_patch import (
 )
 from ..contracts.turn_record import TurnRecord, TurnMode
 from ..contracts.quality_decision import QualityDecision, QualityVerdict
+from ..contracts.quality_issue import QualityIssue
 from ..contracts.final_turn_brief import FinalTurnBrief
 from ..contracts.writer_draft import WriterDraft
 from ..contracts.writer_input_bundle import WriterInputBundle
+from ..contracts.revision_request import RevisionRequest
 from ..contracts.first_turn_receipt import FirstTurnReceipt
 from ..contracts.first_turn_diagnostics import FirstTurnDiagnostics
 from ..contracts.execution_trace import ExecutionTrace, TraceEvent
@@ -52,6 +54,7 @@ from .provider_adapter_factory import (
     run_director, run_writer, AdapterOutcome,
 )
 from .writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+from .reviser_runtime import ReviserRuntime
 from .turn_evolution_curator import TurnEvolutionCurator
 from .active_memory_commit_runtime import ActiveMemoryCommitRuntime
 from .rag_memory_commit_runtime import RagMemoryCommitRuntime
@@ -808,23 +811,56 @@ class PersistentTurnEngine:
         diag.steps_completed.append("quality_gate")
 
         if not quality_decision.allows_side_effects():
-            diag.steps_failed.append("quality_gate")
-            diag.outcome = "quality_rejected"
-            diag.failure_message = f"Quality gate rejected: {quality_decision.blocking_reasons}"
-            receipt = FirstTurnReceipt(
-                receipt_id=_id("ptr", request_id),
-                request_id=request_id, workflow_run_id=workflow_run_id,
-                trace_id=trace_id, turn_id=turn_id, attempt_id=attempt_id,
-                session_id=session_id,
-                logical_card_id=binding.logical_card_id,
-                card_version=binding.card_version,
-                source_hash=binding.source_hash,
-                quality_verdict="reject", idempotency_status="new",
-                created_at=now,
+            revised_text = self._try_revise(
+                candidate_text,
+                quality_decision,
+                snapshot,
+                trace_id,
+                bundle,
+                wrt_adapter,
+                request_id,
+                trace,
             )
-            self._persist_trace(trace, diag)
-            return (receipt.to_dict(), {}, diag.to_dict(),
-                    card_state.to_dict(), {}, snapshot.to_dict())
+            if revised_text != candidate_text:
+                candidate_text = revised_text
+                quality_decision = self._quality_check(candidate_text, snapshot, trace_id)
+                diag.quality_verdict = quality_decision.verdict.value
+                diag.quality_blocking_reasons = list(quality_decision.blocking_reasons)
+                _add_trace_event(
+                    trace,
+                    "quality_gate",
+                    "quality_pipeline",
+                    success=True,
+                    duration_ms=_ms_since(step_start),
+                    details={
+                        "verdict": quality_decision.verdict.value,
+                        "overall_score": quality_decision.overall_score,
+                        "blocking_reasons": quality_decision.blocking_reasons,
+                        "after_revision": True,
+                    },
+                )
+
+            if not quality_decision.allows_side_effects():
+                diag.steps_failed.append("quality_gate")
+                diag.outcome = "quality_rejected"
+                diag.failure_message = (
+                    "Quality gate rejected after revise: "
+                    f"{quality_decision.blocking_reasons}"
+                )
+                receipt = FirstTurnReceipt(
+                    receipt_id=_id("ptr", request_id),
+                    request_id=request_id, workflow_run_id=workflow_run_id,
+                    trace_id=trace_id, turn_id=turn_id, attempt_id=attempt_id,
+                    session_id=session_id,
+                    logical_card_id=binding.logical_card_id,
+                    card_version=binding.card_version,
+                    source_hash=binding.source_hash,
+                    quality_verdict="reject", idempotency_status="new",
+                    created_at=now,
+                )
+                self._persist_trace(trace, diag)
+                return (receipt.to_dict(), {}, diag.to_dict(),
+                        card_state.to_dict(), {}, snapshot.to_dict())
 
         # ── TurnEvolutionCurator (P1: real LLM state + memory) ───────────
         step_start = time.time()
@@ -1149,6 +1185,69 @@ class PersistentTurnEngine:
         return decision
 
     # ── Curator adapter builder ─────────────────────────────────────────
+    def _try_revise(
+        self,
+        candidate_text: str,
+        quality_decision: QualityDecision,
+        snapshot: RoundSnapshot,
+        trace_id: str,
+        bundle: WriterInputBundle,
+        writer_adapter: Any,
+        request_id: str,
+        trace: ExecutionTrace,
+    ) -> str:
+        if not quality_decision.can_retry():
+            return candidate_text
+
+        issues = [
+            QualityIssue(description=reason, fixable=True)
+            for reason in quality_decision.blocking_reasons
+        ]
+        if not issues:
+            return candidate_text
+
+        revision_request = RevisionRequest(
+            request_id=_id("rev", request_id),
+            trace_id=trace_id,
+            snapshot_id=snapshot.snapshot_id,
+            writer_draft_id=_id("wd", trace_id),
+            current_revision=quality_decision.retry_count,
+            max_revisions=quality_decision.max_retries,
+            issues=issues,
+            original_text=candidate_text,
+            created_at=_now(),
+        )
+
+        try:
+            result = ReviserRuntime(writer_adapter, max_revisions=1).revise(
+                revision_request,
+                bundle,
+            )
+        except Exception as exc:
+            _add_trace_event(
+                trace,
+                "reviser",
+                "reviser",
+                success=False,
+                error=str(exc)[:200],
+                details={"issue_count": len(issues)},
+            )
+            return candidate_text
+
+        _add_trace_event(
+            trace,
+            "reviser",
+            "reviser",
+            success=bool(result.success),
+            details={
+                "revision_number": result.revision_number,
+                "issues_addressed": list(result.issues_addressed),
+                "issues_remaining": list(result.issues_remaining),
+                "text_length": len(result.revised_text or ""),
+            },
+        )
+        return result.revised_text or candidate_text
+
     def _build_curator_adapter(self, dir_outcome: Any) -> Any:
         """Build an LLM adapter for the TurnEvolutionCurator.
 
