@@ -17,7 +17,7 @@ Usage (offline):
 Usage (real-acceptance):
   AWP_REAL_LLM_E2E=1 AWP_ALLOW_EXTERNAL_CARD_CONTENT=1 `
   python -m awp_rp_runtime_v2.testing.comfy_multisession_longrun_harness `
-    --card-path "C:/Users/zhao/Downloads/桃花村的公媳.json" `
+    --card-path "<your-card-path>.json" `
     --sessions 2 --turns 20 `
     --director-profile-id "deepseek-v4-pro-director" `
     --writer-profile-id "deepseek-v4-flash-writer" `

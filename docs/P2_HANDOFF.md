@@ -137,7 +137,7 @@ GET  /awp/{tail:.*}                       → SPA 静态文件
 
 ### 2.1 测试配置
 
-- 卡片：桃花村的公媳.json（40 worldbook, 6 greeting）
+- 卡片：测试酒馆卡（40 worldbook, 6 greeting）
 - Director：deepseek-v4-flash-director（Flash + 思考）
 - Writer：deepseek-v4-pro-writer（Pro + 禁思考）
 - 预设：kedai_heavy_v1

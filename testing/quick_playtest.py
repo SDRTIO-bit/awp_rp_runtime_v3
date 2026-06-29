@@ -16,7 +16,7 @@ os.environ['AWP_RUNTIME_PROFILE'] = 'test'
 _tmpdir = tempfile.mkdtemp(prefix='awp_play_')
 os.environ['AWP_TEST_STORE_ROOT'] = _tmpdir
 
-CARD_PATH = r'C:\Users\zhao\Downloads\桃花村的公媳.json'
+CARD_PATH = os.environ.get('AWP_REAL_CARD_PATH', '<your-card-path>.json')
 SESSION_ID = 'playtest-' + os.urandom(4).hex()
 DIRECTOR = 'deepseek-v4-flash-director'
 WRITER = 'deepseek-v4-pro-writer'

@@ -192,7 +192,7 @@ python testing/comfy_multisession_longrun_harness.py \
 
 ### 6. 角色卡开场白 g0 为乱码
 
-桃花村的公媳.json 的 `first_mes` 为乱码，g0 不可用。使用 `greeting_id: "g2"` 或更高索引。
+测试酒馆卡的 `first_mes` 为乱码时，g0 不可用。使用 `greeting_id: "g2"` 或更高索引。
 
 ---
 

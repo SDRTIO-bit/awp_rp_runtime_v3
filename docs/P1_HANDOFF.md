@@ -37,7 +37,7 @@
 
 ## 二、已验证可工作的部分
 
-### 2.1 真实酒馆卡加载 (桃花村的公媳, 263KB, 40 worldbook)
+### 2.1 真实酒馆卡加载 (测试酒馆卡, 263KB, 40 worldbook)
 
 - Bootstrap 正确加载 40 条 worldbook (26 constant + 14 selective)
 - 6 greetings 正确解析 (g0-g6)
@@ -157,8 +157,8 @@
 
 ## 六、环境
 
-- 测试卡: `C:\Users\zhao\Downloads\桃花村的公媳.json` (263KB, 40 worldbook, 6 greetings)
-- 预设: `C:\Users\zhao\Downloads\{{addvar可待_前置处理.txt` (已复制到 `presets/writer/addvar_keidai.txt`)
+- 测试卡: 任意酒馆卡 JSON (263KB+, 40+ worldbook, 6+ greetings)
+- 预设: `kedai_heavy_v1` (已包含在 `presets/writer/`)
 - API Key: `DEEPSEEK_API_KEY` 已设置
 - Profile: `deepseek-v4-pro-director`, `deepseek-v4-flash-writer`
-- 测试命令: `python -m awp_rp_runtime_v2.testing.linear_persistent_rp_debug --card "C:\Users\zhao\Downloads\桃花村的公媳.json" --greeting-id g1 --verbose`
+- 测试命令: `python -m awp_rp_runtime_v2.testing.linear_persistent_rp_debug --card "<your-card-path>.json" --greeting-id g1 --verbose`

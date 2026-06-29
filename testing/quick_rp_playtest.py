@@ -6,7 +6,7 @@
 
 环境要求:
   DEEPSEEK_API_KEY 已设置
-  C:\Users\zhao\Downloads\桃花村的公媳.json 存在
+  AWP_REAL_CARD_PATH 已设置（指向有效的角色卡 JSON）
 """
 
 import hashlib
@@ -26,7 +26,7 @@ os.environ["AWP_RUNTIME_PROFILE"] = "test"
 tmpdir = tempfile.mkdtemp(prefix="awp_playtest_")
 os.environ["AWP_TEST_STORE_ROOT"] = tmpdir
 
-CARD_PATH = r"C:\Users\zhao\Downloads\桃花村的公媳.json"
+CARD_PATH = os.environ.get("AWP_REAL_CARD_PATH", "<your-card-path>.json")
 SESSION_ID = "playtest-001"
 DIRECTOR_PROFILE = "deepseek-v4-pro-director"
 WRITER_PROFILE = "deepseek-v4-flash-writer"

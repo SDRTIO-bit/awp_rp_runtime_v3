@@ -35,7 +35,7 @@ ComfyUI RP Runtime V2：持久化会话 + 双主 Agent + 受控动态子 Agent +
 - 模型配置受控：白名单 profile（deepseek-v4-pro/flash, fake-*）
 - 真实 DeepSeek：8/8 回合通过（Anthropic 端点）
 - ComfyUI 实机：Bootstrap → 5 回合 → Replay 全部通过
-- 真实酒馆卡加载：桃花村的公媳（263KB, 40 worldbook, 6 greetings）
+- 真实酒馆卡加载：大型酒馆卡（263KB, 40 worldbook, 6 greetings）
 - 世界书激活：constant 8 条/回合 + selective 关键词匹配
 - 双 Agent 真实 LLM：Director (Flash+思考) + Writer (Pro+禁思考)
 - 子 Agent LLM 调用：D1-D5 触发后调 DeepSeek Flash 产出具体分析

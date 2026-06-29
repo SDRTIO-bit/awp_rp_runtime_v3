@@ -1,14 +1,14 @@
 """Final 2×20 acceptance test with writer preset."""
-import os, json, time, urllib.request, uuid, sqlite3
+import os, json, time, urllib.request, uuid, sqlite3, tempfile
 
 os.environ['AWP_REAL_LLM_E2E'] = '1'
 os.environ['AWP_ALLOW_EXTERNAL_CARD_CONTENT'] = '1'
 os.environ['AWP_RUNTIME_PROFILE'] = 'real'
 os.environ['AWP_TEST_RUNTIME_NAMESPACE'] = f'final-20x2-{int(time.time())}'
 
-CARD = r'C:\Users\zhao\Downloads\桃花村的公媳.json'
+CARD = os.environ.get('AWP_REAL_CARD_PATH', '<your-card-path>.json')
 URL = 'http://127.0.0.1:8188'
-DB = r'F:\12\语英\本体_ComfyUI\ComfyUI\awp_rp_runtime.db'
+DB = os.environ.get('AWP_DB_PATH', os.path.join(tempfile.gettempdir(), 'awp_rp_runtime.db'))
 PRESET = 'kedai_heavy_v1'
 
 DIRECTOR = 'deepseek-v4-pro-director'
