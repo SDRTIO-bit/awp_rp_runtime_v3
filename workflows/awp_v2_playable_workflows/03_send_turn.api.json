@@ -94,8 +94,7 @@
           "name": "diagnostics",
           "type": "FIRST_TURN_DIAGNOSTICS",
           "links": [
-            2,
-            5
+            2
           ],
           "slot_index": 2
         },
@@ -123,11 +122,11 @@
       ],
       "properties": {},
       "_meta": {
-        "title": "③ 常规回合：玩家输入"
+        "title": "03 Normal Turn - Persistent Engine"
       },
       "widgets_values": [
         "my-session-001",
-        "那女子抬起头，竟是周语晴。她眼圈一红：你总算回来了。",
+        "Player input goes here.",
         "",
         "",
         "turn-002",
@@ -143,7 +142,7 @@
       "id": 10,
       "type": "AWPV2AcceptedTextOutput",
       "pos": [
-        480,
+        500,
         70
       ],
       "size": [
@@ -163,19 +162,19 @@
       "outputs": [],
       "properties": {},
       "_meta": {
-        "title": "【输出】玩家可见正文"
+        "title": "Output - Accepted Text"
       }
     },
     {
       "id": 11,
       "type": "AWPV2TurnResultProbe",
       "pos": [
-        480,
+        500,
         190
       ],
       "size": [
         340,
-        130
+        150
       ],
       "flags": {},
       "order": 11,
@@ -197,6 +196,11 @@
           "link": 4
         },
         {
+          "name": "prompt_id",
+          "type": "STRING",
+          "link": null
+        },
+        {
           "name": "turn_kind",
           "type": "STRING",
           "link": null
@@ -205,9 +209,10 @@
       "outputs": [],
       "properties": {},
       "_meta": {
-        "title": "【输出】回合结果（安全摘要）"
+        "title": "Output - Frontend Turn Result"
       },
       "widgets_values": [
+        "continuation",
         "continuation"
       ]
     },
@@ -215,8 +220,8 @@
       "id": 12,
       "type": "AWPV2TraceDisplay",
       "pos": [
-        480,
-        350
+        500,
+        380
       ],
       "size": [
         340,
@@ -240,7 +245,7 @@
       "outputs": [],
       "properties": {},
       "_meta": {
-        "title": "【调试】Continuation Context"
+        "title": "Debug - Continuation Context"
       },
       "widgets_values": [
         "Continuation Context"
@@ -292,7 +297,5 @@
   "groups": [],
   "config": {},
   "extra": {},
-  "version": 0.4,
-  "_comment": "正式流程第 3 步及以后：每次玩家发送新输入时运行。本图只产生一个持久化 continuation turn，避免与其他回合并列。",
-  "_usage": "导入后只修改节点「③ 常规回合：玩家输入」的 widgets。每个新回合必须使用新的 turn_id、request_id、run_id。"
+  "version": 0.4
 }

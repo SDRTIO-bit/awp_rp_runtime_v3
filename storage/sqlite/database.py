@@ -363,7 +363,7 @@ class Database:
     def connect(self) -> sqlite3.Connection:
         """Get or create a database connection."""
         if self._connection is None:
-            self._connection = sqlite3.connect(self.db_path)
+            self._connection = sqlite3.connect(self.db_path, check_same_thread=False)
             self._connection.execute("PRAGMA journal_mode=WAL")
             self._connection.execute("PRAGMA foreign_keys=ON")
             self._connection.row_factory = sqlite3.Row

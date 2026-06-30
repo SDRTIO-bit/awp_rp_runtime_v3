@@ -32,7 +32,7 @@ export default function Sessions() {
   const handleDelete = async (sessionId: string) => {
     try {
       await deleteSession(sessionId);
-      message.success("Session deleted");
+      message.success("会话已删除");
       loadSessions();
     } catch (error) {
       message.error(getErrorMessage(error));
@@ -51,10 +51,10 @@ export default function Sessions() {
         }}
       >
         <Text strong style={{ fontSize: 18 }}>
-          Sessions
+          会话
         </Text>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-          New session
+          新建会话
         </Button>
       </div>
 
@@ -69,10 +69,10 @@ export default function Sessions() {
               style={{ cursor: "pointer", padding: "12px 16px" }}
               extra={
                 <Space onClick={(event) => event.stopPropagation()}>
-                  <Tag>{session.turn_count} turns</Tag>
+                  <Tag>{session.turn_count} 回合</Tag>
                   <Popconfirm
-                    title="Delete this session?"
-                    okText="Delete"
+                    title="删除这个会话？"
+                    okText="删除"
                     okButtonProps={{ danger: true }}
                     onConfirm={() => handleDelete(session.session_id)}
                   >
@@ -88,7 +88,7 @@ export default function Sessions() {
                   <>
                     <Text type="secondary">ID: {session.session_id.slice(0, 16)}...</Text>
                     <br />
-                    <Text type="secondary">Greeting: {session.greeting_id}</Text>
+                    <Text type="secondary">开场白：{session.greeting_id}</Text>
                     <br />
                     <Text type="secondary">
                       {new Date(session.last_turn_time || session.created_at).toLocaleString("zh-CN")}
@@ -100,7 +100,7 @@ export default function Sessions() {
           )}
         />
       ) : (
-        <Empty description="No sessions" />
+        <Empty description="暂无会话" />
       )}
 
       <NewSessionModal

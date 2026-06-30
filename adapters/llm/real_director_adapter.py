@@ -27,7 +27,17 @@ class RealDirectorV2Adapter:
     def __init__(self, deepseek: DeepSeekAdapter, model: str = ""):
         self._llm = deepseek
         self._model = model
-        self._extra_body = {"thinking": {"type": "enabled"}}
+        # Director is a structured-planning role (filling schema fields, not
+        # creative prose), so it uses function calling instead of thinking.
+        #
+        # DeepSeek v4 models default to thinking mode server-side, and thinking
+        # mode rejects tool_choice ("Thinking mode does not support this
+        # tool_choice" → 400 → SDK retries → EMPTY_RESPONSE). So we must
+        # explicitly DISABLE thinking to unlock function calling. With thinking
+        # disabled, the SDK's tool_calls path returns valid structured JSON,
+        # avoiding the old raw-text json.loads failures (markdown fences /
+        # truncation / empty content).
+        self._extra_body = {"thinking": {"type": "disabled"}}
 
     def generate_plan(
         self,
@@ -301,10 +311,11 @@ class RealDirectorV2Adapter:
         ), receipt
 
     def _build_plan_prompt(self, snapshot: RoundSnapshot) -> str:
-        """Build prompt for Director plan generation.
+        """Build user prompt for Director plan generation.
 
-        Includes truncated worldbook/recent-turn/memory content
-        (not full card text) to improve planning quality.
+        Separates stable worldbook context from volatile turn data for
+        provider prefix caching. Role/workflow/format instructions are in
+        the system prompt (SYSTEM_PROMPT_DIRECTOR), not repeated here.
         """
         player_input = snapshot.player_input[:500]
         scene_location = ""
@@ -313,6 +324,7 @@ class RealDirectorV2Adapter:
 
         recent_turn_count = len(snapshot.recent_turn_records)
 
+        # ── Worldbook: split stable (constant) vs dynamic ───────────────
         stable_worldbook_lines = []
         dynamic_worldbook_lines = []
         for entry in (snapshot.active_worldbook_entries or [])[:5]:
@@ -359,31 +371,32 @@ class RealDirectorV2Adapter:
                     mem_lines.append(f"- {summary}")
         mem_block = "\n".join(mem_lines) if mem_lines else "(none)"
 
-        return (
-            f"You are a narrative director for a roleplay session.\n"
-            f"Keep fixed instructions above volatile turn context so provider prefix caching can be reused.\n\n"
-            f"=== STABLE DIRECTOR CONTRACT ===\n"
-            f"You are the first planning agent and coordinator, not the Writer.\n"
-            f"Plan the next turn without producing player-visible prose.\n"
-            f"First identify hard evidence, then risks, then delegation/tool needs, then writer intent.\n"
-            f"Respect established facts, character continuity, worldbook constraints, and player agency.\n"
-            f"Use tools only through the runtime ToolPlan; do not invent tool results.\n"
-            f"Keep private reasoning concise. Return compact JSON only; keep each list to 5 items or fewer.\n"
-            f"Respond with JSON containing: turn_goal, scene_focus, must_preserve_facts, "
-            f"must_not_do, narrative_opportunities, writer_constraints, active_character_refs, "
-            f"relationship_tensions, unresolved_threads, pacing_guidance, risk_flags.\n\n"
-            f"Stable worldbook context:\n"
-            f"{stable_worldbook_block}\n\n"
-            f"=== TURN PACKET (volatile; changes every turn) ===\n"
-            f"Current scene: {scene_location}\n"
-            f"Player input: {player_input}\n"
-            f"Recent turns count: {recent_turn_count}\n"
-            f"Active worldbook entries: {len(snapshot.active_worldbook_entries)}\n"
-            f"Active memories: {len(snapshot.active_memories)}\n\n"
-            f"=== Dynamic Worldbook Context ===\n"
-            f"{dynamic_worldbook_block}\n\n"
-            f"=== Recent Turns ===\n"
-            f"{recent_turns_block}\n\n"
-            f"=== Active Memories ===\n"
-            f"{mem_block}"
-        )
+        return f"""You are a narrative director for a roleplay session.
+Keep the fixed instructions above separate from the volatile turn context below so provider prefix caching can be reused.
+
+=== STABLE DIRECTOR CONTRACT ===
+
+This block contains stable worldbuilding context. It changes infrequently.
+The instructions above (role, workflow, output format) remain in effect.
+Stable worldbook context:
+{stable_worldbook_block}
+
+=== TURN PACKET (volatile; changes every turn) ===
+
+Current scene: {scene_location}
+Player input: {player_input}
+Recent turns count: {recent_turn_count}
+Active worldbook entries count: {len(snapshot.active_worldbook_entries)}
+Active memories count: {len(snapshot.active_memories)}
+
+=== Dynamic Worldbook Context ===
+
+{dynamic_worldbook_block}
+
+=== Recent Turns ===
+
+{recent_turns_block}
+
+=== Active Memories ===
+
+{mem_block}"""

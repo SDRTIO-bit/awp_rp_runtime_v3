@@ -59,6 +59,24 @@ export interface TurnCommandResult {
   writer_output?: string;
 }
 
+export interface StepPayload {
+  [key: string]: unknown;
+}
+
+export type StreamEvent =
+  | { type: "started"; turn_id: string; steps: string[] }
+  | { type: "step"; step: string; payload: StepPayload; duration_ms: number }
+  | { type: "writer_text"; turn_id: string; writer_output: string }
+  | {
+      type: "done";
+      success: boolean;
+      turn_id?: string;
+      turn_index?: number;
+      writer_output?: string;
+      error?: string;
+      failure_code?: string;
+    };
+
 export interface ImportCardResult {
   success: boolean;
   session_id: string;
@@ -166,6 +184,70 @@ export async function sendTurn(
     withExecutionQuery(`/sessions/${encodeURIComponent(sessionId)}/turn`, opts),
     { player_input: playerInput },
   );
+}
+
+export function parseSSEBlock(block: string): StreamEvent | null {
+  let type = "";
+  const dataLines: string[] = [];
+  for (const rawLine of block.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (line.startsWith("event:")) {
+      type = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+  if (!type || dataLines.length === 0) return null;
+  const data = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+  return { type, ...data } as StreamEvent;
+}
+
+export async function sendTurnStream(
+  sessionId: string,
+  playerInput: string,
+  onEvent: (event: StreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(
+    `${BASE}/awp/api/v1/sessions/${encodeURIComponent(sessionId)}/turn/stream`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ player_input: playerInput }),
+      signal,
+    },
+  );
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      message = errorMessage(await parseJson<{ error?: string }>(res), res.status);
+    } catch {
+      // Keep the HTTP status if the server did not return JSON.
+    }
+    throw new Error(message);
+  }
+  if (!res.body) throw new Error("流式响应正文不可用");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split(/\r?\n\r?\n/);
+    buffer = parts.pop() || "";
+    for (const part of parts) {
+      const event = parseSSEBlock(part);
+      if (event) onEvent(event);
+    }
+  }
+  buffer += decoder.decode();
+  const trailing = buffer.trim();
+  if (trailing) {
+    const event = parseSSEBlock(trailing);
+    if (event) onEvent(event);
+  }
 }
 
 export async function firstTurn(

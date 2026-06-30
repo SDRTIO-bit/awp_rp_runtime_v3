@@ -21,6 +21,10 @@ from typing import Any
 
 from ..contracts.first_turn_diagnostics import FirstTurnDiagnostics
 from ..contracts.first_turn_receipt import FirstTurnReceipt
+from ..runtime.default_model_profiles import (
+    DEFAULT_DIRECTOR_PROFILE_ID,
+    DEFAULT_WRITER_PROFILE_ID,
+)
 from ..runtime.persistent_turn_engine import PersistentTurnEngine, _id, _now
 from ..runtime.runtime_store_factory import RuntimeStoreFactory
 from ..runtime.session_runtime_load import SessionRuntimeLoad
@@ -120,8 +124,8 @@ class AWPV2ContinueTurn:
                 "attempt_id": ("STRING", {"default": ""}),
                 "request_id": ("STRING", {"default": ""}),
                 "run_id": ("STRING", {"default": ""}),
-                "director_profile_id": ("STRING", {"default": "fake-director"}),
-                "writer_profile_id": ("STRING", {"default": "fake-writer"}),
+                "director_profile_id": ("STRING", {"default": DEFAULT_DIRECTOR_PROFILE_ID}),
+                "writer_profile_id": ("STRING", {"default": DEFAULT_WRITER_PROFILE_ID}),
                 "writer_preset_path": ("STRING", {"default": ""}),
             },
         }
@@ -148,8 +152,8 @@ class AWPV2ContinueTurn:
         attempt_id: str = "",
         request_id: str = "",
         run_id: str = "",
-        director_profile_id: str = "fake-director",
-        writer_profile_id: str = "fake-writer",
+        director_profile_id: str = DEFAULT_DIRECTOR_PROFILE_ID,
+        writer_profile_id: str = DEFAULT_WRITER_PROFILE_ID,
         writer_preset_path: str = "",
     ):
         logical_card_id, card_version, source_hash, revision, latest_turn_id = _cache_identity(session_id)
@@ -178,8 +182,8 @@ class AWPV2ContinueTurn:
         attempt_id: str = "",
         request_id: str = "",
         run_id: str = "",
-        director_profile_id: str = "fake-director",
-        writer_profile_id: str = "fake-writer",
+        director_profile_id: str = DEFAULT_DIRECTOR_PROFILE_ID,
+        writer_profile_id: str = DEFAULT_WRITER_PROFILE_ID,
         writer_preset_path: str = "",
     ) -> tuple:
         now = _now()

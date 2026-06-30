@@ -11,8 +11,8 @@ export default function AppLayout() {
   const selectedKey = location.pathname.startsWith("/cards") ? "/cards" : "/sessions";
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Sider width={200} theme="light">
+    <Layout style={{ height: "100vh", minHeight: 0, overflow: "hidden" }}>
+      <Sider width={200} theme="light" style={{ height: "100vh", overflow: "auto" }}>
         <div style={{ padding: "16px", fontWeight: "bold", fontSize: 16, textAlign: "center" }}>
           AWP RP
         </div>
@@ -26,8 +26,17 @@ export default function AppLayout() {
           onClick={({ key }) => navigate(key)}
         />
       </Sider>
-      <Layout>
-        <Content style={{ padding: 24, background: "#f5f5f5", overflow: "auto" }}>
+      <Layout style={{ minHeight: 0 }}>
+        <Content
+          style={{
+            padding: 24,
+            background: "#f5f5f5",
+            height: "100vh",
+            minHeight: 0,
+            overflow: "hidden",
+            boxSizing: "border-box",
+          }}
+        >
           <Outlet />
         </Content>
       </Layout>

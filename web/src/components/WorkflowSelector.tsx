@@ -13,9 +13,9 @@ interface WorkflowSelectorProps {
 }
 
 const actionLabels: Record<WorkflowSelectorProps["action"], string> = {
-  turn: "Player turn",
-  first_turn: "First turn",
-  continue: "Continue",
+  turn: "玩家回合",
+  first_turn: "首回合",
+  continue: "续写",
 };
 
 export default function WorkflowSelector({
@@ -37,7 +37,7 @@ export default function WorkflowSelector({
     () =>
       workflows.map((item) => ({
         value: item.name,
-        label: `${item.name} (${item.node_count} nodes)`,
+        label: `${item.name}（${item.node_count} 个节点）`,
       })),
     [workflows],
   );
@@ -48,19 +48,19 @@ export default function WorkflowSelector({
       items={[
         {
           key: "execution",
-          label: `Execution mode and workflow (${actionLabels[action]})`,
+          label: `执行模式与工作流（${actionLabels[action]}）`,
           children: (
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
               <Radio.Group value={mode} onChange={(event) => onModeChange(event.target.value)}>
-                <Radio.Button value="hybrid">Workflow</Radio.Button>
-                <Radio.Button value="python">Python direct</Radio.Button>
+                <Radio.Button value="hybrid">工作流</Radio.Button>
+                <Radio.Button value="python">Python 直连</Radio.Button>
               </Radio.Group>
               <div>
-                <Text type="secondary">Workflow</Text>
+                <Text type="secondary">工作流</Text>
                 <Select
                   allowClear
                   options={workflowOptions}
-                  placeholder="Default workflow"
+                  placeholder="默认工作流"
                   style={{ width: "100%", marginTop: 4 }}
                   value={workflow || undefined}
                   onChange={(value) => onWorkflowChange(value || "")}

@@ -292,7 +292,7 @@ class TestTurnEvolutionCurator:
         prefix1 = p1.split("=== TURN PACKET", 1)[0]
         prefix2 = p2.split("=== TURN PACKET", 1)[0]
         assert prefix1 == prefix2
-        assert p1.index("FIXED STYLE PRESET") < p1.index("=== TURN PACKET")
+        # Preset is now in system prompt, not in user prompt
         assert p1.index("当前输入A") > p1.index("=== TURN PACKET")
 
     def test_17c1_writer_prompt_keeps_director_plan_after_stable_prefix(self):
@@ -560,6 +560,8 @@ class TestP1EngineIntegration:
                     player_input="你好",
                     turn_id="t1", request_id="r1",
                     workflow_run_id="w1", trace_id="tc1",
+                    director_profile_id="fake-director",
+                    writer_profile_id="fake-writer",
                 )
 
                 diag = result[2]
@@ -596,6 +598,8 @@ class TestP1EngineIntegration:
                     player_input="你好",
                     turn_id="t1", request_id="r1",
                     workflow_run_id="w1", trace_id="tc1",
+                    director_profile_id="fake-director",
+                    writer_profile_id="fake-writer",
                 )
 
                 ctx = result[1]
@@ -629,6 +633,8 @@ class TestP1EngineIntegration:
                     player_input="你好",
                     turn_id="t1", request_id="r1",
                     workflow_run_id="w1", trace_id="tc1",
+                    director_profile_id="fake-director",
+                    writer_profile_id="fake-writer",
                 )
 
                 diag = result[2]
@@ -699,8 +705,14 @@ class TestP1EngineIntegration:
         assert _delegation_agent_name("emotion-relationship") == "d4_emotion_rel"
         assert _delegation_agent_name("continuity") == "d5_continuity"
 
-    def test_22b_real_director_plan_uses_thinking_mode(self):
-        """Director should enable provider thinking mode for its tool call."""
+    def test_22b_real_director_plan_uses_function_calling_mode(self):
+        """Director should disable thinking mode to enable function calling.
+
+        DeepSeek v4 models default to thinking mode server-side, and thinking
+        rejects tool_choice. Director explicitly disables thinking so the SDK's
+        function calling path (tool_calls) can be used for reliable structured
+        output instead of fragile raw-text JSON parsing.
+        """
         from ..adapters.llm.real_director_adapter import RealDirectorV2Adapter
         from ..contracts.round_snapshot import RoundSnapshot
         from ..contracts.card_state import CardState
@@ -727,7 +739,7 @@ class TestP1EngineIntegration:
         plan, receipt = adapter.generate_plan(snapshot)
 
         assert plan.turn_goal == "test"
-        assert llm.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+        assert llm.kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
         assert llm.kwargs["max_tokens"] == 1200
 
     def test_22c_sub_agent_prompt_uses_stable_prefix_and_tool_results(self):

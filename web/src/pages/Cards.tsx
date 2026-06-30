@@ -54,13 +54,13 @@ export default function Cards() {
 
   const handleImport = async () => {
     if (!sourcePath.trim()) {
-      message.warning("Source path is required");
+      message.warning("请填写来源路径");
       return;
     }
     setImporting(true);
     try {
       const result = await importCard(sourcePath.trim());
-      message.success(`Imported card: ${result.card_id}`);
+      message.success(`已导入角色卡：${result.card_id}`);
       setImportOpen(false);
       setSourcePath("");
       loadCards();
@@ -74,7 +74,7 @@ export default function Cards() {
   const handleDelete = async (cardId: string) => {
     try {
       await deleteCard(cardId);
-      message.success("Card deleted");
+      message.success("角色卡已删除");
       if (detailCard?.card_id === cardId) {
         setDetailCard(null);
         setGreetings([]);
@@ -100,46 +100,48 @@ export default function Cards() {
 
   const columns = [
     {
-      title: "Card name",
+      title: "角色卡名称",
       dataIndex: "name",
       key: "name",
       render: (name: string) => <Text strong>{name}</Text>,
     },
     {
-      title: "Status",
+      title: "状态",
       dataIndex: "status",
       key: "status",
       render: (status: string) => (
-        <Tag color={status === "ready" ? "green" : "orange"}>{status}</Tag>
+        <Tag color={status === "ready" ? "green" : "orange"}>
+          {status === "ready" ? "就绪" : status}
+        </Tag>
       ),
     },
     {
-      title: "Greetings",
+      title: "开场白",
       dataIndex: "greeting_count",
       key: "greeting_count",
     },
     {
-      title: "Worldbook entries",
+      title: "世界书条目",
       dataIndex: "worldbook_count",
       key: "worldbook_count",
     },
     {
-      title: "Imported at",
+      title: "导入时间",
       dataIndex: "created_at",
       key: "created_at",
       render: (time: string) => new Date(time).toLocaleString("zh-CN"),
     },
     {
-      title: "Actions",
+      title: "操作",
       key: "actions",
       render: (_: unknown, record: Card) => (
         <Space onClick={(event) => event.stopPropagation()}>
           <Button size="small" onClick={() => openDetails(record)}>
-            Details
+            详情
           </Button>
           <Popconfirm
-            title="Delete this card and its sessions?"
-            okText="Delete"
+            title="删除这个角色卡及其会话？"
+            okText="删除"
             okButtonProps={{ danger: true }}
             onConfirm={() => handleDelete(record.card_id)}
           >
@@ -162,10 +164,10 @@ export default function Cards() {
         }}
       >
         <Text strong style={{ fontSize: 18 }}>
-          Cards
+          角色卡
         </Text>
         <Button type="primary" icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
-          Import card
+          导入角色卡
         </Button>
       </div>
 
@@ -183,18 +185,18 @@ export default function Cards() {
           })}
         />
       ) : (
-        <Empty description="No cards" />
+        <Empty description="暂无角色卡" />
       )}
 
       <Modal
-        title="Import card"
+        title="导入角色卡"
         open={importOpen}
-        okText="Import"
+        okText="导入"
         confirmLoading={importing}
         onOk={handleImport}
         onCancel={() => setImportOpen(false)}
       >
-        <Text type="secondary">Source path</Text>
+        <Text type="secondary">来源路径</Text>
         <Input
           style={{ marginTop: 8 }}
           placeholder="F:\\path\\to\\card.json"
@@ -205,7 +207,7 @@ export default function Cards() {
       </Modal>
 
       <Drawer
-        title={detailCard ? detailCard.name : "Card details"}
+        title={detailCard ? detailCard.name : "角色卡详情"}
         open={Boolean(detailCard)}
         width={480}
         onClose={() => {
@@ -216,23 +218,23 @@ export default function Cards() {
         {detailCard && (
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Text type="secondary">ID: {detailCard.card_id}</Text>
-            <Text type="secondary">Version: {detailCard.version}</Text>
-            <Text type="secondary">Worldbook entries: {detailCard.worldbook_count}</Text>
+            <Text type="secondary">版本：{detailCard.version}</Text>
+            <Text type="secondary">世界书条目：{detailCard.worldbook_count}</Text>
             <List
               loading={greetingsLoading}
-              header={<Text strong>Greetings</Text>}
+              header={<Text strong>开场白</Text>}
               dataSource={greetings}
-              locale={{ emptyText: "No greetings" }}
+              locale={{ emptyText: "暂无开场白" }}
               renderItem={(greeting) => (
                 <List.Item>
                   <List.Item.Meta
                     title={
                       <Space>
                         <span>{greeting.label || greeting.greeting_id}</span>
-                        {greeting.is_default && <Tag color="blue">Default</Tag>}
+                        {greeting.is_default && <Tag color="blue">默认</Tag>}
                       </Space>
                     }
-                    description={greeting.preview || "(empty)"}
+                    description={greeting.preview || "（空）"}
                   />
                 </List.Item>
               )}

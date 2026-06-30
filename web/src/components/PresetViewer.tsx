@@ -40,12 +40,12 @@ export default function PresetViewer() {
       items={[
         {
           key: "writer-presets",
-          label: "Writer presets",
+          label: "写作预设",
           children: (
             <>
               <Select
                 options={presets.map((preset) => ({ value: preset, label: preset }))}
-                placeholder="Select a preset"
+                placeholder="选择预设"
                 style={{ width: "100%" }}
                 value={selected || undefined}
                 onChange={setSelected}
@@ -53,7 +53,7 @@ export default function PresetViewer() {
               {selected && (
                 <div style={{ marginTop: 8 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    Path: {path}
+                    路径：{path}
                   </Text>
                   <Paragraph
                     style={{
@@ -74,12 +74,12 @@ export default function PresetViewer() {
                     icon={<FolderOpenOutlined />}
                     onClick={() => {
                       Modal.info({
-                        title: "Edit preset",
-                        content: `Open this file from the local filesystem: ${path}`,
+                        title: "编辑预设",
+                        content: `请从本机文件系统打开：${path}`,
                       });
                     }}
                   >
-                    Locate file
+                    定位文件
                   </Button>
                 </div>
               )}

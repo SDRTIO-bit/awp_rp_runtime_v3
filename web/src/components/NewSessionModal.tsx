@@ -65,13 +65,13 @@ export default function NewSessionModal({ open, onClose, onCreated }: NewSession
 
   const handleCreate = async () => {
     if (!cardId || !greetingId) {
-      message.warning("Select a card and greeting first");
+      message.warning("请先选择角色卡和开场白");
       return;
     }
     setCreating(true);
     try {
       await createSession(cardId, greetingId);
-      message.success("Session created");
+      message.success("会话已创建");
       onCreated();
       closeAndReset();
     } catch (error) {
@@ -83,36 +83,36 @@ export default function NewSessionModal({ open, onClose, onCreated }: NewSession
 
   return (
     <Modal
-      title="New session"
+      title="新建会话"
       open={open}
-      okText="Create"
+      okText="创建"
       confirmLoading={creating}
       onOk={handleCreate}
       onCancel={closeAndReset}
     >
-      <Text type="secondary">Card</Text>
+      <Text type="secondary">角色卡</Text>
       <Select
         showSearch
         loading={loadingCards}
         optionFilterProp="label"
         options={cards.map((card) => ({ value: card.card_id, label: card.name }))}
-        placeholder="Select a card"
+        placeholder="选择角色卡"
         style={{ width: "100%", marginTop: 8 }}
         value={cardId || undefined}
         onChange={setCardId}
       />
 
       <Text type="secondary" style={{ display: "block", marginTop: 16 }}>
-        Greeting
+        开场白
       </Text>
       <Select
         loading={loadingGreetings}
         disabled={!cardId}
         options={greetings.map((greeting) => ({
           value: greeting.greeting_id,
-          label: `${greeting.label || greeting.greeting_id}${greeting.is_default ? " (default)" : ""}`,
+          label: `${greeting.label || greeting.greeting_id}${greeting.is_default ? "（默认）" : ""}`,
         }))}
-        placeholder={cardId ? "Select a greeting" : "Select a card first"}
+        placeholder={cardId ? "选择开场白" : "请先选择角色卡"}
         style={{ width: "100%", marginTop: 8 }}
         value={greetingId || undefined}
         onChange={setGreetingId}

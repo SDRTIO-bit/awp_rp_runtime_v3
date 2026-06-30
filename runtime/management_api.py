@@ -9,6 +9,8 @@ The SPA static files are served at /awp/.
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import json
 import uuid
 from pathlib import Path
@@ -47,6 +49,9 @@ try:
 
     def _factory() -> RuntimeStoreFactory:
         return RuntimeStoreFactory.from_env()
+
+    async def _run_blocking(func, *args, **kwargs):
+        return await asyncio.to_thread(func, *args, **kwargs)
 
     @server.PromptServer.instance.routes.get("/awp/api/v1/sessions")
     async def list_sessions(request):
@@ -216,7 +221,8 @@ try:
         try:
             from .execution_dispatcher import ExecutionDispatcher
 
-            result = ExecutionDispatcher().execute_continue(
+            result = await _run_blocking(
+                ExecutionDispatcher().execute_continue,
                 session_id,
                 mode=mode,
                 workflow=workflow,
@@ -240,7 +246,8 @@ try:
         try:
             from .execution_dispatcher import ExecutionDispatcher
 
-            result = ExecutionDispatcher().execute_turn(
+            result = await _run_blocking(
+                ExecutionDispatcher().execute_turn,
                 session_id,
                 player_input,
                 mode=mode,
@@ -249,6 +256,99 @@ try:
             return _json(result)
         except Exception as e:
             return _json({"error": f"Turn failed: {str(e)[:200]}"}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/sessions/{session_id}/turn/stream")
+    async def post_turn_stream(request):
+        session_id = request.match_info["session_id"]
+        body = await request.json()
+        player_input = str(body.get("player_input", "") or "").strip()
+        if not player_input:
+            return _json({"error": "player_input required"}, 400)
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+
+        def _enqueue(event_type: str, data: dict[str, Any]) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, (event_type, data))
+
+        def _on_started(turn_id: str, steps: list[str]) -> None:
+            _enqueue("started", {"turn_id": turn_id, "steps": steps})
+
+        def _on_step(name: str, payload: dict[str, Any]) -> None:
+            _enqueue("step", {
+                "step": name,
+                "payload": payload,
+                "duration_ms": payload.get("duration_ms", 0),
+            })
+
+        def _on_writer_text(turn_id: str, text: str) -> None:
+            _enqueue("writer_text", {"turn_id": turn_id, "writer_output": text})
+
+        def _on_done(result: dict[str, Any]) -> None:
+            _enqueue("done", result)
+
+        def _run_streaming_turn() -> None:
+            try:
+                from .execution_dispatcher import ExecutionDispatcher
+
+                ExecutionDispatcher().execute_turn_streaming(
+                    session_id,
+                    player_input,
+                    on_started=_on_started,
+                    on_step=_on_step,
+                    on_writer_text=_on_writer_text,
+                    on_done=_on_done,
+                )
+            except Exception as e:
+                _enqueue("done", {
+                    "success": False,
+                    "turn_id": "",
+                    "turn_index": 0,
+                    "error": f"Turn failed: {str(e)[:200]}",
+                    "failure_code": "STREAM_EXECUTION_ERROR",
+                })
+
+        loop.run_in_executor(None, functools.partial(_run_streaming_turn))
+
+        response = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+        await response.prepare(request)
+
+        while True:
+            try:
+                event_type, data = await asyncio.wait_for(queue.get(), timeout=180)
+            except asyncio.TimeoutError:
+                event_type = "done"
+                data = {
+                    "success": False,
+                    "turn_id": "",
+                    "turn_index": 0,
+                    "error": "timeout",
+                    "failure_code": "TIMEOUT",
+                }
+
+            chunk = (
+                f"event: {event_type}\n"
+                f"data: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+            ).encode("utf-8")
+            try:
+                await response.write(chunk)
+            except (ConnectionResetError, RuntimeError, asyncio.CancelledError):
+                break
+            if event_type == "done":
+                break
+
+        try:
+            await response.write_eof()
+        except (ConnectionResetError, RuntimeError, asyncio.CancelledError):
+            pass
+        return response
 
     @server.PromptServer.instance.routes.post("/awp/api/v1/sessions/{session_id}/first-turn")
     async def post_first_turn(request):
@@ -261,7 +361,8 @@ try:
         try:
             from .execution_dispatcher import ExecutionDispatcher
 
-            result = ExecutionDispatcher().execute_first_turn(
+            result = await _run_blocking(
+                ExecutionDispatcher().execute_first_turn,
                 session_id,
                 player_input,
                 mode=mode,
@@ -405,7 +506,7 @@ try:
 
     @server.PromptServer.instance.routes.get("/awp/api/v1/workflows")
     async def list_workflows(request):
-        from testing.api_workflow_loader import APIWorkflowLoader
+        from ..testing.api_workflow_loader import APIWorkflowLoader
 
         loader = APIWorkflowLoader()
         result = []

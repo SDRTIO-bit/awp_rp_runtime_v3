@@ -1,6 +1,9 @@
 import json
+import sys
+from pathlib import Path
 
 from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+from awp_rp_runtime_v2.testing.api_workflow_loader import APIWorkflowLoader
 
 
 def _node_result(writer_output: str = "accepted text") -> tuple:
@@ -21,6 +24,8 @@ def test_python_mode_calls_node_directly(monkeypatch):
         def execute(self, session_id: str, player_input: str, **kwargs):
             calls["session_id"] = session_id
             calls["player_input"] = player_input
+            calls["director_profile_id"] = kwargs.get("director_profile_id")
+            calls["writer_profile_id"] = kwargs.get("writer_profile_id")
             return _node_result("direct python output")
 
     from awp_rp_runtime_v2.nodes import persistent_continuation_turn_node
@@ -37,10 +42,79 @@ def test_python_mode_calls_node_directly(monkeypatch):
         mode="python",
     )
 
-    assert calls == {"session_id": "session-1", "player_input": "hello"}
+    assert calls == {
+        "session_id": "session-1",
+        "player_input": "hello",
+        "director_profile_id": "deepseek-v4-flash-director",
+        "writer_profile_id": "deepseek-v4-pro-writer",
+    }
     assert result["success"] is True
     assert result["turn_id"] == "turn-1"
     assert result["writer_output"] == "direct python output"
+
+
+def test_python_mode_profile_env_overrides(monkeypatch):
+    calls = {}
+
+    class FakeFirstTurnNode:
+        def execute(self, session_id: str, player_input: str, **kwargs):
+            calls["session_id"] = session_id
+            calls["player_input"] = player_input
+            calls["director_profile_id"] = kwargs.get("director_profile_id")
+            calls["writer_profile_id"] = kwargs.get("writer_profile_id")
+            return _node_result("direct python output")
+
+    from awp_rp_runtime_v2.nodes import persistent_first_turn_node
+
+    monkeypatch.setattr(
+        persistent_first_turn_node,
+        "AWPV2PersistentFirstTurn",
+        FakeFirstTurnNode,
+    )
+    monkeypatch.setenv("AWP_DIRECTOR_PROFILE_ID", "fake-director")
+    monkeypatch.setenv("AWP_WRITER_PROFILE_ID", "fake-writer")
+
+    result = ExecutionDispatcher().execute_first_turn(
+        "session-1",
+        "hello",
+        mode="python",
+    )
+
+    assert result["success"] is True
+    assert calls == {
+        "session_id": "session-1",
+        "player_input": "hello",
+        "director_profile_id": "fake-director",
+        "writer_profile_id": "fake-writer",
+    }
+
+
+def test_python_continue_uses_real_profiles_by_default(monkeypatch):
+    calls = {}
+
+    class FakeContinueNode:
+        def execute(self, session_id: str, **kwargs):
+            calls["session_id"] = session_id
+            calls["director_profile_id"] = kwargs.get("director_profile_id")
+            calls["writer_profile_id"] = kwargs.get("writer_profile_id")
+            return _node_result("direct python output")
+
+    from awp_rp_runtime_v2.nodes import continue_turn_execution_node
+
+    monkeypatch.setattr(
+        continue_turn_execution_node,
+        "AWPV2ContinueTurn",
+        FakeContinueNode,
+    )
+
+    result = ExecutionDispatcher().execute_continue("session-1", mode="python")
+
+    assert result["success"] is True
+    assert calls == {
+        "session_id": "session-1",
+        "director_profile_id": "deepseek-v4-flash-director",
+        "writer_profile_id": "deepseek-v4-pro-writer",
+    }
 
 
 def test_request_mode_overrides_global(monkeypatch):
@@ -104,6 +178,31 @@ def test_workflow_param_selects_workflow(monkeypatch):
     assert result["success"] is True
     assert loaded == ["custom_flow"]
     assert submitted == {"session_id": "session-1", "player_input": "hello"}
+
+
+def test_load_workflow_works_when_package_loaded_from_custom_nodes(monkeypatch, tmp_path):
+    package_root = Path(__file__).resolve().parents[1]
+    custom_nodes_root = package_root.parent
+    cleaned_path = [
+        path
+        for path in sys.path
+        if Path(path or ".").resolve() != package_root
+    ]
+    monkeypatch.setattr(sys, "path", [str(custom_nodes_root), *cleaned_path])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delitem(sys.modules, "testing", raising=False)
+
+    graph = ExecutionDispatcher()._load_workflow("send_turn")
+
+    assert graph
+
+
+def test_api_workflow_loader_default_path_is_package_relative(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    workflows = APIWorkflowLoader().list_workflows()
+
+    assert workflows == ["continue_world", "first_turn", "send_turn"]
 
 
 def test_extract_turn_result_from_comfy_history_ui_payload():

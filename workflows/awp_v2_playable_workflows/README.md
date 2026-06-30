@@ -44,3 +44,14 @@
 没有手工重接旧版 `full_architecture_turn` 中的 Director、D1-D6、Quality、CardState Commit、Memory Commit，因此不会产生旧显式架构图里的类型错配和双提交风险。
 
 将来若新增一个真正的 `AWPV2PlayableSessionAction` 路由节点，才适合把四张图收敛成一张 Start / Send / Continue 单入口图。
+# AWP RP Runtime V2 playable workflows
+
+## Current workflow roles
+
+- `01_bootstrap_session.api.json`: create/bootstrap a persistent session.
+- `02_first_turn.api.json`: run the first player turn after bootstrap.
+- `03_send_turn.api.json`: production path for normal player turns. This uses `AWPV2PersistentContinuationTurn`, which runs the canonical persistent engine internally.
+- `04_continue_world.api.json`: production path for world-advance/continue actions.
+- `full_architecture_turn.graph.json`: observable equivalent of the normal turn path. It executes the same persistent continuation node once, then uses `AWPV2PersistentTurnObserver` and `AWPV2TraceDisplay` nodes to expose Director, sub-agent, Writer, quality, state, memory, and full diagnostic views. The observation nodes are read-only and do not repeat state, turn, or memory commits.
+
+Use `03_send_turn.api.json` for normal frontend/hybrid execution. Use `full_architecture_turn.graph.json` when you want to inspect the pipeline without changing the execution semantics.

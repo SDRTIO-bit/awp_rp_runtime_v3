@@ -79,7 +79,7 @@ class TestNodeRegistration:
             "AWPV2FirstTurnDiagnostics", "AWPV2FirstTurnExecution",
         }
         observability_expected = {
-            "AWPV2TraceDisplay",
+            "AWPV2TraceDisplay", "AWPV2PersistentTurnObserver",
         }
         canonical_expected = {
             "AWPV2AcceptedTextOutput",
@@ -117,6 +117,16 @@ class TestNodeRegistration:
         from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
         for name, display in NODE_DISPLAY_NAME_MAPPINGS.items():
             assert "AWP V2" in display, f"{name} display name should contain 'AWP V2'"
+
+    def test_trace_display_declares_comfy_union_input_type(self):
+        from comfy_execution.validation import validate_node_input
+        from awp_rp_runtime_v2.nodes.trace_display_node import AWPV2TraceDisplay
+
+        data_type = AWPV2TraceDisplay.INPUT_TYPES()["required"]["data"][0]
+
+        assert isinstance(data_type, str)
+        assert validate_node_input("JSON", data_type)
+        assert validate_node_input("DIRECTOR_PLAN", data_type)
 
 
 class TestNodeExecution:

@@ -6,6 +6,8 @@ import json
 import os
 from typing import Any
 
+from .default_model_profiles import profile_ids_from_env
+from .persistent_turn_engine import _id
 from .runtime_store_factory import RuntimeStoreFactory
 
 
@@ -15,9 +17,25 @@ DEFAULT_WORKFLOWS = {
     "continue": "continue_world",
 }
 
+PIPELINE_STREAM_STEP_NAMES = [
+    "round_snapshot",
+    "director",
+    "director_delegation",
+    "sub_agents",
+    "writer",
+    "quality_gate",
+    "turn_evolution_curator",
+    "state_commit",
+    "memory_curator",
+]
+
 
 def _global_mode() -> str:
     return os.environ.get("AWP_EXECUTION_MODE", "hybrid").strip().lower() or "hybrid"
+
+
+def _python_profile_ids() -> tuple[str, str]:
+    return profile_ids_from_env()
 
 
 class ExecutionDispatcher:
@@ -69,25 +87,93 @@ class ExecutionDispatcher:
             AWPV2PersistentContinuationTurn,
         )
 
+        director_profile_id, writer_profile_id = _python_profile_ids()
         result = AWPV2PersistentContinuationTurn().execute(
             session_id=session_id,
             player_input=player_input,
+            director_profile_id=director_profile_id,
+            writer_profile_id=writer_profile_id,
         )
         return self._extract_turn_result(result)
+
+    def execute_turn_streaming(
+        self,
+        session_id: str,
+        player_input: str,
+        on_started=None,
+        on_step=None,
+        on_writer_text=None,
+        on_done=None,
+    ) -> dict[str, Any]:
+        from ..nodes.persistent_continuation_turn_node import (
+            AWPV2PersistentContinuationTurn,
+        )
+
+        seed = f"{session_id}:{player_input}"
+        request_id = _id("ctr", seed)
+        workflow_run_id = _id("wfr", seed)
+        trace_id = _id("trc", seed)
+        turn_id = _id("turn", seed)
+        attempt_id = _id("att", seed)
+        director_profile_id, writer_profile_id = _python_profile_ids()
+
+        if on_started is not None:
+            on_started(turn_id, list(PIPELINE_STREAM_STEP_NAMES))
+
+        def _on_writer_text(text: str) -> None:
+            if on_writer_text is not None:
+                on_writer_text(turn_id, text)
+
+        result_tuple = AWPV2PersistentContinuationTurn().execute(
+            session_id=session_id,
+            player_input=player_input,
+            workflow_run_id=workflow_run_id,
+            trace_id=trace_id,
+            turn_id=turn_id,
+            attempt_id=attempt_id,
+            request_id=request_id,
+            director_profile_id=director_profile_id,
+            writer_profile_id=writer_profile_id,
+            on_step=on_step,
+            on_writer_text=_on_writer_text,
+        )
+        result = self._extract_turn_result(result_tuple)
+        done_payload: dict[str, Any] = {
+            "success": result["success"],
+            "turn_id": result.get("turn_id", ""),
+            "turn_index": result.get("turn_index", 0),
+        }
+        if result["success"]:
+            done_payload["writer_output"] = result.get("writer_output", "")
+        else:
+            diagnostics = result.get("diagnostics", {})
+            done_payload["error"] = diagnostics.get("failure_message", "Turn failed")
+            done_payload["failure_code"] = diagnostics.get("failure_code", "")
+        if on_done is not None:
+            on_done(done_payload)
+        return result
 
     def _python_first_turn(self, session_id: str, player_input: str) -> dict[str, Any]:
         from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
 
+        director_profile_id, writer_profile_id = _python_profile_ids()
         result = AWPV2PersistentFirstTurn().execute(
             session_id=session_id,
             player_input=player_input,
+            director_profile_id=director_profile_id,
+            writer_profile_id=writer_profile_id,
         )
         return self._extract_turn_result(result)
 
     def _python_continue(self, session_id: str) -> dict[str, Any]:
         from ..nodes.continue_turn_execution_node import AWPV2ContinueTurn
 
-        result = AWPV2ContinueTurn().execute(session_id=session_id)
+        director_profile_id, writer_profile_id = _python_profile_ids()
+        result = AWPV2ContinueTurn().execute(
+            session_id=session_id,
+            director_profile_id=director_profile_id,
+            writer_profile_id=writer_profile_id,
+        )
         return self._extract_turn_result(result)
 
     def _hybrid(
@@ -103,7 +189,7 @@ class ExecutionDispatcher:
         return self._submit_and_wait(graph)
 
     def _load_workflow(self, name: str) -> dict[str, Any]:
-        from testing.api_workflow_loader import APIWorkflowLoader
+        from ..testing.api_workflow_loader import APIWorkflowLoader
 
         return APIWorkflowLoader().load(name)
 
@@ -125,7 +211,7 @@ class ExecutionDispatcher:
                 inputs["player_input"] = player_input
 
     def _submit_and_wait(self, graph: dict[str, Any]) -> dict[str, Any]:
-        from testing.comfy_api_client import ComfyAPIClient
+        from ..testing.comfy_api_client import ComfyAPIClient
 
         client = ComfyAPIClient()
         if not client.is_available():
