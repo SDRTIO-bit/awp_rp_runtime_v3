@@ -33,6 +33,8 @@ from ..contracts.turn_record import TurnRecord, TurnMode
 from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from ..contracts.quality_issue import QualityIssue
 from ..contracts.final_turn_brief import FinalTurnBrief
+from ..contracts.agent_execution_result import AgentExecutionResult
+from ..contracts.delegation_plan import DelegationPlan
 from ..contracts.writer_draft import WriterDraft
 from ..contracts.writer_input_bundle import WriterInputBundle
 from ..contracts.revision_request import RevisionRequest
@@ -58,6 +60,7 @@ from .reviser_runtime import ReviserRuntime
 from .turn_evolution_curator import TurnEvolutionCurator
 from .active_memory_commit_runtime import ActiveMemoryCommitRuntime
 from .rag_memory_commit_runtime import RagMemoryCommitRuntime
+from .suggestion_merger import SuggestionMerger
 # (no additional imports needed for sub-agent merge — inline SuggestionMergeResult used)
 
 
@@ -155,19 +158,26 @@ def _provider_failure(
 _DELEGATION_ROLE_TO_AGENT = {
     "history_recall": "d1_history_recall",
     "history-recall": "d1_history_recall",
+    "d1_history_recall": "d1_history_recall",
     "opportunity": "d2_opportunity",
+    "d2_opportunity": "d2_opportunity",
     "world_life": "d3_world_life",
     "world-life": "d3_world_life",
+    "d3_world_life": "d3_world_life",
     "emotion_relationship": "d4_emotion_rel",
     "emotion-relationship": "d4_emotion_rel",
     "emotion_rel": "d4_emotion_rel",
+    "emotion rel": "d4_emotion_rel",
+    "d4_emotion_rel": "d4_emotion_rel",
     "continuity": "d5_continuity",
+    "d5_continuity": "d5_continuity",
 }
 
 
 def _delegation_agent_name(role: Any) -> str:
     """Normalize Director delegation role IDs to runtime trigger names."""
-    key = str(role or "").strip()
+    key = str(role or "").strip().lower()
+    key = key.replace(" ", "_")
     return _DELEGATION_ROLE_TO_AGENT.get(key, key)
 
 
@@ -182,6 +192,38 @@ class PersistentTurnEngine:
     def __init__(self, registry, profile: str = "production"):
         self._registry = registry
         self._profile = profile
+
+    def _load_card_profile_context(self, binding: Any) -> dict[str, Any]:
+        """Load immutable card profile for Writer's formal input bundle."""
+        store = getattr(self._registry, "card_definition_store", None)
+        if store is None:
+            return {}
+        logical_card_id = getattr(binding, "logical_card_id", "")
+        if not logical_card_id:
+            return {}
+
+        definition = None
+        card_version = getattr(binding, "card_version", 0)
+        try:
+            if card_version:
+                definition = store.load(logical_card_id, card_version)
+            if definition is None and hasattr(store, "get_latest"):
+                definition = store.get_latest(logical_card_id)
+        except Exception:
+            return {}
+        if definition is None:
+            return {}
+
+        profile = dict(getattr(definition, "profile", {}) or {})
+        if not profile.get("name"):
+            profile["name"] = (
+                getattr(definition, "display_name", "")
+                or getattr(definition, "name", "")
+                or logical_card_id
+            )
+        profile["logical_card_id"] = logical_card_id
+        profile["card_version"] = getattr(definition, "card_version", card_version)
+        return profile
 
     def _run_sub_agent_triggers(
         self,
@@ -396,6 +438,62 @@ class PersistentTurnEngine:
             })
 
         return suggestions, triggered, trigger_diagnostics
+
+    def _merge_agent_suggestions(
+        self,
+        *,
+        snapshot: RoundSnapshot,
+        brief: FinalTurnBrief,
+        agent_suggestions: list,
+        turn_id: str,
+        delegation_plan: Any = None,
+    ):
+        """Merge sub-agent output through the canonical SuggestionMerger."""
+        if not agent_suggestions:
+            return None
+
+        plan = delegation_plan
+        if plan is None:
+            plan = DelegationPlan(
+                plan_id=_id("dp_fallback", turn_id),
+                trace_id=snapshot.trace_id,
+                snapshot_id=snapshot.snapshot_id,
+                brief_id=brief.brief_id,
+                card_id=snapshot.card_id,
+                session_id=snapshot.session_id,
+            )
+        elif not getattr(plan, "plan_id", ""):
+            plan.plan_id = _id("dp", turn_id)
+
+        execution_results: list[AgentExecutionResult] = []
+        for index, suggestion in enumerate(agent_suggestions):
+            task_id = (
+                getattr(suggestion, "task_id", "")
+                or getattr(suggestion, "task_run_id", "")
+                or f"subagent_{index}"
+            )
+            suggestion.task_id = task_id
+            execution_results.append(AgentExecutionResult(
+                task_run_id=getattr(suggestion, "task_run_id", "") or task_id,
+                task_id=task_id,
+                role=getattr(suggestion, "role", ""),
+                trace_id=snapshot.trace_id,
+                success=True,
+                suggestions=[suggestion],
+            ))
+
+        return SuggestionMerger().merge(plan, brief, snapshot, execution_results)
+
+    def _adopted_agent_suggestion_dicts(self, merge_result: Any) -> list[dict[str, Any]]:
+        """Return only merger-adopted sub-agent suggestions for downstream mutation planning."""
+        if merge_result is None:
+            return []
+        adopted: list[dict[str, Any]] = []
+        for item in getattr(merge_result, "adopted", []) or []:
+            suggestion = getattr(item, "suggestion", None)
+            if suggestion is not None and hasattr(suggestion, "to_dict"):
+                adopted.append(suggestion.to_dict())
+        return adopted
 
     def execute(
         self,
@@ -788,25 +886,14 @@ class PersistentTurnEngine:
             "duration_ms": _step_duration(diag, "sub_agents"),
         })
 
-        # Build merge result from agent suggestions
-        merge_result = None
-        if agent_suggestions:
-            from ..contracts.suggestion_merge_result import (
-                SuggestionMergeResult, MergeItem, MergeDecision,
-            )
-            merge_result = SuggestionMergeResult(
-                merge_id=_id("sm", turn_id),
-                trace_id=trace_id,
-                adopted=[MergeItem(suggestion_id=s.suggestion_id, task_id=s.task_id,
-                                   role=s.role, decision=MergeDecision.ADOPTED,
-                                   reason="trigger_policy", suggestion=s)
-                         for s in agent_suggestions],
-                ignored=[],
-                conflicts=[],
-                writer_guidance=[s.summary for s in agent_suggestions if s.summary],
-                state_proposal_hints=[],
-                memory_proposal_hints=[],
-            )
+        merge_result = self._merge_agent_suggestions(
+            snapshot=snapshot,
+            brief=brief,
+            agent_suggestions=agent_suggestions,
+            turn_id=turn_id,
+            delegation_plan=delegation_plan,
+        )
+        adopted_agent_suggestions = self._adopted_agent_suggestion_dicts(merge_result)
 
         # ── Writer ───────────────────────────────────────────────────────
         step_start = time.time()
@@ -848,12 +935,21 @@ class PersistentTurnEngine:
             self._persist_trace(trace, diag)
             return self._failure_return(diag, trace, card_state, snapshot, effects)
 
+        from .score_generator import ScoreGenerator
+        score = ScoreGenerator().generate(director_plan, merge_result)
+        card_profile_context = (
+            getattr(snapshot, "card_profile_context", {}) or
+            self._load_card_profile_context(binding)
+        )
+
         bundle = WriterInputBundleV2Builder().build(
             snapshot,
             brief,
             merge_result,
+            card_profile_context=card_profile_context,
             opening_context=opening_context,
             worldbook_context=worldbook_context,
+            score=score,
         )
         candidate_text, wrt_receipt = run_writer(
             wrt_adapter, wrt_outcome, bundle,
@@ -1001,7 +1097,7 @@ class PersistentTurnEngine:
                 worldbook_context if worldbook_context is not None
                 else snapshot.active_worldbook_entries
             ),
-            agent_suggestions=[s.to_dict() for s in agent_suggestions],
+            agent_suggestions=adopted_agent_suggestions,
             turn_kind=turn_kind,
             base_card_state_revision=card_state.revision,
         )

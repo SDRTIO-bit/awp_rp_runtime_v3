@@ -17,6 +17,12 @@ DEFAULT_WORKFLOWS = {
     "continue": "continue_world",
 }
 
+WORKFLOW_ACTION_NODE_TYPES = {
+    "turn": {"AWPV2PersistentContinuationTurn"},
+    "first_turn": {"AWPV2PersistentFirstTurn"},
+    "continue": {"AWPV2ContinueTurnP1", "AWPV2ContinueTurn"},
+}
+
 PIPELINE_STREAM_STEP_NAMES = [
     "round_snapshot",
     "director",
@@ -100,11 +106,30 @@ class ExecutionDispatcher:
         self,
         session_id: str,
         player_input: str,
+        mode: str = "",
+        workflow: str = "",
         on_started=None,
         on_step=None,
         on_writer_text=None,
         on_done=None,
     ) -> dict[str, Any]:
+        selected_mode = (mode or "python").strip().lower()
+        if selected_mode != "python":
+            if on_started is not None:
+                on_started("", ["queued_workflow"])
+            result = self.execute_turn(session_id, player_input, mode=mode, workflow=workflow)
+            if on_done is not None:
+                on_done({
+                    "success": result["success"],
+                    "turn_id": result.get("turn_id", ""),
+                    "turn_index": result.get("turn_index", 0),
+                    **({"writer_output": result.get("writer_output", "")} if result["success"] else {
+                        "error": result.get("diagnostics", {}).get("failure_message", "Turn failed"),
+                        "failure_code": result.get("diagnostics", {}).get("failure_code", ""),
+                    }),
+                })
+            return result
+
         from ..nodes.persistent_continuation_turn_node import (
             AWPV2PersistentContinuationTurn,
         )
@@ -185,6 +210,7 @@ class ExecutionDispatcher:
     ) -> dict[str, Any]:
         workflow_name = workflow or DEFAULT_WORKFLOWS[action]
         graph = self._load_workflow(workflow_name)
+        self._validate_workflow_action(action, workflow_name, graph)
         self._fill_inputs(graph, session_id, player_input)
         return self._submit_and_wait(graph)
 
@@ -192,6 +218,29 @@ class ExecutionDispatcher:
         from ..testing.api_workflow_loader import APIWorkflowLoader
 
         return APIWorkflowLoader().load(name)
+
+    def _validate_workflow_action(
+        self,
+        action: str,
+        workflow_name: str,
+        graph: dict[str, Any],
+    ) -> None:
+        expected = WORKFLOW_ACTION_NODE_TYPES.get(action, set())
+        if not expected:
+            return
+        class_types = {
+            str(node_def.get("class_type", ""))
+            for node_def in graph.values()
+            if isinstance(node_def, dict)
+        }
+        if class_types.intersection(expected):
+            return
+        expected_text = ", ".join(sorted(expected))
+        actual_text = ", ".join(sorted(item for item in class_types if item)) or "(none)"
+        raise ValueError(
+            f"Workflow '{workflow_name}' is not valid for action '{action}'. "
+            f"Expected one of: {expected_text}. Actual node types: {actual_text}"
+        )
 
     def _fill_inputs(
         self,

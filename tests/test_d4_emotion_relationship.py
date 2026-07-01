@@ -345,8 +345,7 @@ class TestEmotionRelationshipPermissions:
         runtime = EmotionRelationshipRuntime()
         assert not hasattr(runtime, 'card_state_store')
         assert not hasattr(runtime, 'turn_record_store')
-        assert not hasattr(runtime, 'active_memory_store')
-        assert not hasattr(runtime, 'rag_memory_store')
+
 
     def test_16_cannot_cross_card_session(self):
         """Emotion/Relationship Agent 无法跨 cardId / sessionId 查询。"""

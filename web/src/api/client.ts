@@ -110,6 +110,13 @@ export interface WriterPresetInfo {
   path: string;
 }
 
+export interface ConsoleCommandResult {
+  ok: boolean;
+  command: string;
+  output: string;
+  data: Record<string, unknown>;
+}
+
 function errorMessage(body: ApiEnvelope<{ error?: string }> | undefined, status: number): string {
   return body?.data?.error || `HTTP ${status}`;
 }
@@ -206,10 +213,14 @@ export async function sendTurnStream(
   sessionId: string,
   playerInput: string,
   onEvent: (event: StreamEvent) => void,
+  opts?: ExecutionOptions,
   signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(
-    `${BASE}/awp/api/v1/sessions/${encodeURIComponent(sessionId)}/turn/stream`,
+    `${BASE}/awp/api/v1${withExecutionQuery(
+      `/sessions/${encodeURIComponent(sessionId)}/turn/stream`,
+      opts,
+    )}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -298,6 +309,16 @@ export async function createSession(cardId: string, greetingId: string): Promise
 
 export async function listWorkflows(): Promise<WorkflowInfo[]> {
   return get<WorkflowInfo[]>("/workflows");
+}
+
+export async function runConsoleCommand(
+  command: string,
+  sessionId?: string,
+): Promise<ConsoleCommandResult> {
+  return post<ConsoleCommandResult>("/console/command", {
+    command,
+    session_id: sessionId || "",
+  });
 }
 
 export async function listWriterPresets(): Promise<string[]> {

@@ -345,6 +345,22 @@ class TestContinuityPermissions:
         assert CONTINUITY_ROLE_SPEC.can_generate_final_text is False
 
 
+class TestContinuityRuntimeWorldbookEvidence:
+    def test_worldbook_content_excerpt_is_used_as_evidence(self):
+        snapshot = _make_snapshot(
+            active_worldbook=[{
+                "entry_id": "wb_lore",
+                "title": "Lore",
+                "content_excerpt": "CRITICAL_WORLDBOOK_EXCERPT",
+            }],
+        )
+        trigger = ContinuityTriggerResult(should_trigger=True)
+
+        evidence = ContinuityRuntime()._collect_evidence_from_snapshot(snapshot, trigger)
+
+        assert any(ev.excerpt == "CRITICAL_WORLDBOOK_EXCERPT" for ev in evidence)
+
+
 # ─────────────────────────────────────────────
 # Tests 19-21: Ranker
 # ─────────────────────────────────────────────

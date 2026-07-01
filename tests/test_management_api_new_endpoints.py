@@ -12,6 +12,7 @@ from awp_rp_runtime_v2.storage.sqlite.database import Database
 from awp_rp_runtime_v2.tests.factories import (
     make_binding,
     make_card_definition,
+    make_opening_record,
     make_turn_record,
 )
 
@@ -172,11 +173,15 @@ def test_post_turn_stream_endpoint_writes_sse_events(monkeypatch):
         self,
         session_id,
         player_input,
+        mode="",
+        workflow="",
         on_started=None,
         on_step=None,
         on_writer_text=None,
         on_done=None,
     ):
+        assert mode == "python"
+        assert workflow == "send_turn"
         on_started("turn-1", ["round_snapshot", "director"])
         on_step("round_snapshot", {"duration_ms": 1, "snapshot_id": "snap-1"})
         on_writer_text("turn-1", "accepted text")
@@ -193,7 +198,11 @@ def test_post_turn_stream_endpoint_writes_sse_events(monkeypatch):
 
     async def invoke():
         return await handler(
-            _Request(match_info={"session_id": "s1"}, body={"player_input": "hello"})
+            _Request(
+                match_info={"session_id": "s1"},
+                body={"player_input": "hello"},
+                query={"mode": "python", "workflow": "send_turn"},
+            )
         )
 
     response = asyncio.run(invoke())
@@ -314,3 +323,148 @@ def test_continue_endpoint_dispatches_mode_and_workflow(tmp_path, monkeypatch):
         "mode": "python",
         "workflow": "continue_world",
     }
+
+
+def test_console_command_help(monkeypatch):
+    _module, routes = _load_api(monkeypatch)
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    response = asyncio.run(handler(_Request(body={"command": "help"})))
+
+    assert response.status == 200
+    data = _data(response)
+    assert data["ok"] is True
+    assert "context" in data["data"]["commands"]
+    assert data["data"]["shell"] is False
+
+
+def test_console_command_context_uses_project_session(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_definition_store.save(make_card_definition("c1"))
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    reg.card_state_store.initialize("c1", "s1")
+    reg.turn_record_store.save(make_turn_record(session_id="s1", card_id="c1"))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    response = asyncio.run(handler(_Request(body={"command": "context", "session_id": "s1"})))
+
+    assert response.status == 200
+    data = _data(response)
+    assert data["ok"] is True
+    assert data["data"]["session"]["session_id"] == "s1"
+    assert len(data["data"]["latest_turns"]) == 1
+    assert "available_commands" in data["data"]
+
+
+def test_console_command_transcript_prints_full_session_text(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_definition_store.save(make_card_definition("c1"))
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    reg.opening_record_store.save(make_opening_record(session_id="s1", logical_card_id="c1", content="Opening text"))
+    reg.card_state_store.initialize("c1", "s1")
+    reg.turn_record_store.save(make_turn_record(
+        session_id="s1",
+        card_id="c1",
+        player_input="Player says hello",
+        writer_output="Writer answers",
+    ))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    response = asyncio.run(handler(_Request(body={"command": "transcript", "session_id": "s1"})))
+
+    data = _data(response)
+    text = data["data"]["text"]
+    assert data["ok"] is True
+    assert "Opening text" in text
+    assert "Player says hello" in text
+    assert "Writer answers" in text
+    assert "=== CardState ===" in text
+
+
+def test_console_command_rejects_unknown_command(monkeypatch):
+    _module, routes = _load_api(monkeypatch)
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    response = asyncio.run(handler(_Request(body={"command": "shell rm -rf ."})))
+
+    assert response.status == 200
+    data = _data(response)
+    assert data["ok"] is False
+    assert "Unknown safe command" in data["output"]
+
+
+def test_console_command_lists_cards_and_sessions(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_definition_store.save(make_card_definition("c1"))
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    cards_response = asyncio.run(handler(_Request(body={"command": "cards"})))
+    sessions_response = asyncio.run(handler(_Request(body={"command": "sessions"})))
+
+    assert _data(cards_response)["data"]["cards"][0]["card_id"] == "c1"
+    assert _data(sessions_response)["data"]["sessions"][0]["session_id"] == "s1"
+
+
+def test_console_command_creates_new_session(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_definition_store.save(make_card_definition("c1"))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    response = asyncio.run(handler(_Request(body={"command": "new c1 g0"})))
+
+    data = _data(response)
+    assert data["ok"] is True
+    session_id = data["data"]["session_id"]
+    assert reg.card_session_binding_store.load(session_id) is not None
+
+
+def test_console_command_send_dispatches_python_turn(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    calls = {}
+    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+
+    def fake_execute_turn(self, session_id, player_input, mode="", workflow=""):
+        calls.update({
+            "session_id": session_id,
+            "player_input": player_input,
+            "mode": mode,
+            "workflow": workflow,
+        })
+        return {"success": True, "turn_id": "t1", "writer_output": "ok"}
+
+    monkeypatch.setattr(ExecutionDispatcher, "execute_turn", fake_execute_turn)
+
+    handler = routes.handlers[("POST", "/awp/api/v1/console/command")]
+    response = asyncio.run(
+        handler(_Request(body={"command": 'send "hello world"', "session_id": "s1"}))
+    )
+
+    assert _data(response)["ok"] is True
+    assert calls == {
+        "session_id": "s1",
+        "player_input": "hello world",
+        "mode": "python",
+        "workflow": "",
+    }
+
+
+def test_static_asset_path_cannot_escape_management_dist(monkeypatch):
+    module, _routes = _load_api(monkeypatch)
+
+    assert module._resolve_static_asset_path("assets/app.js").name == "app.js"
+    assert module._resolve_static_asset_path("../README.md") is None
+    assert module._resolve_static_asset_path("..\\README.md") is None
+    assert module._resolve_static_asset_path(str(module._MANAGEMENT_DIR.parent / "README.md")) is None

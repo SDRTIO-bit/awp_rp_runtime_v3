@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import json
+import shlex
 import uuid
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,19 @@ from ..runtime.runtime_store_factory import RuntimeStoreFactory
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _MANAGEMENT_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+
+def _resolve_static_asset_path(tail: str) -> Path | None:
+    """Resolve an SPA asset path without allowing traversal outside dist."""
+    if not tail:
+        return None
+    root = _MANAGEMENT_DIR.resolve()
+    candidate = (root / tail).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate
 
 
 def _mime_type(suffix: str) -> str:
@@ -52,6 +66,345 @@ try:
 
     async def _run_blocking(func, *args, **kwargs):
         return await asyncio.to_thread(func, *args, **kwargs)
+
+    def _console_result(
+        command: str,
+        output: str,
+        data: Any = None,
+        ok: bool = True,
+    ) -> dict[str, Any]:
+        return {
+            "ok": ok,
+            "command": command,
+            "output": output,
+            "data": data if data is not None else {},
+        }
+
+    def _turn_to_console_dict(turn: Any) -> dict[str, Any]:
+        return {
+            "turn_id": turn.turn_id,
+            "turn_index": turn.turn_index,
+            "mode": turn.mode.value,
+            "player_input": turn.player_input,
+            "writer_output": turn.writer_output,
+            "base_card_state_revision": turn.base_card_state_revision,
+            "result_card_state_revision": turn.result_card_state_revision,
+            "accepted_at": turn.accepted_at,
+            "created_at": turn.created_at,
+            "trace_id": turn.trace_id,
+        }
+
+    def _run_console_command(command: str, session_id: str = "") -> dict[str, Any]:
+        command = str(command or "").strip()[:500]
+        session_id = str(session_id or "").strip()
+        if not command:
+            return _console_result(command, "No command.", ok=False)
+
+        try:
+            parts = shlex.split(command)
+        except ValueError as e:
+            return _console_result(command, f"Command parse error: {e}", ok=False)
+        name = parts[0].lower()
+        args = parts[1:]
+        allowed = [
+            "help", "context", "cards", "sessions", "new", "session",
+            "history", "turns", "transcript", "state", "send", "continue",
+            "workflows", "presets", "echo", "clear",
+        ]
+
+        if name == "help":
+            return _console_result(
+                command,
+                "Available commands: " + ", ".join(allowed),
+                {
+                    "commands": {
+                        "help": "Show safe console commands.",
+                        "context": "Return AI-readable session context.",
+                        "cards": "List imported cards.",
+                        "sessions": "List sessions.",
+                        "new <card_id> [greeting_id]": "Create a new session from a card.",
+                        "session": "Show current session metadata.",
+                        "history [n]": "Alias for turns [n].",
+                        "turns [n]": "Show latest n turns, default 5.",
+                        "transcript": "Print profile, opening, all turns, and state as terminal text.",
+                        "state": "Show current CardState.",
+                        "send <text>": "Send a player message to the current session using Python direct mode.",
+                        "continue": "Continue the current session using Python direct mode.",
+                        "workflows": "List API workflows.",
+                        "presets": "List writer presets.",
+                        "echo <text>": "Echo text for console checks.",
+                        "clear": "Cleared locally by the frontend.",
+                    },
+                    "shell": False,
+                },
+            )
+
+        if name == "clear":
+            return _console_result(command, "Console cleared locally.", {"local_only": True})
+
+        if name == "echo":
+            return _console_result(command, " ".join(args), {"text": " ".join(args)})
+
+        if name == "workflows":
+            from ..testing.api_workflow_loader import APIWorkflowLoader
+
+            loader = APIWorkflowLoader()
+            workflows = []
+            for workflow_name in loader.list_workflows():
+                workflow = loader.load(workflow_name)
+                class_types = sorted({
+                    node_def.get("class_type", "")
+                    for node_def in workflow.values()
+                    if isinstance(node_def, dict)
+                })
+                workflows.append({
+                    "name": workflow_name,
+                    "node_count": len(workflow),
+                    "class_types": class_types,
+                })
+            return _console_result(command, f"{len(workflows)} workflows.", {"workflows": workflows})
+
+        if name == "presets":
+            from ..presets.writer_preset_loader import WriterPresetLoader
+
+            presets = WriterPresetLoader().list_presets()
+            return _console_result(command, f"{len(presets)} writer presets.", {"presets": presets})
+
+        if name == "cards":
+            factory = _factory()
+            cards = []
+            for card in factory.registry.card_definition_store.list_all():
+                cards.append({
+                    "card_id": card.logical_card_id,
+                    "version": card.card_version,
+                    "name": card.display_name or card.name or card.logical_card_id,
+                    "status": card.status,
+                    "greeting_count": len(card.greetings or []),
+                    "worldbook_count": len(card.worldbook_catalog or []),
+                    "created_at": card.created_at,
+                })
+            return _console_result(command, f"{len(cards)} cards.", {"cards": cards})
+
+        if name == "sessions":
+            factory = _factory()
+            registry = factory.registry
+            sessions = []
+            for binding in registry.card_session_binding_store.list_all():
+                turns_for_session = registry.turn_record_store.list_by_session(binding.session_id)
+                sessions.append({
+                    "session_id": binding.session_id,
+                    "logical_card_id": binding.logical_card_id,
+                    "card_version": binding.card_version,
+                    "selected_greeting_id": binding.selected_greeting_id,
+                    "status": binding.status,
+                    "turn_count": len(turns_for_session),
+                })
+            return _console_result(command, f"{len(sessions)} sessions.", {"sessions": sessions})
+
+        if name == "new":
+            if not args:
+                return _console_result(command, "Usage: new <card_id> [greeting_id]", ok=False)
+            card_id = args[0]
+            greeting_id = args[1] if len(args) > 1 else "g0"
+            factory = _factory()
+            registry = factory.registry
+            card = registry.card_definition_store.get_latest(card_id)
+            if not card:
+                return _console_result(command, f"Card not found: {card_id}", ok=False)
+            try:
+                from ..contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
+                from ..runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
+
+                new_session_id = f"sess-{uuid.uuid4().hex[:12]}"
+                request_id = f"req-{uuid.uuid4().hex[:12]}"
+                bootstrap_request = CardSessionBootstrapRequest(
+                    request_id=request_id,
+                    workflow_run_id=f"wr-{request_id}",
+                    trace_id=f"tr-{request_id}",
+                    session_id=new_session_id,
+                    logical_card_id=card.logical_card_id,
+                    card_version=card.card_version,
+                    greeting_id=greeting_id,
+                    expected_source_hash=card.source_hash,
+                )
+                pipeline = CardSessionBootstrapPipeline(
+                    definition_store=registry.card_definition_store,
+                    binding_store=registry.card_session_binding_store,
+                    opening_store=registry.opening_record_store,
+                    worldbook_store=registry.worldbook_binding_store,
+                    receipt_store=registry.bootstrap_receipt_store,
+                )
+                receipt, failure, diagnostics = pipeline.bootstrap(bootstrap_request)
+                if failure:
+                    return _console_result(command, failure.failure_message, ok=False)
+                registry.card_state_store.initialize(card.logical_card_id, new_session_id)
+                data = {
+                    "session_id": receipt.session_id if receipt else new_session_id,
+                    "card_id": card.logical_card_id,
+                    "greeting_id": greeting_id,
+                    "diagnostics": diagnostics.to_dict(),
+                }
+                return _console_result(command, f"Created session {data['session_id']}.", data)
+            except Exception as e:
+                return _console_result(command, f"Create session failed: {str(e)[:200]}", ok=False)
+
+        if name not in {
+            "context", "session", "history", "turns", "transcript",
+            "state", "send", "continue",
+        }:
+            return _console_result(
+                command,
+                f"Unknown safe command: {name}. Type help.",
+                {"allowed_commands": allowed},
+                ok=False,
+            )
+
+        if not session_id:
+            return _console_result(command, "session_id is required for this command.", ok=False)
+
+        factory = _factory()
+        registry = factory.registry
+        binding = registry.card_session_binding_store.load(session_id)
+        if not binding:
+            return _console_result(command, f"Session not found: {session_id}", ok=False)
+
+        turns = registry.turn_record_store.list_by_session(session_id)
+        session_data = {
+            "session_id": binding.session_id,
+            "logical_card_id": binding.logical_card_id,
+            "card_version": binding.card_version,
+            "source_hash": binding.source_hash,
+            "selected_greeting_id": binding.selected_greeting_id,
+            "status": binding.status,
+            "turn_count": len(turns),
+        }
+
+        if name == "session":
+            return _console_result(command, f"Session {session_id}: {len(turns)} turns.", {"session": session_data})
+
+        if name == "transcript":
+            card = registry.card_definition_store.load(
+                binding.logical_card_id,
+                binding.card_version,
+            )
+            if card is None:
+                card = registry.card_definition_store.get_latest(binding.logical_card_id)
+            opening = registry.opening_record_store.get_by_session(session_id)
+            state = registry.card_state_store.load(binding.logical_card_id, session_id)
+            profile = dict(getattr(card, "profile", {}) or {}) if card else {}
+            lines = [
+                f"Session: {session_id}",
+                f"Card: {binding.logical_card_id} v{binding.card_version}",
+                "",
+                "=== Character Profile ===",
+            ]
+            if card:
+                lines.append(f"Name: {profile.get('name') or card.display_name or card.name}")
+            for key in ("description", "personality", "scenario", "mes_example", "creator_notes"):
+                value = str(profile.get(key, "") or "").strip()
+                if value:
+                    lines.extend([f"{key}:", value, ""])
+            lines.extend([
+                "=== Opening ===",
+                opening.safe_display_content if opening else "(none)",
+                "",
+                "=== Turns ===",
+            ])
+            if turns:
+                for turn in turns:
+                    lines.extend([
+                        f"[Turn {turn.turn_index}]",
+                        "Player:",
+                        turn.player_input or "",
+                        "Writer:",
+                        turn.writer_output or "",
+                        "",
+                    ])
+            else:
+                lines.append("(none)")
+            lines.extend([
+                "=== CardState ===",
+                json.dumps(state.to_dict() if state else None, ensure_ascii=False, indent=2, default=str),
+            ])
+            text = "\n".join(lines).strip()
+            return _console_result(
+                command,
+                text,
+                {
+                    "text": text,
+                    "session": session_data,
+                    "profile": profile,
+                    "opening": opening.safe_display_content if opening else "",
+                    "turns": [_turn_to_console_dict(turn) for turn in turns],
+                    "card_state": state.to_dict() if state else None,
+                },
+            )
+
+        if name in {"history", "turns"}:
+            try:
+                limit = max(1, min(20, int(args[0]))) if args else 5
+            except ValueError:
+                limit = 5
+            selected = turns[-limit:]
+            return _console_result(
+                command,
+                f"Latest {len(selected)} turns.",
+                {"turns": [_turn_to_console_dict(turn) for turn in selected]},
+            )
+
+        if name == "state":
+            state = registry.card_state_store.load(binding.logical_card_id, session_id)
+            return _console_result(
+                command,
+                "Current CardState.",
+                {"card_state": state.to_dict() if state else None},
+            )
+
+        if name == "send":
+            player_input = " ".join(args).strip()
+            if not player_input:
+                return _console_result(command, "Usage: send <player text>", ok=False)
+            from .execution_dispatcher import ExecutionDispatcher
+
+            result = ExecutionDispatcher().execute_turn(
+                session_id,
+                player_input,
+                mode="python",
+            )
+            return _console_result(
+                command,
+                "Turn executed." if result.get("success") else "Turn failed.",
+                {"result": result},
+                ok=bool(result.get("success")),
+            )
+
+        if name == "continue":
+            from .execution_dispatcher import ExecutionDispatcher
+
+            result = ExecutionDispatcher().execute_continue(session_id, mode="python")
+            return _console_result(
+                command,
+                "Continuation executed." if result.get("success") else "Continuation failed.",
+                {"result": result},
+                ok=bool(result.get("success")),
+            )
+
+        state = registry.card_state_store.load(binding.logical_card_id, session_id)
+        latest_turns = turns[-5:]
+        return _console_result(
+            command,
+            "AI-readable runtime context.",
+            {
+                "session": session_data,
+                "latest_turns": [_turn_to_console_dict(turn) for turn in latest_turns],
+                "card_state": state.to_dict() if state else None,
+                "available_commands": allowed,
+                "notes": [
+                    "This console is project-scoped and does not execute shell commands.",
+                    "Use this JSON as diagnostic context for human or AI review.",
+                ],
+            },
+        )
 
     @server.PromptServer.instance.routes.get("/awp/api/v1/sessions")
     async def list_sessions(request):
@@ -264,6 +617,8 @@ try:
         player_input = str(body.get("player_input", "") or "").strip()
         if not player_input:
             return _json({"error": "player_input required"}, 400)
+        mode = request.query.get("mode", "")
+        workflow = request.query.get("workflow", "")
 
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
@@ -294,6 +649,8 @@ try:
                 ExecutionDispatcher().execute_turn_streaming(
                     session_id,
                     player_input,
+                    mode=mode,
+                    workflow=workflow,
                     on_started=_on_started,
                     on_step=_on_step,
                     on_writer_text=_on_writer_text,
@@ -524,6 +881,17 @@ try:
             })
         return _json(result)
 
+    @server.PromptServer.instance.routes.post("/awp/api/v1/console/command")
+    async def post_console_command(request):
+        body = await request.json()
+        command = body.get("command", "")
+        session_id = body.get("session_id", "")
+        try:
+            result = await _run_blocking(_run_console_command, command, session_id)
+            return _json(result)
+        except Exception as e:
+            return _json(_console_result(str(command), str(e)[:300], ok=False), 500)
+
     @server.PromptServer.instance.routes.get("/awp/api/v1/presets/writer")
     async def list_writer_presets(request):
         from ..presets.writer_preset_loader import WriterPresetLoader
@@ -558,9 +926,9 @@ try:
     async def serve_spa_static(request):
         """Serve static files or fall back to index.html for SPA routing."""
         tail = request.match_info.get("tail", "")
-        file_path = _MANAGEMENT_DIR / tail
+        file_path = _resolve_static_asset_path(tail)
 
-        if file_path.exists() and file_path.is_file():
+        if file_path and file_path.exists() and file_path.is_file():
             content_type = _mime_type(file_path.suffix)
             with open(str(file_path), "rb") as f:
                 return web.Response(body=f.read(), content_type=content_type)

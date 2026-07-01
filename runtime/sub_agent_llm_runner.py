@@ -29,6 +29,7 @@ scene_context_lookup: Reads current scene fields such as location, time, weather
 npc_context_lookup: Reads currently active NPC references when present.
 relationship_context_lookup: Reads relationship and emotion cues from memories and recent turns.
 timeline_lookup: Reads recent event order from accepted turns.
+character_profile_lookup: Reads immutable character profile fields from the imported card.
 
 === ROLE CATALOG ===
 history_recall: Find contradictions, unresolved threads, callbacks, and continuity-sensitive facts.
@@ -40,59 +41,68 @@ continuity: Check names, relationships, locations, object ownership, event order
 Use the selected role from the volatile turn packet below."""
 
 
-def _safe(text: Any, max_len: int = 200) -> str:
-    return str(text or "")[:max_len]
+def _safe(text: Any, max_len: int | None = None) -> str:
+    value = str(text or "")
+    if max_len is None:
+        return value
+    return value[:max_len]
 
 
 def _build_tool_result_block(snapshot: Any) -> str:
     """Build deterministic read-only tool results for the sub-agent prompt."""
+    profile = getattr(snapshot, "card_profile_context", {}) or {}
+    profile_block = _format_card_profile(profile)
+
     cs = getattr(snapshot, "card_state", None)
     scene = getattr(cs, "scene_state", None) if cs else None
     location = _safe(getattr(scene, "location", "") if scene else "")
     time_of_day = _safe(getattr(scene, "time_of_day", "") if scene else "")
     weather = _safe(getattr(scene, "weather", "") if scene else "")
     active_npcs = list(getattr(scene, "active_npcs", []) if scene else [])
-    npc_str = ", ".join(str(n) for n in active_npcs[:5]) if active_npcs else "(none)"
+    npc_str = ", ".join(str(n) for n in active_npcs) if active_npcs else "(none)"
 
     recent = getattr(snapshot, "recent_turn_records", []) or []
     turn_lines: list[str] = []
-    for turn in recent[-3:]:
+    recent_limit = int(getattr(snapshot, "max_turn_history", 5) or 5)
+    for turn in _chronological_turns(recent[:recent_limit]):
         idx = _safe(getattr(turn, "turn_index", "?"))
-        player = _safe(getattr(turn, "player_input", ""), 150)
-        writer = _safe(getattr(turn, "writer_output", ""), 150)
+        player = _safe(getattr(turn, "player_input", ""))
+        writer = _safe(getattr(turn, "writer_output", ""))
         turn_lines.append(f"Turn {idx} Player: {player}")
         turn_lines.append(f"Turn {idx} Writer: {writer}")
     recent_block = "\n".join(turn_lines) if turn_lines else "(none)"
 
     memories = getattr(snapshot, "active_memories", []) or []
     memory_lines: list[str] = []
-    for memory in memories[:5]:
+    for memory in memories:
         if isinstance(memory, dict):
-            summary = _safe(memory.get("summary", "") or memory.get("content", ""), 120)
+            summary = _safe(memory.get("summary", "") or memory.get("content", ""))
             if summary:
                 memory_lines.append(f"- {summary}")
     memory_block = "\n".join(memory_lines) if memory_lines else "(none)"
 
     rag = getattr(snapshot, "rag_recall", []) or []
     rag_lines: list[str] = []
-    for item in rag[:5]:
+    for item in rag:
         if isinstance(item, dict):
-            summary = _safe(item.get("summary", "") or item.get("content", ""), 120)
+            summary = _safe(item.get("summary", "") or item.get("content", ""))
             if summary:
                 rag_lines.append(f"- {summary}")
     rag_block = "\n".join(rag_lines) if rag_lines else "(none)"
 
     worldbook = getattr(snapshot, "active_worldbook_entries", []) or []
     worldbook_lines: list[str] = []
-    for entry in worldbook[:8]:
+    for entry in worldbook:
         if isinstance(entry, dict):
-            title = _safe(entry.get("title", "") or entry.get("entry_id", ""), 50)
-            content = _safe(entry.get("content_excerpt", "") or "", 180)
+            title = _safe(entry.get("title", "") or entry.get("entry_id", ""))
+            content = _safe(entry.get("content_excerpt", "") or entry.get("content", ""))
             if title:
                 worldbook_lines.append(f"- {title}: {content}")
     worldbook_block = "\n".join(worldbook_lines) if worldbook_lines else "(none)"
 
     return (
+        "character_profile_lookup:\n"
+        f"{profile_block or '(none)'}\n\n"
         "scene_context_lookup:\n"
         f"Scene: {location} | Time: {time_of_day} | Weather: {weather}\n"
         f"Active NPCs: {npc_str}\n\n"
@@ -105,6 +115,37 @@ def _build_tool_result_block(snapshot: Any) -> str:
         "worldbook_lookup:\n"
         f"{worldbook_block}"
     )
+
+
+def _format_card_profile(profile: dict[str, Any]) -> str:
+    if not isinstance(profile, dict) or not profile:
+        return ""
+    fields = (
+        ("name", "Name"),
+        ("description", "Description"),
+        ("personality", "Personality"),
+        ("scenario", "Scenario"),
+        ("mes_example", "Example messages"),
+        ("creator_notes", "Creator notes"),
+    )
+    lines: list[str] = []
+    for key, label in fields:
+        value = _safe(profile.get(key, ""))
+        if value.strip():
+            lines.append(f"{label}: {value}")
+    return "\n".join(lines)
+
+
+def _chronological_turns(turns: list[Any]) -> list[Any]:
+    def key(turn: Any) -> tuple[int, str]:
+        raw_index = getattr(turn, "turn_index", 0)
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            index = 0
+        return (index, str(getattr(turn, "turn_id", "") or ""))
+
+    return sorted(turns, key=key)
 
 
 def _role_instruction(role: str) -> str:
@@ -120,7 +161,7 @@ def _role_instruction(role: str) -> str:
 
 def _build_prompt(role: str, snapshot: Any) -> str:
     """Build a cache-friendly focused analysis prompt for one sub-agent role."""
-    player_input = _safe(getattr(snapshot, "player_input", ""), 300)
+    player_input = _safe(getattr(snapshot, "player_input", ""))
     return (
         f"{_STABLE_SUB_AGENT_CONTRACT}\n\n"
         "=== TURN PACKET (volatile; changes every turn) ===\n"
@@ -158,4 +199,4 @@ def run_sub_agent_llm(
     if not text.strip():
         return ""
 
-    return text.strip()[:500]
+    return text.strip()

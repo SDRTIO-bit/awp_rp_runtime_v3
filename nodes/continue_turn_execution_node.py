@@ -48,6 +48,21 @@ def _hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _continue_seed(
+    session_id: str,
+    request_id: str = "",
+    turn_id: str = "",
+    run_id: str = "",
+    entropy: str = "",
+) -> str:
+    if request_id or turn_id or run_id:
+        return f"{session_id}:continue:{request_id}:{turn_id}:{run_id}"
+    if not entropy:
+        import time as _time
+        entropy = str(_time.time())
+    return f"{session_id}:continue:{entropy}"
+
+
 def _cache_identity(session_id: str) -> tuple[str, int, str, int, str]:
     try:
         factory = RuntimeStoreFactory.from_env()
@@ -187,9 +202,9 @@ class AWPV2ContinueTurn:
         writer_preset_path: str = "",
     ) -> tuple:
         now = _now()
-        # Continue uses a unique seed to ensure new turn identity
-        import time as _time
-        seed = f"{session_id}:continue:{request_id}:{turn_id}:{run_id}:{_time.time()}"
+        # Continue creates a new turn by default, but explicit request identity
+        # must stay deterministic so idempotent replay can work.
+        seed = _continue_seed(session_id, request_id, turn_id, run_id)
 
         if not request_id:
             request_id = _id("continue", seed)

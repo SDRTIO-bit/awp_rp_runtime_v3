@@ -180,6 +180,27 @@ def test_workflow_param_selects_workflow(monkeypatch):
     assert submitted == {"session_id": "session-1", "player_input": "hello"}
 
 
+def test_hybrid_rejects_workflow_for_wrong_action(monkeypatch):
+    dispatcher = ExecutionDispatcher()
+
+    def fake_load_workflow(name):
+        return {
+            "1": {
+                "class_type": "AWPV2PersistentContinuationTurn",
+                "inputs": {"session_id": "", "player_input": ""},
+            }
+        }
+
+    monkeypatch.setattr(dispatcher, "_load_workflow", fake_load_workflow)
+
+    try:
+        dispatcher.execute_continue("session-1", mode="hybrid", workflow="send_turn")
+    except ValueError as exc:
+        assert "not valid for action 'continue'" in str(exc)
+    else:
+        raise AssertionError("Expected mismatched workflow to be rejected")
+
+
 def test_load_workflow_works_when_package_loaded_from_custom_nodes(monkeypatch, tmp_path):
     package_root = Path(__file__).resolve().parents[1]
     custom_nodes_root = package_root.parent

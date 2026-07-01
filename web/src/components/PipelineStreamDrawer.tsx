@@ -4,8 +4,15 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
-import { Card, Collapse, Drawer, Space, Tag, Typography, message } from "antd";
-import { sendTurnStream, StepPayload, StreamEvent } from "../api/client";
+import { Button, Card, Collapse, Drawer, Input, Space, Tag, Typography, message } from "antd";
+import {
+  ExecutionOptions,
+  runConsoleCommand,
+  sendTurnStream,
+  StepPayload,
+  StreamEvent,
+} from "../api/client";
+import "./PipelineStreamDrawer.css";
 
 const { Paragraph, Text } = Typography;
 
@@ -32,6 +39,14 @@ interface StepState {
   writerOutput?: string;
 }
 
+interface ConsoleEntry {
+  id: number;
+  time: string;
+  level: "info" | "error";
+  title: string;
+  data: unknown;
+}
+
 interface PipelineStreamDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -40,6 +55,7 @@ interface PipelineStreamDrawerProps {
   streamRunId: number;
   onComplete: () => void;
   onRunningChange?: (running: boolean) => void;
+  executionOptions?: ExecutionOptions;
 }
 
 function initialSteps(names: string[]): StepState[] {
@@ -58,9 +74,9 @@ function valueText(value: unknown): string {
 }
 
 function statusIcon(status: StepStatus) {
-  if (status === "done") return <CheckCircleOutlined style={{ color: "#52c41a" }} />;
-  if (status === "failed") return <CloseCircleOutlined style={{ color: "#ff4d4f" }} />;
-  return <ClockCircleOutlined style={{ color: "#8c8c8c" }} />;
+  if (status === "done") return <CheckCircleOutlined className="pipeline-step-icon done" />;
+  if (status === "failed") return <CloseCircleOutlined className="pipeline-step-icon failed" />;
+  return <ClockCircleOutlined className="pipeline-step-icon pending" />;
 }
 
 function verdictText(verdict: unknown): string {
@@ -205,6 +221,16 @@ function renderStepBody(step: StepState) {
   }
 }
 
+function consoleEntryText(entry: ConsoleEntry): string {
+  let body = "";
+  try {
+    body = JSON.stringify(entry.data, null, 2);
+  } catch {
+    body = String(entry.data);
+  }
+  return `[${entry.time}] ${entry.level.toUpperCase()} ${entry.title}\n${body}`;
+}
+
 export default function PipelineStreamDrawer({
   open,
   onClose,
@@ -213,21 +239,87 @@ export default function PipelineStreamDrawer({
   streamRunId,
   onComplete,
   onRunningChange,
+  executionOptions,
 }: PipelineStreamDrawerProps) {
   const defaultStepNames = useMemo(() => Object.keys(STEP_LABELS), []);
   const [steps, setSteps] = useState<StepState[]>(() => initialSteps(defaultStepNames));
   const [running, setRunning] = useState(false);
+  const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([]);
+  const [consoleCommand, setConsoleCommand] = useState("");
+  const [commandRunning, setCommandRunning] = useState(false);
   const startedRunRef = useRef<number | null>(null);
+  const consoleSeqRef = useRef(0);
+
+  const pushConsole = (entry: Omit<ConsoleEntry, "id" | "time">) => {
+    const id = consoleSeqRef.current + 1;
+    consoleSeqRef.current = id;
+    const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+    setConsoleEntries((current) => [
+      ...current.slice(-79),
+      {
+        id,
+        time,
+        ...entry,
+      },
+    ]);
+  };
+
+  const submitConsoleCommand = async () => {
+    const command = consoleCommand.trim();
+    if (!command) return;
+    setConsoleCommand("");
+    if (command.toLowerCase() === "clear") {
+      setConsoleEntries([]);
+      consoleSeqRef.current = 0;
+      return;
+    }
+    pushConsole({
+      level: "info",
+      title: `$ ${command}`,
+      data: { command, sessionId },
+    });
+    setCommandRunning(true);
+    try {
+      const result = await runConsoleCommand(command, sessionId);
+      pushConsole({
+        level: result.ok ? "info" : "error",
+        title: `result: ${command}`,
+        data: result,
+      });
+    } catch (error) {
+      pushConsole({
+        level: "error",
+        title: `command_error: ${command}`,
+        data: {
+          message: error instanceof Error ? error.message : String(error || ""),
+        },
+      });
+    } finally {
+      setCommandRunning(false);
+    }
+  };
 
   useEffect(() => {
     if (!open || !sessionId || !playerInput || startedRunRef.current === streamRunId) return;
     startedRunRef.current = streamRunId;
     setSteps(initialSteps(defaultStepNames));
+    setConsoleEntries([]);
+    consoleSeqRef.current = 0;
     setRunning(true);
     onRunningChange?.(true);
     const controller = new AbortController();
+    pushConsole({
+      level: "info",
+      title: "request",
+      data: { sessionId, playerInput, executionOptions },
+    });
 
     const handleEvent = (event: StreamEvent) => {
+      pushConsole({
+        level: event.type === "done" && !event.success ? "error" : "info",
+        title: event.type,
+        data: event,
+      });
       if (event.type === "started") {
         setSteps(initialSteps(event.steps));
         return;
@@ -267,11 +359,19 @@ export default function PipelineStreamDrawer({
       }
     };
 
-    sendTurnStream(sessionId, playerInput, handleEvent, controller.signal).catch((error) => {
+    sendTurnStream(sessionId, playerInput, handleEvent, executionOptions, controller.signal).catch((error) => {
       if (controller.signal.aborted) return;
       setRunning(false);
       onRunningChange?.(false);
       setSteps(finalizeFailedSteps);
+      pushConsole({
+        level: "error",
+        title: "stream_error",
+        data: {
+          message: formatStreamError(error),
+          raw: error instanceof Error ? error.message : String(error || ""),
+        },
+      });
       message.error(formatStreamError(error));
     });
 
@@ -279,7 +379,7 @@ export default function PipelineStreamDrawer({
       controller.abort();
       onRunningChange?.(false);
     };
-  }, [defaultStepNames, onComplete, onRunningChange, open, playerInput, sessionId, streamRunId]);
+  }, [defaultStepNames, executionOptions, onComplete, onRunningChange, open, playerInput, sessionId, streamRunId]);
 
   return (
     <Drawer
@@ -289,13 +389,53 @@ export default function PipelineStreamDrawer({
       open={open}
       onClose={onClose}
       mask={false}
+      className="pipeline-stream-drawer"
       extra={running ? <Tag color="processing">运行中</Tag> : <Tag>空闲</Tag>}
     >
-      <Space direction="vertical" size={10} style={{ width: "100%" }}>
-        {steps.map((step) => (
+      <Space className="pipeline-step-list" direction="vertical" size={10}>
+        <Card size="small" title="运行控制台">
+          <Space.Compact style={{ width: "100%", marginBottom: 8 }}>
+            <Input
+              value={consoleCommand}
+              onChange={(event) => setConsoleCommand(event.target.value)}
+              onPressEnter={submitConsoleCommand}
+              placeholder="help / context / session / turns 5 / state / workflows / presets / clear"
+              disabled={commandRunning}
+            />
+            <Button type="primary" loading={commandRunning} onClick={submitConsoleCommand}>
+              Run
+            </Button>
+          </Space.Compact>
+          {consoleEntries.length === 0 ? (
+            <Text type="secondary">等待事件</Text>
+          ) : (
+            <Collapse
+              size="small"
+              ghost
+              items={consoleEntries.map((entry) => ({
+                key: String(entry.id),
+                label: (
+                  <Space>
+                    <Tag color={entry.level === "error" ? "red" : "blue"}>{entry.level}</Tag>
+                    <Text>{entry.title}</Text>
+                    <Text type="secondary">{entry.time}</Text>
+                  </Space>
+                ),
+                children: (
+                  <pre className="pipeline-console-entry">
+                    {consoleEntryText(entry)}
+                  </pre>
+                ),
+              }))}
+            />
+          )}
+        </Card>
+        {steps.map((step, index) => (
           <Card
             key={step.name}
             size="small"
+            className={`pipeline-step-card ${step.status}`}
+            style={{ animationDelay: `${index * 38}ms` }}
             title={
               <Space>
                 {statusIcon(step.status)}

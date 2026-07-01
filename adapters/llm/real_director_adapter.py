@@ -317,7 +317,7 @@ class RealDirectorV2Adapter:
         provider prefix caching. Role/workflow/format instructions are in
         the system prompt (SYSTEM_PROMPT_DIRECTOR), not repeated here.
         """
-        player_input = snapshot.player_input[:500]
+        player_input = snapshot.player_input
         scene_location = ""
         if hasattr(snapshot.card_state, 'scene_state'):
             scene_location = getattr(snapshot.card_state.scene_state, 'location', '')
@@ -327,14 +327,14 @@ class RealDirectorV2Adapter:
         # ── Worldbook: split stable (constant) vs dynamic ───────────────
         stable_worldbook_lines = []
         dynamic_worldbook_lines = []
-        for entry in (snapshot.active_worldbook_entries or [])[:5]:
+        for entry in (snapshot.active_worldbook_entries or []):
             if not isinstance(entry, dict):
                 continue
             title = str(entry.get("title", "") or entry.get("entry_id", "Untitled"))
-            content = str(entry.get("content_excerpt", "") or "")[:160]
+            content = str(entry.get("content_excerpt", "") or entry.get("content", "") or "")
             activation_reason = str(entry.get("activation_reason", "") or "")
             matched = entry.get("matched_keywords", [])
-            matched_text = ", ".join(str(item) for item in matched[:5]) if isinstance(matched, list) else ""
+            matched_text = ", ".join(str(item) for item in matched) if isinstance(matched, list) else ""
             line = f"- {title}: {content}"
             if activation_reason:
                 line += f" (reason: {activation_reason})"
@@ -348,25 +348,30 @@ class RealDirectorV2Adapter:
             if is_constant:
                 stable_worldbook_lines.append(line)
             else:
-                dynamic_worldbook_lines.append(line[:240])
+                dynamic_worldbook_lines.append(line)
         stable_worldbook_block = "\n".join(stable_worldbook_lines) if stable_worldbook_lines else "(none)"
         dynamic_worldbook_block = "\n".join(dynamic_worldbook_lines) if dynamic_worldbook_lines else "(none)"
+        profile_block = self._format_card_profile(
+            getattr(snapshot, "card_profile_context", {}) or {}
+        )
 
         # ── Recent turns (last 2-3, truncated) ──────────────────────────
         turn_lines = []
-        for turn in (snapshot.recent_turn_records or [])[-3:]:
+        recent_limit = int(getattr(snapshot, "max_turn_history", 5) or 5)
+        for turn in self._chronological_turns((snapshot.recent_turn_records or [])[:recent_limit]):
             idx = getattr(turn, 'turn_index', '?')
-            p = str(getattr(turn, 'player_input', '') or '')[:200]
-            w = str(getattr(turn, 'writer_output', '') or '')[:200]
+            p = str(getattr(turn, 'player_input', '') or '')
+            w = str(getattr(turn, 'writer_output', '') or '')
             turn_lines.append(f"Turn {idx} Player: {p}")
             turn_lines.append(f"Turn {idx} Writer: {w}")
         recent_turns_block = "\n".join(turn_lines) if turn_lines else "(none)"
+        older_turns_summary = str(getattr(snapshot, "older_turns_summary", "") or "").strip()
 
         # ── Active memories (top 5, truncated) ──────────────────────────
         mem_lines = []
-        for entry in (snapshot.active_memories or [])[:5]:
+        for entry in (snapshot.active_memories or []):
             if isinstance(entry, dict):
-                summary = str(entry.get("summary", "") or entry.get("content", "") or "")[:120]
+                summary = str(entry.get("summary", "") or entry.get("content", "") or "")
                 if summary:
                     mem_lines.append(f"- {summary}")
         mem_block = "\n".join(mem_lines) if mem_lines else "(none)"
@@ -378,6 +383,9 @@ Keep the fixed instructions above separate from the volatile turn context below 
 
 This block contains stable worldbuilding context. It changes infrequently.
 The instructions above (role, workflow, output format) remain in effect.
+Character profile:
+{profile_block or "(none)"}
+
 Stable worldbook context:
 {stable_worldbook_block}
 
@@ -397,6 +405,39 @@ Active memories count: {len(snapshot.active_memories)}
 
 {recent_turns_block}
 
+=== Earlier Turns Summary ===
+
+{older_turns_summary or "(none)"}
+
 === Active Memories ===
 
 {mem_block}"""
+
+    def _format_card_profile(self, profile: dict[str, Any]) -> str:
+        if not isinstance(profile, dict) or not profile:
+            return ""
+        fields = (
+            ("name", "Name"),
+            ("description", "Description"),
+            ("personality", "Personality"),
+            ("scenario", "Scenario"),
+            ("mes_example", "Example messages"),
+            ("creator_notes", "Creator notes"),
+        )
+        lines = []
+        for key, label in fields:
+            value = str(profile.get(key, "") or "").strip()
+            if value:
+                lines.append(f"{label}:\n{value}")
+        return "\n\n".join(lines)
+
+    def _chronological_turns(self, turns: list[Any]) -> list[Any]:
+        def key(turn: Any) -> tuple[int, str]:
+            raw_index = getattr(turn, "turn_index", 0)
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError):
+                index = 0
+            return (index, str(getattr(turn, "turn_id", "") or ""))
+
+        return sorted(turns, key=key)

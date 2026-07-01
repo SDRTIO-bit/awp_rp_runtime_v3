@@ -670,6 +670,44 @@ class TestSessionRuntimeLoadIntegration:
             assert len(bundle.round_snapshot.recent_turn_records) == 3
             _close_db(db)
 
+    def test_load_includes_version_locked_card_profile_in_snapshot(self):
+        """SessionRuntimeLoad must freeze character profile into RoundSnapshot."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _make_db(tmp)
+            registry = SessionRuntimeStoreRegistry(db)
+            _seed_session(registry)
+            registry.card_definition_store.save(CardDefinition(
+                logical_card_id="card_001",
+                card_version=1,
+                source_id="src_card_001_1",
+                source_hash="abc123",
+                name="Seed Card",
+                display_name="Seed Card",
+                status=CardDefinitionStatus.READY,
+                profile={
+                    "schema_id": "awp.rp.card-profile.v1",
+                    "schema_version": 1,
+                    "name": "PROFILE_NAME_MARKER",
+                    "description": "PROFILE_DESCRIPTION_MARKER",
+                    "personality": "PROFILE_PERSONALITY_MARKER",
+                },
+                greetings=[],
+                worldbook_catalog=[],
+                worldbook_chunks=[],
+                created_at=_now(),
+                updated_at=_now(),
+            ))
+
+            bundle = SessionRuntimeLoad(registry).load("sess_001", "New player input")
+
+            assert bundle.is_valid
+            assert bundle.round_snapshot is not None
+            assert bundle.round_snapshot.card_profile_context["name"] == "PROFILE_NAME_MARKER"
+            assert bundle.round_snapshot.card_profile_context["description"] == "PROFILE_DESCRIPTION_MARKER"
+            assert bundle.round_snapshot.card_profile_context["personality"] == "PROFILE_PERSONALITY_MARKER"
+            assert bundle.round_snapshot.card_profile_context["card_version"] == 1
+            _close_db(db)
+
     def test_load_fails_gracefully_missing_session(self):
         """SessionRuntimeLoad returns errors for missing session."""
         with tempfile.TemporaryDirectory() as tmp:

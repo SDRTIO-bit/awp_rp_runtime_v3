@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Empty, Input, Spin, Tag, Typography, message } from "antd";
 import { ArrowLeftOutlined, PlayCircleOutlined, SendOutlined } from "@ant-design/icons";
@@ -35,8 +35,10 @@ export default function SessionChat() {
   const [drawerInput, setDrawerInput] = useState("");
   const [streamRunId, setStreamRunId] = useState(0);
   const [streaming, setStreaming] = useState(false);
-  const [mode, setMode] = useState("hybrid");
-  const [workflow, setWorkflow] = useState("");
+  const [turnMode, setTurnMode] = useState("python");
+  const [turnWorkflow, setTurnWorkflow] = useState("");
+  const [continueMode, setContinueMode] = useState("python");
+  const [continueWorkflow, setContinueWorkflow] = useState("");
 
   const load = useCallback((showSpinner = true) => {
     if (!id) return;
@@ -60,16 +62,21 @@ export default function SessionChat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns]);
 
-  const executionOptions = {
-    mode,
-    workflow: workflow || undefined,
-  };
+  const turnExecutionOptions = useMemo(() => ({
+    mode: turnMode,
+    workflow: turnWorkflow || undefined,
+  }), [turnMode, turnWorkflow]);
+
+  const continueExecutionOptions = useMemo(() => ({
+    mode: continueMode,
+    workflow: continueWorkflow || undefined,
+  }), [continueMode, continueWorkflow]);
 
   const handleContinue = async () => {
     if (!id) return;
     setContinuing(true);
     try {
-      const result = await continueSessionV2(id, executionOptions);
+      const result = await continueSessionV2(id, continueExecutionOptions);
       if (result.success) {
         message.success(`继续完成：第 ${result.turn_index ?? ""} 回合`.trim());
         load();
@@ -215,10 +222,17 @@ export default function SessionChat() {
       <aside className="session-chat-sidebar">
         <WorkflowSelector
           action="turn"
-          mode={mode}
-          workflow={workflow}
-          onModeChange={setMode}
-          onWorkflowChange={setWorkflow}
+          mode={turnMode}
+          workflow={turnWorkflow}
+          onModeChange={setTurnMode}
+          onWorkflowChange={setTurnWorkflow}
+        />
+        <WorkflowSelector
+          action="continue"
+          mode={continueMode}
+          workflow={continueWorkflow}
+          onModeChange={setContinueMode}
+          onWorkflowChange={setContinueWorkflow}
         />
         <PresetViewer />
       </aside>
@@ -232,6 +246,7 @@ export default function SessionChat() {
           streamRunId={streamRunId}
           onComplete={() => load(false)}
           onRunningChange={setStreaming}
+          executionOptions={turnExecutionOptions}
         />
       )}
     </div>
