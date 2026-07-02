@@ -89,24 +89,34 @@ class PromptAssembler:
         score_block = score.strip() or self._build_score_fallback(final_turn_brief, accepted_guidance)
         current_state = self._format_variable_snapshot(variable_snapshot or self._snapshot_from_card_state(card_state_context))
 
-        turn_parts = [
-            "=== SCORE (Director's integrated direction) ===\n" + score_block,
-            "=== CURRENT STATE (volatile) ===\n" + (current_state or "None"),
-            "=== PLAYER INPUT ===\n" + (player_input or ""),
-        ]
+        # TURN PACKET 顺序：历史 → 状态 → 记忆 → 世界书 → Director 规划 → 玩家输入
+        turn_parts = []
 
+        # 1. 历史（第一位）
         opening_text = str(opening_context.get("safe_display_content", "") or "").strip()
         history_block = self._format_recent_turns(recent_turns, opening_text)
         if history_block:
-            turn_parts.insert(1, "=== RECENT HISTORY (full) ===\n" + history_block)
+            turn_parts.append("=== RECENT HISTORY (full) ===\n" + history_block)
         if older_turns_summary:
-            turn_parts.insert(2, "=== EARLIER HISTORY (emotional summary) ===\n" + older_turns_summary)
+            turn_parts.append("=== EARLIER HISTORY (emotional summary) ===\n" + older_turns_summary)
 
+        # 2. 当前状态
+        turn_parts.append("=== CURRENT STATE (volatile) ===\n" + (current_state or "None"))
+
+        # 3. 记忆上下文
         memories_block = self._format_memory_block(active_memories, rag_memories)
         if memories_block:
-            turn_parts.insert(-1, "=== MEMORY CONTEXT ===\n" + memories_block)
+            turn_parts.append("=== MEMORY CONTEXT ===\n" + memories_block)
+
+        # 4. 动态世界书
         if dynamic_worldbook:
-            turn_parts.insert(-1, "=== DYNAMIC WORLDBOOK CONTEXT ===\n" + dynamic_worldbook)
+            turn_parts.append("=== DYNAMIC WORLDBOOK CONTEXT ===\n" + dynamic_worldbook)
+
+        # 5. Director 规划（第6位，在 PLAYER INPUT 前）
+        turn_parts.append("=== SCORE (Director's integrated direction) ===\n" + score_block)
+
+        # 6. 玩家输入（最后）
+        turn_parts.append("=== PLAYER INPUT ===\n" + (player_input or ""))
 
         return (
             "=== STABLE WRITER CONTRACT ===\n\n"
