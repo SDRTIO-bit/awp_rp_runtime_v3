@@ -216,6 +216,10 @@ export async function sendTurnStream(
   opts?: ExecutionOptions,
   signal?: AbortSignal,
 ): Promise<void> {
+  // SSE 实时流式接收；8s 内若连一个事件都没收到，回落为轮询 /turns 兜底。
+  // 注意：python 模式会逐步推 step 事件，gotEvent 会很快置 true；hybrid/工作流模式
+  // 后端会立即推 started 事件（即使后续要等 ComfyUI 跑完才有 done），所以正常
+  // 情况下 8s 内一定会收到事件，这个兜底只在 SSE 真的没动静时才触发。
   const res = await fetch(
     `${BASE}/awp/api/v1${withExecutionQuery(
       `/sessions/${encodeURIComponent(sessionId)}/turn/stream`,
@@ -239,26 +243,103 @@ export async function sendTurnStream(
   }
   if (!res.body) throw new Error("流式响应正文不可用");
 
+  let gotEvent = false;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split(/\r?\n\r?\n/);
-    buffer = parts.pop() || "";
-    for (const part of parts) {
-      const event = parseSSEBlock(part);
+
+  // Start a polling fallback timer: if no SSE event arrives within 8s,
+  // poll the turns endpoint for the result.
+  const knownTurnCount = await _getTurnCount(sessionId, signal);
+  const pollTimer = setTimeout(async () => {
+    if (gotEvent || signal?.aborted) return;
+    // 8s 内一个 SSE 事件都没收到（连接异常或后端迟迟没推），改轮询 /turns 兜底拿结果。
+    const result = await _pollForNewTurn(sessionId, knownTurnCount, signal);
+    if (result && !signal?.aborted) {
+      onEvent({ type: "started", turn_id: result.turn_id, steps: [] });
+      onEvent({
+        type: "writer_text",
+        turn_id: result.turn_id,
+        writer_output: result.writer_output,
+      });
+      onEvent({
+        type: "done",
+        success: true,
+        turn_id: result.turn_id,
+        turn_index: result.turn_index,
+        writer_output: result.writer_output,
+      });
+    }
+  }, 8000);
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      gotEvent = true;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\r?\n\r?\n/);
+      buffer = parts.pop() || "";
+      for (const part of parts) {
+        const event = parseSSEBlock(part);
+        if (event) onEvent(event);
+      }
+    }
+    buffer += decoder.decode();
+    const trailing = buffer.trim();
+    if (trailing) {
+      const event = parseSSEBlock(trailing);
       if (event) onEvent(event);
     }
+  } finally {
+    clearTimeout(pollTimer);
   }
-  buffer += decoder.decode();
-  const trailing = buffer.trim();
-  if (trailing) {
-    const event = parseSSEBlock(trailing);
-    if (event) onEvent(event);
+}
+
+async function _getTurnCount(sessionId: string, signal?: AbortSignal): Promise<number> {
+  try {
+    const res = await fetch(
+      `${BASE}/awp/api/v1/sessions/${encodeURIComponent(sessionId)}/turns`,
+      { signal },
+    );
+    if (!res.ok) return 0;
+    const body = await res.json();
+    return (body?.data as unknown[])?.length ?? 0;
+  } catch {
+    return 0;
   }
+}
+
+async function _pollForNewTurn(
+  sessionId: string,
+  previousCount: number,
+  signal?: AbortSignal,
+): Promise<{ turn_id: string; turn_index: number; writer_output: string } | null> {
+  // Poll every 2s for up to 120s
+  for (let i = 0; i < 60; i++) {
+    if (signal?.aborted) return null;
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const res = await fetch(
+        `${BASE}/awp/api/v1/sessions/${encodeURIComponent(sessionId)}/turns`,
+        { signal },
+      );
+      if (!res.ok) continue;
+      const body = await res.json();
+      const turns = (body?.data as Array<Record<string, unknown>>) ?? [];
+      if (turns.length > previousCount) {
+        const latest = turns[turns.length - 1];
+        return {
+          turn_id: String(latest.turn_id ?? ""),
+          turn_index: Number(latest.turn_index ?? 0),
+          writer_output: String(latest.writer_output ?? ""),
+        };
+      }
+    } catch {
+      // ignore and retry
+    }
+  }
+  return null;
 }
 
 export async function firstTurn(
@@ -286,6 +367,19 @@ export async function importCard(sourcePath: string, greetingId?: string): Promi
     source_path: sourcePath,
     ...(greetingId ? { greeting_id: greetingId } : {}),
   });
+}
+
+export async function uploadCard(file: File, greetingId?: string): Promise<ImportCardResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const params = greetingId ? `?greeting_id=${encodeURIComponent(greetingId)}` : "";
+  const res = await fetch(`${BASE}/awp/api/v1/cards/upload${params}`, {
+    method: "POST",
+    body: formData,
+  });
+  const body = await parseJson<ImportCardResult>(res);
+  if (!res.ok) throw new Error(errorMessage(body as ApiEnvelope<{ error?: string }>, res.status));
+  return body.data as ImportCardResult;
 }
 
 export async function deleteCard(cardId: string): Promise<void> {

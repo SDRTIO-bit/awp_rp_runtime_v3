@@ -9,6 +9,9 @@ from types import SimpleNamespace
 
 from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from awp_rp_runtime_v2.storage.sqlite.database import Database
+from awp_rp_runtime_v2.contracts.active_memory import ActiveMemoryRecord
+from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace, TraceEvent
+from awp_rp_runtime_v2.contracts.rag_memory import RagMemoryRecord
 from awp_rp_runtime_v2.tests.factories import (
     make_binding,
     make_card_definition,
@@ -159,6 +162,9 @@ def test_post_turn_stream_endpoint_writes_sse_events(monkeypatch):
         async def prepare(self, request):
             return self
 
+        async def drain(self):
+            pass
+
         async def write(self, data: bytes):
             self.writes.append(data)
 
@@ -230,6 +236,107 @@ def test_post_turn_stream_empty_input_returns_400(monkeypatch):
 
     assert response.status == 400
     assert _data(response)["error"] == "player_input required"
+
+
+def test_turn_pipeline_rejects_trace_from_other_session(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    reg.trace_store.save(ExecutionTrace(
+        trace_id="trace-other",
+        turn_id="turn-other",
+        card_id="c2",
+        session_id="s2",
+    ))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("GET", "/awp/api/v1/sessions/{session_id}/turns/{turn_id}/pipeline")]
+    response = asyncio.run(handler(_Request(match_info={"session_id": "s1", "turn_id": "turn-other"})))
+
+    assert response.status == 404
+
+
+def test_turn_pipeline_redacts_trace_output_preview(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    reg.turn_record_store.save(make_turn_record(
+        session_id="s1",
+        card_id="c1",
+        turn_id="t1",
+        player_input="Player input is session-owned",
+        writer_output="Writer output is session-owned",
+    ))
+    reg.trace_store.save(ExecutionTrace(
+        trace_id="trace-t1",
+        turn_id="t1",
+        card_id="c1",
+        session_id="s1",
+        events=[
+            TraceEvent(
+                event_type="writer",
+                actor="writer",
+                details={"output_preview": "RAW WRITER TEXT", "text_length": 15},
+            )
+        ],
+    ))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("GET", "/awp/api/v1/sessions/{session_id}/turns/{turn_id}/pipeline")]
+    response = asyncio.run(handler(_Request(match_info={"session_id": "s1", "turn_id": "t1"})))
+
+    step = _data(response)["steps"][0]
+    assert "output_preview" not in step["details"]
+    assert step["details"]["text_length"] == 15
+
+
+def test_turn_pipeline_memory_lookup_uses_source_turn_ids(tmp_path, monkeypatch):
+    module, routes = _load_api(monkeypatch)
+    reg = _registry(tmp_path)
+    reg.card_session_binding_store.save(make_binding(session_id="s1", logical_card_id="c1"))
+    reg.turn_record_store.save(make_turn_record(session_id="s1", card_id="c1", turn_id="t1"))
+    reg.trace_store.save(ExecutionTrace(
+        trace_id="trace-t1",
+        turn_id="t1",
+        card_id="c1",
+        session_id="s1",
+    ))
+    reg.active_memory_store.upsert("c1", "s1", ActiveMemoryRecord(
+        memory_id="am-good",
+        card_id="c1",
+        session_id="s1",
+        summary="Source-bound memory for this turn",
+        source_turn_ids=["t1"],
+    ))
+    reg.active_memory_store.upsert("c1", "s1", ActiveMemoryRecord(
+        memory_id="am-false-positive",
+        card_id="c1",
+        session_id="s1",
+        summary="Mentions t1 in text but belongs elsewhere",
+        source_turn_ids=["t2"],
+    ))
+    reg.rag_memory_store.save("c1", "s1", RagMemoryRecord(
+        memory_id="rag-good",
+        card_id="c1",
+        session_id="s1",
+        content="Long-term memory for this turn",
+        source_turn_ids=["t1"],
+    ))
+    reg.rag_memory_store.save("c1", "s1", RagMemoryRecord(
+        memory_id="rag-false-positive",
+        card_id="c1",
+        session_id="s1",
+        content="Mentions t1 in content but belongs elsewhere",
+        source_turn_ids=["t2"],
+    ))
+    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
+
+    handler = routes.handlers[("GET", "/awp/api/v1/sessions/{session_id}/turns/{turn_id}/pipeline")]
+    response = asyncio.run(handler(_Request(match_info={"session_id": "s1", "turn_id": "t1"})))
+
+    data = _data(response)
+    assert [m["memory_id"] for m in data["active_memories"]] == ["am-good"]
+    assert [m["memory_id"] for m in data["rag_memories"]] == ["rag-good"]
 
 
 def test_greetings_endpoint_lists_card_greetings(tmp_path, monkeypatch):

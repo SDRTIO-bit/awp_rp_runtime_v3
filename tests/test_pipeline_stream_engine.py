@@ -62,6 +62,14 @@ def test_engine_stream_callbacks_emit_nine_steps_and_writer_text(tmp_path):
     assert writer_payload["text_hash"] == hashlib.sha256(
         result[4]["writer_output"].encode("utf-8")
     ).hexdigest()[:16]
+    director_payload = dict(steps)["director"]
+    assert director_payload["call_success"] is True
+    assert director_payload["turn_goal"], "director step payload must carry turn_goal"
+    assert director_payload["scene_focus"], "director step payload must carry scene_focus"
+    assert isinstance(director_payload["must_preserve_facts"], list)
+    assert isinstance(director_payload["must_not_do"], list)
+    assert isinstance(director_payload["writer_constraints"], list)
+    assert isinstance(director_payload["narrative_opportunities"], list)
     quality_payload = dict(steps)["quality_gate"]
     assert quality_payload["verdict"] == "pass"
     assert all(isinstance(payload["duration_ms"], int) for _name, payload in steps)

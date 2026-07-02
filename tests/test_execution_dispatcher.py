@@ -245,3 +245,25 @@ def test_extract_turn_result_from_comfy_history_ui_payload():
     assert result["turn_id"] == "turn-9"
     assert result["turn_index"] == 4
     assert result["writer_output"] == "full accepted text"
+
+
+def test_extract_turn_result_from_comfy_history_top_level_failure_payload():
+    projection = {
+        "turn_id": "",
+        "turn_index": 0,
+        "diagnostic_status": "failure",
+        "failure_code": "SESSION_LOAD_FAILED",
+        "failure_message": "No CardSessionBinding",
+    }
+    history = {
+        "outputs": {
+            "10": {"awp_accepted_text": [""]},
+            "11": {"awp_turn_result_json": [json.dumps(projection)]},
+        }
+    }
+
+    result = ExecutionDispatcher()._extract_turn_result_from_history(history)
+
+    assert result["success"] is False
+    assert result["diagnostics"]["failure_code"] == "SESSION_LOAD_FAILED"
+    assert result["diagnostics"]["failure_message"] == "No CardSessionBinding"

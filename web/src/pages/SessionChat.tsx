@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Empty, Input, Spin, Tag, Typography, message } from "antd";
-import { ArrowLeftOutlined, PlayCircleOutlined, SendOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DashboardOutlined, PlayCircleOutlined, SendOutlined } from "@ant-design/icons";
 import {
   continueSessionV2,
   getSession,
@@ -53,6 +53,13 @@ export default function SessionChat() {
         if (showSpinner) setLoading(false);
       });
   }, [id]);
+
+  // 必须保持稳定引用：PipelineStreamDrawer 的 SSE effect 把 onComplete 放进了依赖数组，
+  // 若每次 render 都新建函数，会在 effect 启动后立刻触发 cleanup → abort 进行中的 SSE 流，
+  // 表现为“步骤不更新、刷新页面才出数据”。
+  const handleStreamComplete = useCallback(() => {
+    load(false);
+  }, [load]);
 
   useEffect(() => {
     load();
@@ -121,6 +128,12 @@ export default function SessionChat() {
             onClick={handleContinue}
           >
             继续
+          </Button>
+          <Button
+            icon={<DashboardOutlined />}
+            onClick={() => setDrawerOpen(true)}
+          >
+            流程
           </Button>
         </div>
 
@@ -244,7 +257,7 @@ export default function SessionChat() {
           sessionId={id}
           playerInput={drawerInput}
           streamRunId={streamRunId}
-          onComplete={() => load(false)}
+          onComplete={handleStreamComplete}
           onRunningChange={setStreaming}
           executionOptions={turnExecutionOptions}
         />

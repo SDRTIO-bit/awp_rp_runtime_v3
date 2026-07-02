@@ -1005,47 +1005,46 @@ class TestP1EngineIntegration:
         assert llm.kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
         assert llm.kwargs["max_tokens"] == 1200
 
-    def test_22c_sub_agent_prompt_uses_stable_prefix_and_tool_results(self):
-        """Sub-agent prompt should cache shared contract while using read-only tool results."""
+    def test_22c_sub_agent_tools_return_expected_data(self):
+        """Sub-agent tool execution should return data from the snapshot."""
         from types import SimpleNamespace
-        from ..runtime.sub_agent_llm_runner import _build_prompt
+        from ..runtime.sub_agent_llm_runner import _execute_tool
 
-        snapshot_a = SimpleNamespace(
+        snapshot = SimpleNamespace(
             player_input="input A",
             card_state=SimpleNamespace(scene_state=SimpleNamespace(
                 location="yard", time_of_day="morning", weather="clear", active_npcs=["npc1"],
             )),
             recent_turn_records=[SimpleNamespace(turn_index=1, player_input="p1", writer_output="w1")],
-            active_memories=[{"summary": "promise"}],
+            active_memories=[{"kind": "promise", "summary": "promise"}],
             rag_recall=[{"summary": "old fact"}],
             active_worldbook_entries=[{"title": "village", "content_excerpt": "stable lore"}],
-        )
-        snapshot_b = SimpleNamespace(
-            player_input="input B",
-            card_state=snapshot_a.card_state,
-            recent_turn_records=snapshot_a.recent_turn_records,
-            active_memories=snapshot_a.active_memories,
-            rag_recall=snapshot_a.rag_recall,
-            active_worldbook_entries=snapshot_a.active_worldbook_entries,
+            card_profile_context={"name": "TestChar"},
         )
 
-        p1 = _build_prompt("opportunity", snapshot_a)
-        p2 = _build_prompt("world_life", snapshot_b)
-        prefix1 = p1.split("=== TURN PACKET", 1)[0]
-        prefix2 = p2.split("=== TURN PACKET", 1)[0]
-        turn_packet = p1.split("=== TURN PACKET", 1)[1]
+        scene = _execute_tool("scene_context_lookup", {}, snapshot)
+        assert "yard" in scene
+        assert "morning" in scene
+        assert "npc1" in scene
 
-        assert prefix1 == prefix2
-        assert "AVAILABLE READ-ONLY TOOLS" in prefix1
-        assert "accepted_turn_lookup" in prefix1
-        assert "READ-ONLY TOOL RESULTS" in turn_packet
-        assert "worldbook_lookup" in turn_packet
-        assert "input A" in turn_packet
+        turns = _execute_tool("accepted_turn_lookup", {"limit": 5}, snapshot)
+        assert "p1" in turns
+        assert "w1" in turns
+
+        wb = _execute_tool("worldbook_lookup", {}, snapshot)
+        assert "village" in wb
+        assert "stable lore" in wb
+
+        mem = _execute_tool("active_memory_lookup", {}, snapshot)
+        assert "promise" in mem
+
+        profile = _execute_tool("character_profile_lookup", {}, snapshot)
+        assert "TestChar" in profile
 
     def test_22c1_sub_agent_prompt_preserves_latest_five_full_context(self):
-        """D1-D5 analysis should see the same latest-five full context window."""
+        """D1-D5 tool execution should return full context without truncation."""
         from types import SimpleNamespace
-        from ..runtime.sub_agent_llm_runner import _build_prompt
+        from ..runtime.sub_agent_llm_runner import _execute_tool
 
         snapshot = SimpleNamespace(
             player_input="SUB_AGENT_INPUT_" + "A" * 360 + "_INPUT_TAIL",
@@ -1060,38 +1059,47 @@ class TestP1EngineIntegration:
                 )
                 for i in [6, 5, 4, 3, 2]
             ],
-            active_memories=[{"summary": "MEMORY_" + "M" * 160 + "_MEMORY_TAIL"}],
+            active_memories=[{"kind": "promise", "summary": "MEMORY_" + "M" * 160 + "_MEMORY_TAIL"}],
             rag_recall=[{"summary": "RAG_" + "R" * 160 + "_RAG_TAIL"}],
             active_worldbook_entries=[{
                 "title": "village",
                 "content_excerpt": "WORLDBOOK_" + "L" * 240 + "_WORLDBOOK_TAIL",
             }],
+            card_profile_context={},
         )
 
-        prompt = _build_prompt("continuity", snapshot)
+        turns = _execute_tool("accepted_turn_lookup", {"limit": 5}, snapshot)
+        assert "_PLAYER_TAIL_6" in turns
+        assert "_WRITER_TAIL_6" in turns
+        assert "_PLAYER_TAIL_2" in turns
+        assert "_WRITER_TAIL_2" in turns
 
-        assert "_INPUT_TAIL" in prompt
-        assert "_PLAYER_TAIL_6" in prompt
-        assert "_WRITER_TAIL_6" in prompt
-        assert "_PLAYER_TAIL_2" in prompt
-        assert "_WRITER_TAIL_2" in prompt
-        assert "_MEMORY_TAIL" in prompt
-        assert "_RAG_TAIL" in prompt
-        assert "_WORLDBOOK_TAIL" in prompt
+        mem = _execute_tool("active_memory_lookup", {}, snapshot)
+        assert "_MEMORY_TAIL" in mem
+
+        rag = _execute_tool("rag_memory_lookup", {}, snapshot)
+        assert "_RAG_TAIL" in rag
+
+        wb = _execute_tool("worldbook_lookup", {}, snapshot)
+        assert "_WORLDBOOK_TAIL" in wb
 
     def test_22d_sub_agent_llm_disables_thinking_mode(self):
         """Sub-agent Flash calls should keep thinking disabled."""
         from types import SimpleNamespace
         from ..runtime.sub_agent_llm_runner import run_sub_agent_llm
 
+        class MockMessage:
+            content = "Specific analysis."
+            tool_calls = None
+
         class MockAdapter:
             def __init__(self):
                 self.kwargs = {}
 
-            def generate_text(self, prompt, **kwargs):
+            def call_with_tools(self, messages, tools, **kwargs):
                 self.kwargs = kwargs
-                receipt = type('Receipt', (), {'success': True})()
-                return "Specific analysis.", receipt
+                usage = type('Usage', (), {'total_tokens': 0})()
+                return MockMessage(), usage
 
         adapter = MockAdapter()
         snapshot = SimpleNamespace(
@@ -1101,6 +1109,7 @@ class TestP1EngineIntegration:
             active_memories=[],
             rag_recall=[],
             active_worldbook_entries=[],
+            card_profile_context={},
         )
 
         text = run_sub_agent_llm("opportunity", snapshot, adapter)

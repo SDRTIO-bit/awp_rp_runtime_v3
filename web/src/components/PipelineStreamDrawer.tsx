@@ -129,16 +129,44 @@ function renderStepBody(step: StepState) {
           {valueText(payload.worldbook_activated_count)}
         </Text>
       );
-    case "director":
+    case "director": {
+      const hasPlan = Boolean(payload.turn_goal || payload.scene_focus);
       return (
         <Space direction="vertical" size={2}>
           <Text>
             {valueText(payload.provider_type)} / {valueText(payload.model)}
           </Text>
-          <Text type="secondary">计划：{valueText(payload.plan_ref).slice(0, 48)}</Text>
           {payload.call_success === false && <Tag color="red">{valueText(payload.failure_code)}</Tag>}
+          {hasPlan && (
+            <Collapse size="small" ghost items={[{
+              key: "plan",
+              label: <Text type="secondary">计划 {valueText(payload.plan_ref).slice(0, 24)}…</Text>,
+              children: (
+                <Space direction="vertical" size={2} style={{ fontSize: 12 }}>
+                  {Boolean(payload.turn_goal) && <div><Text strong>目标：</Text>{String(payload.turn_goal)}</div>}
+                  {Boolean(payload.scene_focus) && <div><Text strong>焦点：</Text>{String(payload.scene_focus)}</div>}
+                  {Array.isArray(payload.must_preserve_facts) && payload.must_preserve_facts.length > 0 && (
+                    <div><Text strong>必须保留：</Text>{(payload.must_preserve_facts as string[]).join("；")}</div>
+                  )}
+                  {Array.isArray(payload.must_not_do) && payload.must_not_do.length > 0 && (
+                    <div><Text strong>禁止：</Text>{(payload.must_not_do as string[]).join("；")}</div>
+                  )}
+                  {Array.isArray(payload.narrative_opportunities) && payload.narrative_opportunities.length > 0 && (
+                    <div><Text strong>机会：</Text>{(payload.narrative_opportunities as string[]).join("；")}</div>
+                  )}
+                  {Array.isArray(payload.writer_constraints) && payload.writer_constraints.length > 0 && (
+                    <div><Text strong>约束：</Text>{(payload.writer_constraints as string[]).join("；")}</div>
+                  )}
+                  {Array.isArray(payload.active_character_refs) && payload.active_character_refs.length > 0 && (
+                    <div><Text strong>角色：</Text>{(payload.active_character_refs as string[]).join("；")}</div>
+                  )}
+                </Space>
+              ),
+            }]} />
+          )}
         </Space>
       );
+    }
     case "director_delegation":
       return (
         <Space direction="vertical" size={4}>

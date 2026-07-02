@@ -3,7 +3,6 @@ import {
   Button,
   Drawer,
   Empty,
-  Input,
   List,
   Modal,
   Popconfirm,
@@ -12,14 +11,16 @@ import {
   Table,
   Tag,
   Typography,
+  Upload,
   message,
 } from "antd";
-import { DeleteOutlined, ImportOutlined } from "@ant-design/icons";
+import { DeleteOutlined, ImportOutlined, UploadOutlined } from "@ant-design/icons";
+import type { UploadFile } from "antd";
 import {
   Card,
   deleteCard,
   GreetingInfo,
-  importCard,
+  uploadCard,
   listCards,
   listGreetings,
 } from "../api/client";
@@ -34,7 +35,7 @@ export default function Cards() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
-  const [sourcePath, setSourcePath] = useState("");
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importing, setImporting] = useState(false);
   const [detailCard, setDetailCard] = useState<Card | null>(null);
   const [greetings, setGreetings] = useState<GreetingInfo[]>([]);
@@ -53,16 +54,17 @@ export default function Cards() {
   }, []);
 
   const handleImport = async () => {
-    if (!sourcePath.trim()) {
-      message.warning("请填写来源路径");
+    const file = fileList[0]?.originFileObj;
+    if (!file) {
+      message.warning("请选择角色卡文件");
       return;
     }
     setImporting(true);
     try {
-      const result = await importCard(sourcePath.trim());
+      const result = await uploadCard(file);
       message.success(`已导入角色卡：${result.card_id}`);
       setImportOpen(false);
-      setSourcePath("");
+      setFileList([]);
       loadCards();
     } catch (error) {
       message.error(getErrorMessage(error));
@@ -194,16 +196,27 @@ export default function Cards() {
         okText="导入"
         confirmLoading={importing}
         onOk={handleImport}
-        onCancel={() => setImportOpen(false)}
+        onCancel={() => {
+          setImportOpen(false);
+          setFileList([]);
+        }}
       >
-        <Text type="secondary">来源路径</Text>
-        <Input
+        <Text type="secondary">选择角色卡文件（.json 或 .png）</Text>
+        <Upload
+          accept=".json,.png"
+          maxCount={1}
+          fileList={fileList}
+          beforeUpload={() => false}
+          onChange={({ fileList: newFileList }) => setFileList(newFileList)}
           style={{ marginTop: 8 }}
-          placeholder="F:\\path\\to\\card.json"
-          value={sourcePath}
-          onChange={(event) => setSourcePath(event.target.value)}
-          onPressEnter={handleImport}
-        />
+        >
+          <Button icon={<UploadOutlined />}>选择文件</Button>
+        </Upload>
+        {fileList.length > 0 && (
+          <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+            已选择：{fileList[0].name}
+          </Text>
+        )}
       </Modal>
 
       <Drawer

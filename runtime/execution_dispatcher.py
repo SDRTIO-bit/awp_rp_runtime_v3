@@ -307,11 +307,22 @@ class ExecutionDispatcher:
                         projection = json.loads(str(turn_results[0] or "{}"))
                     except json.JSONDecodeError:
                         projection = {}
+            accepted = node_output.get("awp_accepted_text")
+            if isinstance(accepted, list) and accepted and not writer_output:
+                writer_output = str(accepted[0] or "")
+            turn_results = node_output.get("awp_turn_result_json")
+            if isinstance(turn_results, list) and turn_results:
+                try:
+                    projection = json.loads(str(turn_results[0] or "{}"))
+                except json.JSONDecodeError:
+                    projection = {}
             if not writer_output and isinstance(node_output.get("text"), str):
                 writer_output = node_output["text"]
 
         diagnostics = {
             "outcome": projection.get("diagnostic_status", "success"),
+            "failure_code": projection.get("failure_code", ""),
+            "failure_message": projection.get("failure_message", ""),
             "projection": projection,
         }
         return {

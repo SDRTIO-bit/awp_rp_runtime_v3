@@ -555,6 +555,45 @@ class DeepSeekAdapter(BaseLlmAdapter):
         )
         return parsed, usage
 
+    def call_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        model: str = "",
+        max_tokens: int = 500,
+        temperature: float = 0.3,
+        extra_body: dict | None = None,
+    ) -> tuple[Any, ProviderUsage]:
+        """Single tool-calling turn. Returns the raw message object.
+
+        The caller is responsible for the agentic loop: check
+        message.tool_calls, execute tools, append results, and call again.
+        """
+        use_model = model or self._model
+        self._init_client()
+        kwargs: dict[str, Any] = dict(
+            model=use_model,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+        resp = self._client.chat.completions.create(**kwargs)
+        message = resp.choices[0].message if resp.choices else None
+        output_content = _message_text_attr(message, "content")
+        reasoning_content = _message_text_attr(message, "reasoning_content")
+        usage = _provider_usage_from_openai(
+            resp.usage, use_model,
+            output_content=output_content,
+            reasoning_content=reasoning_content,
+        )
+        self._total_tokens += usage.total_tokens
+        self._call_count += 1
+        return message, usage
+
     # ── Error handling ───────────────────────────────────────────────────
 
     def _handle_error(self, e, request_id, model, provider_role,

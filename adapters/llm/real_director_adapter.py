@@ -198,24 +198,29 @@ class RealDirectorV2Adapter:
 
         tool_allowlist = [
             "accepted_turn_lookup", "active_memory_lookup", "rag_memory_lookup",
-            "worldbook_lookup", "scene_context_lookup", "relationship_context_lookup",
-            "timeline_lookup", "entity_alias_lookup",
+            "memory_rag_lookup", "worldbook_lookup", "scene_context_lookup",
+            "relationship_context_lookup", "timeline_lookup", "entity_alias_lookup",
         ]
 
-        # D1: History Recall — useful when there are prior turns to check
+        # D1: History Recall — uses RAG + recent turns, not worldbook
         if recent_turn_count >= 2:
             tasks.append(DelegationTask(
                 task_id=f"d1_{uuid.uuid4().hex[:8]}",
                 role="history_recall",
                 priority=0.7,
-                purpose="Check recent history for consistency and unresolved threads",
+                purpose=(
+                    f"Check recent history for this turn. "
+                    f"Director's goal: {plan.turn_goal}. "
+                    f"Risks to verify: {'; '.join(plan.risk_flags[:3]) if plan.risk_flags else 'none'}. "
+                    f"Look for contradictions with established facts, unresolved threads, and callbacks."
+                ),
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
                 tool_allowlist=tool_allowlist,
                 input_field_allowlist=[
                     "player_input", "recent_turn_records", "active_memories",
-                    "rag_recall", "active_worldbook_entries", "card_state",
+                    "rag_recall", "card_state",
                 ],
                 expected_suggestion_kinds=["identity_clarification", "historical_conflict"],
             ))
@@ -226,7 +231,13 @@ class RealDirectorV2Adapter:
                 task_id=f"d2_{uuid.uuid4().hex[:8]}",
                 role="opportunity",
                 priority=0.6,
-                purpose="Find dramatic opportunities grounded in established facts",
+                purpose=(
+                    f"Find dramatic opportunities for this turn. "
+                    f"Director's goal: {plan.turn_goal}. "
+                    f"Scene focus: {plan.scene_focus}. "
+                    f"Known opportunities: {'; '.join(plan.narrative_opportunities[:3])}. "
+                    f"Ground your analysis in established facts from recent turns and worldbook."
+                ),
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
@@ -244,7 +255,12 @@ class RealDirectorV2Adapter:
                 task_id=f"d3_{uuid.uuid4().hex[:8]}",
                 role="world_life",
                 priority=0.5,
-                purpose="Add world presence, environment, and NPC-side texture",
+                purpose=(
+                    f"Add world texture and sensory details for this turn. "
+                    f"Scene focus: {plan.scene_focus}. "
+                    f"Look for environmental details, NPC background actions, and sensory elements "
+                    f"that match the current location and time."
+                ),
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
@@ -256,20 +272,25 @@ class RealDirectorV2Adapter:
                 expected_suggestion_kinds=["world_detail"],
             ))
 
-        # D4: Emotion/Relationship — useful when relationship context matters
+        # D4: Emotion/Relationship — uses memories + recent turns, not worldbook
         if active_mem_count > 0 or recent_turn_count >= 1 or plan.relationship_tensions:
             tasks.append(DelegationTask(
                 task_id=f"d4_{uuid.uuid4().hex[:8]}",
                 role="emotion_relationship",
                 priority=0.6,
-                purpose="Analyze current emotional state and relationship dynamics",
+                purpose=(
+                    f"Analyze emotional state and relationship dynamics. "
+                    f"Director's goal: {plan.turn_goal}. "
+                    f"Relationship tensions: {'; '.join(plan.relationship_tensions[:3]) if plan.relationship_tensions else 'none'}. "
+                    f"Look for what characters are feeling but not saying."
+                ),
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",
                 tool_allowlist=tool_allowlist,
                 input_field_allowlist=[
                     "player_input", "recent_turn_records", "active_memories",
-                    "rag_recall", "active_worldbook_entries", "card_state",
+                    "rag_recall", "card_state",
                 ],
                 expected_suggestion_kinds=["relationship_shift"],
             ))
@@ -280,7 +301,12 @@ class RealDirectorV2Adapter:
                 task_id=f"d5_{uuid.uuid4().hex[:8]}",
                 role="continuity",
                 priority=0.8,
-                purpose="Verify factual continuity with established world state",
+                purpose=(
+                    f"Verify factual continuity for this turn. "
+                    f"Risks: {'; '.join(plan.risk_flags[:3]) if plan.risk_flags else 'none'}. "
+                    f"Must preserve: {'; '.join(plan.must_preserve_facts[:3]) if plan.must_preserve_facts else 'none'}. "
+                    f"Check names, relationships, locations, and timeline."
+                ),
                 max_tokens=500,
                 timeout_ms=20000,
                 failure_policy="skip",

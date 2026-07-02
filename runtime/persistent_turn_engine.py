@@ -439,6 +439,16 @@ class PersistentTurnEngine:
 
         return suggestions, triggered, trigger_diagnostics
 
+    def _apply_sub_agent_output(self, sug: Any, role: str, llm_text: str) -> None:
+        """Apply sub-agent output to AgentSuggestion fields.
+
+        子代理的角色是"检索者"：产出是 tool results 的原始内容，直接传给 Writer。
+        不再解析 [SUGGESTION] 格式，不再压缩结果。
+        """
+        sug.summary = f"[{role}] 检索到 {llm_text.count('[')} 条工具结果"
+        sug.recommendations = [llm_text]  # 完整 tool results，零损失传递
+        # kind 保持默认（NARRATIVE_OPPORTUNITY），不做强制分类
+
     def _merge_agent_suggestions(
         self,
         *,
@@ -728,7 +738,14 @@ class PersistentTurnEngine:
                          duration_ms=_ms_since(step_start),
                          details={"plan_ref": diag.director_plan_ref,
                                   "provider": dir_outcome.provider,
-                                  "model": dir_outcome.model})
+                                  "model": dir_outcome.model,
+                                  "turn_goal": getattr(director_plan, "turn_goal", ""),
+                                  "scene_focus": getattr(director_plan, "scene_focus", ""),
+                                  "must_preserve_facts": list(getattr(director_plan, "must_preserve_facts", []) or []),
+                                  "must_not_do": list(getattr(director_plan, "must_not_do", []) or []),
+                                  "writer_constraints": list(getattr(director_plan, "writer_constraints", []) or []),
+                                  "narrative_opportunities": list(getattr(director_plan, "narrative_opportunities", []) or []),
+                                  "active_character_refs": list(getattr(director_plan, "active_character_refs", []) or [])})
         _record_step(diag, "director", step_start)
         _safe_on_step(on_step, "director", {
             "provider_type": dir_outcome.provider,
@@ -737,6 +754,14 @@ class PersistentTurnEngine:
             "call_success": True,
             "failure_code": "",
             "duration_ms": _step_duration(diag, "director"),
+            # 规划内容字段：让前端流程抽屉能展示总控规划
+            "turn_goal": getattr(director_plan, "turn_goal", ""),
+            "scene_focus": getattr(director_plan, "scene_focus", ""),
+            "must_preserve_facts": list(getattr(director_plan, "must_preserve_facts", []) or []),
+            "must_not_do": list(getattr(director_plan, "must_not_do", []) or []),
+            "writer_constraints": list(getattr(director_plan, "writer_constraints", []) or []),
+            "narrative_opportunities": list(getattr(director_plan, "narrative_opportunities", []) or []),
+            "active_character_refs": list(getattr(director_plan, "active_character_refs", []) or []),
         })
 
         # ── Director-controlled sub-agent delegation ─────────────────────
@@ -829,6 +854,21 @@ class PersistentTurnEngine:
                         max_workers = min(len(agent_suggestions), 5)
                         effects["delegation"]["parallelism"] = max_workers
 
+                        # Build per-role task metadata from the Director plan.
+                        # input_field_allowlist controls data exposure elsewhere;
+                        # sub-agent tool selection must use tool_allowlist.
+                        _task_tool_allowlists: dict[str, list[str]] = {}
+                        _task_purposes: dict[str, str] = {}
+                        for task in (getattr(delegation_plan, "tasks", []) or []):
+                            task_role = str(getattr(task, "role", "") or "").replace("-", "_")
+                            if task_role:
+                                tools = list(getattr(task, "tool_allowlist", []) or [])
+                                if tools:
+                                    _task_tool_allowlists[task_role] = tools
+                                purpose = str(getattr(task, "purpose", "") or "")
+                                if purpose:
+                                    _task_purposes[task_role] = purpose
+
                         def _run_one(sug):
                             role = getattr(sug, "role", "") or ""
                             flash_adapter = DeepSeekAdapter(
@@ -841,6 +881,8 @@ class PersistentTurnEngine:
                                 role, snapshot, flash_adapter,
                                 trace_id=trace_id, turn_id=turn_id,
                                 attempt_id=attempt_id,
+                                tool_allowlist=_task_tool_allowlists.get(role),
+                                task_purpose=_task_purposes.get(role, ""),
                             )
                             return sug, role, llm_text
 
@@ -852,7 +894,7 @@ class PersistentTurnEngine:
                             for future in as_completed(futures):
                                 sug, role, llm_text = future.result()
                                 if llm_text:
-                                    sug.summary = f"[{role}] {llm_text}"
+                                    self._apply_sub_agent_output(sug, role, llm_text)
                 except Exception:
                     # If flash adapter fails, keep the rule-generated summary
                     pass
@@ -875,7 +917,8 @@ class PersistentTurnEngine:
                              success=True,
                              details={"triggered": agent_triggers,
                                       "suggestions": len(agent_suggestions),
-                                      "parallelism": effects["delegation"].get("parallelism", 0)})
+                                      "parallelism": effects["delegation"].get("parallelism", 0),
+                                      "agent_dispositions": dict(diag.agent_dispositions)})
         else:
             effects["delegation"]["trigger_diagnostics"] = agent_trigger_diagnostics
             diag.agent_dispositions = {"_none_triggered": "no sub-agents fired this turn"}
@@ -986,6 +1029,7 @@ class PersistentTurnEngine:
         _add_trace_event(trace, "writer", "writer", success=True,
                          duration_ms=_ms_since(step_start),
                          details={"text_length": len(candidate_text),
+                                  "text_hash": hashlib.sha256(candidate_text.encode("utf-8")).hexdigest()[:16],
                                   "provider": wrt_outcome.provider,
                                   "model": wrt_outcome.model})
         _record_step(diag, "writer", step_start)

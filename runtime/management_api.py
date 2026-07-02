@@ -64,6 +64,15 @@ try:
     def _factory() -> RuntimeStoreFactory:
         return RuntimeStoreFactory.from_env()
 
+    def _redact_pipeline_details(details: Any) -> dict[str, Any]:
+        """Remove raw text previews from trace details returned by the API."""
+        if not isinstance(details, dict):
+            return {}
+        redacted = dict(details)
+        for key in ("output_preview", "candidate_text", "raw_text", "prompt", "system_prompt"):
+            redacted.pop(key, None)
+        return redacted
+
     async def _run_blocking(func, *args, **kwargs):
         return await asyncio.to_thread(func, *args, **kwargs)
 
@@ -507,6 +516,102 @@ try:
 
         return _json(result)
 
+    @server.PromptServer.instance.routes.get("/awp/api/v1/sessions/{session_id}/turns/{turn_id}/pipeline")
+    async def get_turn_pipeline(request):
+        """Get the full pipeline trace for a turn — all steps with detailed content."""
+        session_id = request.match_info["session_id"]
+        turn_id = request.match_info["turn_id"]
+        factory = _factory()
+        registry = factory.registry
+
+        binding = registry.card_session_binding_store.load(session_id)
+        if not binding:
+            return _json({"error": "Session not found"}, 404)
+
+        # Load trace
+        trace = registry.trace_store.get_by_turn(turn_id)
+        if not trace:
+            return _json({"error": "Pipeline trace not found"}, 404)
+        if trace.session_id != session_id:
+            return _json({"error": "Pipeline trace not found"}, 404)
+
+        # Load turn record for writer output
+        turn_record = None
+        for t in registry.turn_record_store.list_by_session(session_id):
+            if t.turn_id == turn_id:
+                turn_record = t
+                break
+        if turn_record and turn_record.session_id != session_id:
+            return _json({"error": "Turn not found"}, 404)
+
+        # Load memory commits for this turn
+        active_memories = []
+        rag_memories = []
+        try:
+            conn = registry.db.connect()
+            rows = conn.execute(
+                "SELECT memory_json FROM active_memory_records "
+                "WHERE session_id=? AND source_turn_ids_json LIKE ? "
+                "ORDER BY importance DESC, updated_at DESC",
+                (session_id, f'%"{turn_id}"%'),
+            ).fetchall()
+            for row in rows:
+                import json as _json_mod
+                mem = _json_mod.loads(row["memory_json"])
+                active_memories.append({
+                    "memory_id": mem.get("memory_id", ""),
+                    "kind": mem.get("kind", ""),
+                    "summary": mem.get("summary", ""),
+                    "importance": mem.get("importance", 0),
+                    "retention_reason": mem.get("retention_reason", ""),
+                })
+            rows = conn.execute(
+                "SELECT memory_json FROM rag_memory_records "
+                "WHERE session_id=? AND source_turn_ids_json LIKE ? "
+                "ORDER BY importance DESC, updated_at DESC",
+                (session_id, f'%"{turn_id}"%'),
+            ).fetchall()
+            for row in rows:
+                mem = _json_mod.loads(row["memory_json"])
+                rag_memories.append({
+                    "memory_id": mem.get("memory_id", ""),
+                    "content": mem.get("content", ""),
+                    "scope": mem.get("scope", ""),
+                    "importance": mem.get("importance", 0),
+                })
+        except Exception:
+            pass
+
+        # Build pipeline steps from trace events
+        trace_dict = trace.to_dict()
+        steps = []
+        for evt in trace_dict.get("events", []):
+            step = {
+                "event_type": evt.get("event_type", ""),
+                "actor": evt.get("actor", ""),
+                "duration_ms": evt.get("duration_ms", 0),
+                "success": evt.get("success", True),
+                "error": evt.get("error"),
+                "details": _redact_pipeline_details(evt.get("details", {})),
+            }
+            steps.append(step)
+
+        result = {
+            "trace_id": trace.trace_id,
+            "turn_id": trace.turn_id,
+            "session_id": trace.session_id,
+            "total_duration_ms": trace_dict.get("total_duration_ms", 0),
+            "success": trace_dict.get("success", True),
+            "steps": steps,
+            "writer_output": turn_record.writer_output if turn_record else "",
+            "player_input": turn_record.player_input if turn_record else "",
+            "turn_index": turn_record.turn_index if turn_record else 0,
+            "active_memories": active_memories,
+            "rag_memories": rag_memories,
+        }
+
+        return _json(result)
+
     @server.PromptServer.instance.routes.get("/awp/api/v1/sessions/{session_id}/opening")
     async def get_opening(request):
         """Get the opening/greeting content for a session."""
@@ -673,9 +778,11 @@ try:
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
             },
         )
         await response.prepare(request)
+        await response.drain()
 
         while True:
             try:
