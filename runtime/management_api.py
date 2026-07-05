@@ -1017,6 +1017,229 @@ try:
             return _json({"error": "Preset not found"}, 404)
         return _json({"name": name, "content": content, "path": path})
 
+    # ── Novel Mode API ────────────────────────────────────────────────────────
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/novels")
+    async def create_novel_project(request):
+        """Create a novel project."""
+        from ..contracts.novel_project import NovelProject
+        body = await request.json()
+        project_id = body.get("project_id", f"novel-{uuid.uuid4().hex[:8]}")
+        project = NovelProject(
+            project_id=project_id,
+            title=body.get("title", ""),
+            genre=body.get("genre", ""),
+            target_platform=body.get("target_platform", ""),
+            target_reader=body.get("target_reader", ""),
+            core_emotion=body.get("core_emotion", ""),
+            one_sentence_pitch=body.get("one_sentence_pitch", ""),
+            status="planning",
+        )
+        try:
+            factory = _factory()
+            factory.registry.novel_project_store.create(project)
+            return _json(project.to_dict())
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels")
+    async def list_novel_projects(request):
+        """List all novel projects."""
+        try:
+            factory = _factory()
+            projects = factory.registry.novel_project_store.list_all()
+            return _json([p.to_dict() for p in projects])
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}")
+    async def get_novel_project(request):
+        """Get novel project details."""
+        project_id = request.match_info["project_id"]
+        try:
+            factory = _factory()
+            project = factory.registry.novel_project_store.load(project_id)
+            if not project:
+                return _json({"error": "Project not found"}, 404)
+            return _json(project.to_dict())
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.delete("/awp/api/v1/novels/{project_id}")
+    async def delete_novel_project(request):
+        """Delete a novel project."""
+        project_id = request.match_info["project_id"]
+        try:
+            factory = _factory()
+            factory.registry.novel_project_store.delete(project_id)
+            return _json({"success": True})
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/chapters")
+    async def list_novel_chapters(request):
+        """List chapter plans for a novel project."""
+        project_id = request.match_info["project_id"]
+        try:
+            factory = _factory()
+            plans = factory.registry.novel_chapter_plan_store.list_by_project(project_id)
+            return _json([p.to_dict() for p in plans])
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/novels/{project_id}/chapters/plan")
+    async def plan_novel_chapter(request):
+        """Plan a chapter using Architect."""
+        project_id = request.match_info["project_id"]
+        body = await request.json()
+        chapter_index = body.get("chapter_index", 1)
+        task_description = body.get("task_description", "")
+        if chapter_index < 1:
+            return _json({"error": "chapter_index must be >= 1"}, 400)
+        try:
+            from .novel_engine import NovelEngine
+            factory = _factory()
+            engine = NovelEngine(factory.registry)
+            plan = await _run_blocking(
+                engine.plan_chapter,
+                project_id=project_id,
+                chapter_index=chapter_index,
+                task_description=task_description,
+            )
+            return _json(plan.to_dict())
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    def _parse_chapter_idx(idx_str: str) -> int | None:
+        """Parse chapter index from URL path, return None if invalid."""
+        try:
+            idx = int(idx_str)
+            return idx if idx >= 1 else None
+        except (ValueError, TypeError):
+            return None
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/chapters/{idx}/plan")
+    async def get_novel_chapter_plan(request):
+        """Get chapter plan by index."""
+        project_id = request.match_info["project_id"]
+        idx = _parse_chapter_idx(request.match_info["idx"])
+        if idx is None:
+            return _json({"error": "Invalid chapter index"}, 400)
+        try:
+            factory = _factory()
+            plan = factory.registry.novel_chapter_plan_store.load_by_index(project_id, idx)
+            if not plan:
+                return _json({"error": "Plan not found"}, 404)
+            return _json(plan.to_dict())
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/novels/{project_id}/chapters/{idx}/write")
+    async def write_novel_chapter(request):
+        """Write a chapter using Writer."""
+        project_id = request.match_info["project_id"]
+        idx = _parse_chapter_idx(request.match_info["idx"])
+        if idx is None:
+            return _json({"error": "Invalid chapter index"}, 400)
+        try:
+            from .novel_engine import NovelEngine
+            factory = _factory()
+            engine = NovelEngine(factory.registry)
+            draft = await _run_blocking(
+                engine.write_chapter,
+                project_id=project_id, chapter_index=idx,
+            )
+            return _json(draft.to_dict())
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/chapters/{idx}/drafts")
+    async def list_novel_drafts(request):
+        """List drafts for a chapter."""
+        project_id = request.match_info["project_id"]
+        idx = _parse_chapter_idx(request.match_info["idx"])
+        if idx is None:
+            return _json({"error": "Invalid chapter index"}, 400)
+        try:
+            factory = _factory()
+            plan = factory.registry.novel_chapter_plan_store.load_by_index(project_id, idx)
+            if not plan:
+                return _json({"error": "Chapter not found"}, 404)
+            drafts = factory.registry.novel_chapter_draft_store.list_by_chapter(plan.chapter_id)
+            return _json([d.to_dict() for d in drafts])
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/novels/{project_id}/chapters/{idx}/revise")
+    async def revise_novel_chapter(request):
+        """Revise a chapter."""
+        project_id = request.match_info["project_id"]
+        idx = _parse_chapter_idx(request.match_info["idx"])
+        if idx is None:
+            return _json({"error": "Invalid chapter index"}, 400)
+        body = await request.json()
+        feedback = body.get("feedback", "")
+        try:
+            from .novel_engine import NovelEngine
+            factory = _factory()
+            engine = NovelEngine(factory.registry)
+            draft = await _run_blocking(
+                engine.revise_chapter,
+                project_id=project_id, chapter_index=idx, feedback=feedback,
+            )
+            return _json(draft.to_dict())
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.post("/awp/api/v1/novels/{project_id}/batch-write")
+    async def batch_write_novel(request):
+        """Batch write multiple chapters."""
+        project_id = request.match_info["project_id"]
+        body = await request.json()
+        chapter_start = body.get("chapter_start", 1)
+        chapter_end = body.get("chapter_end", 3)
+        if chapter_start < 1 or chapter_end < chapter_start:
+            return _json({"error": "Invalid chapter range"}, 400)
+        try:
+            from .novel_engine import NovelEngine
+            factory = _factory()
+            engine = NovelEngine(factory.registry)
+            drafts = await _run_blocking(
+                engine.batch_write,
+                project_id=project_id,
+                chapter_start=chapter_start,
+                chapter_end=chapter_end,
+            )
+            return _json({
+                "drafts": [d.to_dict() for d in drafts],
+                "count": len(drafts),
+            })
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/ledger")
+    async def list_novel_ledger(request):
+        """List ledger items for a novel project."""
+        project_id = request.match_info["project_id"]
+        section = request.query.get("section", "")
+        try:
+            factory = _factory()
+            items = factory.registry.novel_ledger_store.list_by_project(project_id, section)
+            return _json([i.to_dict() for i in items])
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/characters")
+    async def list_novel_characters(request):
+        """List characters for a novel project."""
+        project_id = request.match_info["project_id"]
+        try:
+            factory = _factory()
+            chars = factory.registry.novel_character_store.list_by_project(project_id)
+            return _json([c.to_dict() for c in chars])
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
     @server.PromptServer.instance.routes.get("/awp")
     async def serve_spa_index(request):
         """Serve the SPA index.html."""

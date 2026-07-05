@@ -490,19 +490,37 @@ class DeepSeekAdapter(BaseLlmAdapter):
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        kwargs = dict(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=0.8,
+
+        thinking_enabled = (
+            isinstance(extra_body, dict)
+            and isinstance(extra_body.get("thinking"), dict)
+            and extra_body["thinking"].get("type") == "enabled"
         )
-        if extra_body:
-            kwargs["extra_body"] = extra_body
-        resp = self._client.chat.completions.create(**kwargs)
-        message = resp.choices[0].message if resp.choices else None
-        text = _message_text_attr(message, "content")
-        reasoning = _message_text_attr(message, "reasoning_content")
-        usage = _provider_usage_from_openai(resp.usage, model, output_content=text, reasoning_content=reasoning)
+
+        use_max_tokens = max_tokens
+        for attempt in range(2):
+            kwargs = dict(
+                model=model,
+                messages=messages,
+                temperature=0.8,
+            )
+            if use_max_tokens:
+                kwargs["max_tokens"] = use_max_tokens
+            if extra_body:
+                kwargs["extra_body"] = extra_body
+            resp = self._client.chat.completions.create(**kwargs)
+            message = resp.choices[0].message if resp.choices else None
+            text = _message_text_attr(message, "content")
+            reasoning = _message_text_attr(message, "reasoning_content")
+            usage = _provider_usage_from_openai(resp.usage, model, output_content=text, reasoning_content=reasoning)
+
+            # If content is empty but reasoning exists, thinking consumed all tokens
+            if not text.strip() and reasoning.strip() and thinking_enabled and attempt == 0:
+                use_max_tokens = 16000  # Set explicit limit and retry
+                continue
+
+            return text, usage
+
         return text, usage
 
     def _call_openai_structured(self, prompt: str, max_tokens: int, model: str,

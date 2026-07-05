@@ -99,7 +99,13 @@ class TestNodeRegistration:
             "AWPV2MemoryCurationCommitPlan", "AWPV2MemoryCurationDiagnostics",
             "AWPV2MemoryCuratorAgent",
         }
-        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected | canonical_expected | p1_real_expected | memory_curation_expected
+        novel_expected = {
+            "AWPV2NovelProjectCreate", "AWPV2NovelVolumePlan",
+            "AWPV2NovelChapterPlan", "AWPV2NovelChapterWrite",
+            "AWPV2NovelChapterRevise", "AWPV2NovelLedgerView",
+            "AWPV2NovelExport", "AWPV2NovelBatchWrite",
+        }
+        all_expected = p1_expected | p2_expected | m1_expected | c1_expected | d1_expected | d2_expected | d3_expected | d4_expected | d5_expected | card_import_expected | card_session_expected | first_turn_expected | observability_expected | canonical_expected | p1_real_expected | memory_curation_expected | novel_expected
         assert set(NODE_CLASS_MAPPINGS.keys()) == all_expected
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 

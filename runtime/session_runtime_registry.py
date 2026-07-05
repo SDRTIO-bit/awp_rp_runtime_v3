@@ -20,6 +20,16 @@ from ..storage.sqlite.session_stores import (
     SqliteWorldbookBindingStore,
     SqliteBootstrapReceiptStore,
 )
+from ..storage.sqlite.novel_stores import (
+    SqliteNovelProjectStore,
+    SqliteNovelVolumeStore,
+    SqliteNovelChapterPlanStore,
+    SqliteNovelChapterDraftStore,
+    SqliteNovelLedgerStore,
+    SqliteNovelCharacterStore,
+    SqliteNovelBatchProgressStore,
+    SqliteNovelReferenceBookStore,
+)
 
 
 class SessionRuntimeStoreRegistry:
@@ -47,6 +57,15 @@ class SessionRuntimeStoreRegistry:
         self.rag_memory_store = SqliteRagMemoryStore(db)
         # Card catalog
         self.card_definition_store = SqliteCardDefinitionStore(db)
+        # Novel mode stores
+        self.novel_project_store = SqliteNovelProjectStore(db)
+        self.novel_volume_store = SqliteNovelVolumeStore(db)
+        self.novel_chapter_plan_store = SqliteNovelChapterPlanStore(db)
+        self.novel_chapter_draft_store = SqliteNovelChapterDraftStore(db)
+        self.novel_ledger_store = SqliteNovelLedgerStore(db)
+        self.novel_character_store = SqliteNovelCharacterStore(db)
+        self.novel_batch_progress_store = SqliteNovelBatchProgressStore(db)
+        self.novel_reference_book_store = SqliteNovelReferenceBookStore(db)
 
     @property
     def db(self) -> Database:

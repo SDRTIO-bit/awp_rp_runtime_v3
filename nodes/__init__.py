@@ -145,6 +145,18 @@ from .persistent_bootstrap_node import AWPV2PersistentBootstrap
 from .persistent_first_turn_node import AWPV2PersistentFirstTurn
 from .persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
 
+# Novel Mode nodes
+from .novel_nodes import (
+    AWPV2NovelProjectCreate,
+    AWPV2NovelVolumePlan,
+    AWPV2NovelChapterPlan,
+    AWPV2NovelChapterWrite,
+    AWPV2NovelChapterRevise,
+    AWPV2NovelLedgerView,
+    AWPV2NovelExport,
+    AWPV2NovelBatchWrite,
+)
+
 NODE_CLASS_MAPPINGS = {
     # P1
     "AWPV2CardStateInit": AWPV2CardStateInit,
@@ -276,6 +288,15 @@ NODE_CLASS_MAPPINGS = {
     "AWPV2ContinueTurnP1": AWPV2ContinueTurnP1,
     # Writer V2 (explicit C1 pipeline)
     "AWPV2WriterGenerate": AWPV2WriterGenerate,
+    # Novel Mode
+    "AWPV2NovelProjectCreate": AWPV2NovelProjectCreate,
+    "AWPV2NovelVolumePlan": AWPV2NovelVolumePlan,
+    "AWPV2NovelChapterPlan": AWPV2NovelChapterPlan,
+    "AWPV2NovelChapterWrite": AWPV2NovelChapterWrite,
+    "AWPV2NovelChapterRevise": AWPV2NovelChapterRevise,
+    "AWPV2NovelLedgerView": AWPV2NovelLedgerView,
+    "AWPV2NovelExport": AWPV2NovelExport,
+    "AWPV2NovelBatchWrite": AWPV2NovelBatchWrite,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -409,6 +430,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AWPV2ContinueTurnP1": "AWP V2 Continue Turn (World Advance)",
     # Writer V2 (explicit C1 pipeline)
     "AWPV2WriterGenerate": "AWP V2 Writer 生成",
+    # Novel Mode
+    "AWPV2NovelProjectCreate": "AWP V2 小说项目创建",
+    "AWPV2NovelVolumePlan": "AWP V2 小说卷计划",
+    "AWPV2NovelChapterPlan": "AWP V2 小说章节规划",
+    "AWPV2NovelChapterWrite": "AWP V2 小说章节写作",
+    "AWPV2NovelChapterRevise": "AWP V2 小说章节修订",
+    "AWPV2NovelLedgerView": "AWP V2 小说账本查看",
+    "AWPV2NovelExport": "AWP V2 小说导出",
+    "AWPV2NovelBatchWrite": "AWP V2 小说批量生成",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
