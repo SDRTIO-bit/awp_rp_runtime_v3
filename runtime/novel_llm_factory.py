@@ -65,7 +65,23 @@ class NovelLLMFactory:
             config = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
             provider = self._provider_choice()
 
-            if provider == "opencode":
+            if provider == "mimo":
+                from ..adapters.llm.openai_compatible import OpenAICompatibleAdapter
+                import os
+                self._adapters[role] = OpenAICompatibleAdapter(
+                    model=os.environ.get("NOVEL_LLM_MODEL", "mimo-v2.5-pro"),
+                    base_url=os.environ.get(
+                        "NOVEL_LLM_BASE_URL",
+                        "https://token-plan-cn.xiaomimimo.com/v1",
+                    ),
+                    api_key_env=os.environ.get(
+                        "NOVEL_LLM_API_KEY_ENV", "MIMO_API_KEY",
+                    ),
+                    default_max_tokens=config["max_tokens"],
+                    timeout_seconds=180,
+                    max_retries=2,
+                )
+            elif provider == "opencode":
                 from ..adapters.llm.openai_compatible import OpenAICompatibleAdapter
                 import os
                 self._adapters[role] = OpenAICompatibleAdapter(
@@ -96,20 +112,36 @@ class NovelLLMFactory:
         unchanged so all existing tests pass.
         """
         base = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
-        if self._provider_choice() != "opencode":
+        if self._provider_choice() not in ("opencode", "mimo"):
             return base
 
-        # Override model names with OpenCode-available ids
-        # (qwen3.7-max for writer/director, glm-5.2 fallback via env).
+        provider = self._provider_choice()
+        import os
+
+        if provider == "mimo":
+            default_map = {
+                "director":           "mimo-v2.5-pro",
+                "architect":          "mimo-v2.5-pro",
+                "writer":             "mimo-v2.5-pro",
+                "continuity_checker": "mimo-v2.5-pro",
+                "style_cleaner":      "mimo-v2.5-pro",
+                "ledger_curator":     "mimo-v2.5-pro",
+            }
+            model_id = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}", default_map.get(role, "mimo-v2.5-pro"))
+            return {**base, "model": model_id}
+
+        # Override model names with OpenCode-available ids.
+        # 2026-07-05: max 长程一致性暴露问题（8K 输出窗内同句重复、48h→72h 自相矛盾），
+        # 且单次调用价格是 plus 的数倍。短篇/中篇 plus 实测更稳。
+        # max 仍可通过 NOVEL_LLM_MODEL_WRITER=qwen3.7-max 显式覆盖。
         default_map = {
-            "director":           "qwen3.7-max",
-            "architect":          "qwen3.7-max",
-            "writer":             "qwen3.7-max",
+            "director":           "qwen3.7-plus",
+            "architect":          "qwen3.7-plus",
+            "writer":             "qwen3.7-plus",
             "continuity_checker": "qwen3.7-plus",
             "style_cleaner":      "qwen3.7-plus",
             "ledger_curator":     "qwen3.7-plus",
         }
-        import os
         model_id = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}", default_map.get(role, "qwen3.7-max"))
         return {**base, "model": model_id}
 
