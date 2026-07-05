@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Layout, Menu } from "antd";
-import { MessageOutlined, AppstoreOutlined } from "@ant-design/icons";
+import { MessageOutlined, AppstoreOutlined, BookOutlined } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
 
@@ -8,7 +8,11 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const selectedKey = location.pathname.startsWith("/cards") ? "/cards" : "/sessions";
+  const selectedKey = location.pathname.startsWith("/cards")
+    ? "/cards"
+    : location.pathname.startsWith("/novels")
+      ? "/novels"
+      : "/sessions";
 
   return (
     <Layout style={{ height: "100vh", minHeight: 0, overflow: "hidden" }}>
@@ -21,6 +25,7 @@ export default function AppLayout() {
           selectedKeys={[selectedKey]}
           items={[
             { key: "/sessions", icon: <MessageOutlined />, label: "会话" },
+            { key: "/novels", icon: <BookOutlined />, label: "小说" },
             { key: "/cards", icon: <AppstoreOutlined />, label: "角色卡" },
           ]}
           onClick={({ key }) => navigate(key)}

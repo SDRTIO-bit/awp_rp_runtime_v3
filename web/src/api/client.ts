@@ -422,3 +422,134 @@ export async function listWriterPresets(): Promise<string[]> {
 export async function getWriterPreset(name: string): Promise<WriterPresetInfo> {
   return get<WriterPresetInfo>(`/presets/writer/${encodeURIComponent(name)}`);
 }
+
+// ── Novel Mode ──────────────────────────────────────────────────────────
+
+export interface NovelProject {
+  project_id: string;
+  title: string;
+  genre: string;
+  target_platform: string;
+  target_reader: string;
+  core_emotion: string;
+  one_sentence_pitch: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NovelCharacter {
+  character_id: string;
+  project_id: string;
+  name: string;
+  role: string;
+  personality: string;
+  core_motivation: string;
+  current_state: Record<string, unknown>;
+}
+
+export interface NovelChapterPlan {
+  chapter_id: string;
+  chapter_index: number;
+  title: string;
+  target_chars: number;
+  target_emotion: string;
+  scene_beats: Array<{
+    beat_id: string;
+    description: string;
+    function_tag: string;
+    density: string;
+    budget_chars: number;
+  }>;
+  ending_design: {
+    hook_type: string;
+    hook_detail: string;
+    hook_strength: string;
+  };
+}
+
+export interface NovelDraft {
+  draft_id: string;
+  chapter_id: string;
+  revision: number;
+  text: string;
+  char_count: number;
+  status: string;
+}
+
+export interface NovelLedgerItem {
+  item_id: string;
+  section: string;
+  entity: string;
+  content: string;
+  status: string;
+  source_chapter: number;
+}
+
+export interface NovelPlanResult {
+  title: string;
+  genre: string;
+  one_sentence_pitch: string;
+  core_outline: { surface: string; inner: string; one_sentence: string };
+  world_setting: Record<string, unknown>;
+  characters: Array<{ name: string; role: string; core_trait: string; motivation: string }>;
+  volumes: Array<{ volume_index: number; title: string; objective: string; key_results: string[] }>;
+  first_volume_chapters: Array<{ chapter_index: number; objective: string; key_results: string[]; hook_type: string }>;
+  tags: string[];
+}
+
+export async function listNovelProjects(): Promise<NovelProject[]> {
+  return get<NovelProject[]>("/novels");
+}
+
+export async function getNovelProject(projectId: string): Promise<NovelProject> {
+  return get<NovelProject>(`/novels/${encodeURIComponent(projectId)}`);
+}
+
+export async function deleteNovelProject(projectId: string): Promise<void> {
+  await del<{ success: boolean }>(`/novels/${encodeURIComponent(projectId)}`);
+}
+
+export async function planNovelFromConcept(params: {
+  concept: string;
+  title?: string;
+  genre?: string;
+  target_platform?: string;
+  additional_requirements?: string;
+}): Promise<NovelPlanResult> {
+  return post<NovelPlanResult>("/novels/plan", params);
+}
+
+export async function listNovelCharacters(projectId: string): Promise<NovelCharacter[]> {
+  return get<NovelCharacter[]>(`/novels/${encodeURIComponent(projectId)}/characters`);
+}
+
+export async function listNovelChapterPlans(projectId: string): Promise<NovelChapterPlan[]> {
+  return get<NovelChapterPlan[]>(`/novels/${encodeURIComponent(projectId)}/chapters`);
+}
+
+export async function planNovelChapter(projectId: string, chapterIndex: number, taskDescription?: string): Promise<NovelChapterPlan> {
+  return post<NovelChapterPlan>(`/novels/${encodeURIComponent(projectId)}/chapters/plan`, {
+    chapter_index: chapterIndex,
+    task_description: taskDescription || "",
+  });
+}
+
+export async function writeNovelChapter(projectId: string, chapterIndex: number): Promise<NovelDraft> {
+  return post<NovelDraft>(`/novels/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/write`);
+}
+
+export async function getNovelDrafts(projectId: string, chapterIndex: number): Promise<NovelDraft[]> {
+  return get<NovelDraft[]>(`/novels/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/drafts`);
+}
+
+export async function batchWriteNovel(projectId: string, chapterStart: number, chapterEnd: number): Promise<{ status: string }> {
+  return post<{ status: string }>(`/novels/${encodeURIComponent(projectId)}/batch-write`, {
+    chapter_start: chapterStart,
+    chapter_end: chapterEnd,
+  });
+}
+
+export async function listNovelLedger(projectId: string): Promise<NovelLedgerItem[]> {
+  return get<NovelLedgerItem[]>(`/novels/${encodeURIComponent(projectId)}/ledger`);
+}
