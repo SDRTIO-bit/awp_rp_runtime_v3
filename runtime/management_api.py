@@ -1240,6 +1240,40 @@ try:
         except Exception as e:
             return _json({"error": str(e)[:200]}, 500)
 
+    @server.PromptServer.instance.routes.post("/awp/api/v1/novels/plan")
+    async def plan_novel_from_concept(request):
+        """Generate a full novel plan from a brief concept.
+
+        Body: {
+            "concept": "一句话思路",
+            "title": "可选书名",
+            "genre": "可选题材",
+            "target_platform": "可选平台",
+            "additional_requirements": "可选额外要求"
+        }
+        Returns: NovelPlan JSON (core_outline, world_setting, characters, volumes, chapters)
+        """
+        body = await request.json()
+        concept = body.get("concept", "")
+        if not concept:
+            return _json({"error": "concept is required"}, 400)
+
+        try:
+            factory = _factory()
+            from .novel_planner_adapter import NovelPlannerAdapter
+            planner = NovelPlannerAdapter(factory.registry)
+            plan = planner.plan_novel(
+                concept=concept,
+                title=body.get("title", ""),
+                genre=body.get("genre", ""),
+                target_platform=body.get("target_platform", ""),
+                additional_requirements=body.get("additional_requirements", ""),
+            )
+            return _json(plan.to_dict())
+        except Exception as e:
+            import traceback
+            return _json({"error": str(e)[:500], "trace": traceback.format_exc()[-500:]}, 500)
+
     @server.PromptServer.instance.routes.get("/awp")
     async def serve_spa_index(request):
         """Serve the SPA index.html."""
