@@ -24,6 +24,9 @@ class VolumePlan:
     title: str = ""
     chapter_start: int = 0
     chapter_end: int = 0
+    chapter_count: int = 0
+    objective: str = ""                    # 本卷 O（读者应该感受到什么）
+    key_results: tuple[str, ...] = ()      # 本卷 KR 列表
     core_conflict: str = ""
     emotional_arc: str = ""
     major_payoffs: tuple[str, ...] = ()
@@ -39,6 +42,9 @@ class VolumePlan:
             "title": self.title,
             "chapter_start": self.chapter_start,
             "chapter_end": self.chapter_end,
+            "chapter_count": self.chapter_count,
+            "objective": self.objective,
+            "key_results": list(self.key_results),
             "core_conflict": self.core_conflict,
             "emotional_arc": self.emotional_arc,
             "major_payoffs": list(self.major_payoffs),
@@ -47,6 +53,9 @@ class VolumePlan:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> VolumePlan:
+        data = data if isinstance(data, dict) else {}
+        kr = data.get("key_results", [])
+        kr = tuple(kr) if isinstance(kr, (list, tuple)) else ()
         return cls(
             schema_id=data.get("schema_id", SCHEMA_ID),
             schema_version=data.get("schema_version", SCHEMA_VERSION),
@@ -56,6 +65,9 @@ class VolumePlan:
             title=data.get("title", ""),
             chapter_start=data.get("chapter_start", 0),
             chapter_end=data.get("chapter_end", 0),
+            chapter_count=int(data.get("chapter_count", 0) or 0),
+            objective=str(data.get("objective", "") or ""),
+            key_results=kr,
             core_conflict=data.get("core_conflict", ""),
             emotional_arc=data.get("emotional_arc", ""),
             major_payoffs=tuple(data.get("major_payoffs", [])),

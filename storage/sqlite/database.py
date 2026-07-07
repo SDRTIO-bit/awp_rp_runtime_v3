@@ -449,6 +449,14 @@ CREATE TABLE IF NOT EXISTS novel_reference_books (
     FOREIGN KEY (project_id) REFERENCES novel_projects(project_id)
 );
 CREATE INDEX IF NOT EXISTS idx_novel_references_project ON novel_reference_books(project_id);
+
+CREATE TABLE IF NOT EXISTS novel_plans (
+    project_id TEXT PRIMARY KEY,
+    plan_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES novel_projects(project_id)
+);
 """,
     ),
 ]

@@ -29,6 +29,7 @@ from ..storage.sqlite.novel_stores import (
     SqliteNovelCharacterStore,
     SqliteNovelBatchProgressStore,
     SqliteNovelReferenceBookStore,
+    SqliteNovelPlanStore,
 )
 
 
@@ -66,6 +67,7 @@ class SessionRuntimeStoreRegistry:
         self.novel_character_store = SqliteNovelCharacterStore(db)
         self.novel_batch_progress_store = SqliteNovelBatchProgressStore(db)
         self.novel_reference_book_store = SqliteNovelReferenceBookStore(db)
+        self.novel_plan_store = SqliteNovelPlanStore(db)
 
     @property
     def db(self) -> Database:

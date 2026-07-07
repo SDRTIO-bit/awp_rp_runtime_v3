@@ -114,11 +114,20 @@ class NovelWriterAdapter:
         parts.append(f"\n=== TARGET ===\n目标字数: {packet.chapter_plan.target_chars}")
 
         if packet.director_guidance.guidance_id:
-            parts.append(f"\n=== DIRECTOR GUIDANCE ===\n"
-                        f"方向: {packet.director_guidance.chapter_direction}\n"
-                        f"情绪弧线: {packet.director_guidance.emotional_arc}\n"
-                        f"节奏策略: {packet.director_guidance.pacing_strategy}\n"
-                        f"对话基调: {packet.director_guidance.dialogue_tone}")
+            dg = packet.director_guidance
+            guidance_parts = []
+            if dg.character_anchor:
+                guidance_parts.append(f"角色锚点: {dg.character_anchor}")
+            if dg.timeline_anchor:
+                guidance_parts.append(f"时间锚点: {dg.timeline_anchor}")
+            if dg.beat_details:
+                for bd in dg.beat_details:
+                    guidance_parts.append(f"  [{bd.beat_id}] {bd.content_outline}")
+                    if bd.emotion_shift:
+                        guidance_parts.append(f"    情绪: {bd.emotion_shift}")
+                    if bd.hook_execution:
+                        guidance_parts.append(f"    钩子: {bd.hook_execution}")
+            parts.append(f"\n=== DIRECTOR GUIDANCE ===\n" + "\n".join(guidance_parts))
 
         if packet.writing_intent:
             parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
@@ -130,6 +139,27 @@ class NovelWriterAdapter:
 
         if packet.character_states:
             parts.append(f"\n=== CHARACTER STATES ===\n{packet.character_states}")
+
+        if packet.active_memory_context:
+            parts.append(
+                "\n=== ACTIVE MEMORY ===\n"
+                + self._format_memory_items(packet.active_memory_context)
+            )
+
+        if packet.memory_recall:
+            parts.append(
+                "\n=== MEMORY RECALL ===\n"
+                + self._format_memory_items(packet.memory_recall)
+            )
+
+        if packet.foreshadowing_items:
+            parts.append(
+                "\n=== FORESHADOWING ===\n"
+                + "\n".join(
+                    f"- [{i.get('status', 'active')}] {i.get('entity', '')}: {i.get('content', '')}"
+                    for i in packet.foreshadowing_items
+                )
+            )
 
         if packet.relevant_ledger_items:
             items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content}" for i in packet.relevant_ledger_items)
@@ -170,9 +200,32 @@ class NovelWriterAdapter:
                     f"位置: {packet.chapter_plan.chapter_position}")
 
         if packet.director_guidance.guidance_id:
-            parts.append(f"\n=== DIRECTOR GUIDANCE ===\n"
-                        f"方向: {packet.director_guidance.chapter_direction}\n"
-                        f"情绪弧线: {packet.director_guidance.emotional_arc}")
+            dg = packet.director_guidance
+            if dg.character_anchor:
+                parts.append(f"\n=== DIRECTOR GUIDANCE ===\n"
+                            f"角色锚点: {dg.character_anchor}\n"
+                            f"时间锚点: {dg.timeline_anchor}")
+
+        if packet.active_memory_context:
+            parts.append(
+                "\n=== ACTIVE MEMORY ===\n"
+                + self._format_memory_items(packet.active_memory_context)
+            )
+
+        if packet.memory_recall:
+            parts.append(
+                "\n=== MEMORY RECALL ===\n"
+                + self._format_memory_items(packet.memory_recall)
+            )
+
+        if packet.foreshadowing_items:
+            parts.append(
+                "\n=== FORESHADOWING ===\n"
+                + "\n".join(
+                    f"- [{i.get('status', 'active')}] {i.get('entity', '')}: {i.get('content', '')}"
+                    for i in packet.foreshadowing_items
+                )
+            )
 
         parts.append(f"\n=== OUTPUT RULES ===\n"
                     f"- 只输出本 beat 的正文\n"
@@ -181,6 +234,18 @@ class NovelWriterAdapter:
                     f"- 无标签、无 JSON、无元信息")
 
         return WRITER_SYSTEM_PROMPT, "\n".join(parts)
+
+    def _format_memory_items(self, items: list[dict[str, Any]]) -> str:
+        lines = []
+        for item in items[:10]:
+            content = item.get("content") or item.get("summary") or ""
+            source = item.get("source") or item.get("layer") or "memory"
+            importance = item.get("importance")
+            if importance is None:
+                lines.append(f"- [{source}] {content}")
+            else:
+                lines.append(f"- [{source} {importance:.2f}] {content}")
+        return "\n".join(lines)
 
     def _call_llm(self, prompt: str, system_prompt: str = "") -> str:
         """Call LLM with thinking=medium. Raises on failure (no placeholder)."""

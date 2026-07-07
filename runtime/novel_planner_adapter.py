@@ -268,11 +268,15 @@ class NovelPlannerAdapter:
         return "\n".join(parts)
 
     def _persist_plan(self, plan: NovelPlan) -> None:
-        """Persist plan components to stores."""
+        """Persist plan components to stores.
+
+        Saves: NovelProject, NovelCharacter, VolumePlan (with OKR), full NovelPlan.
+        """
         try:
             from ..contracts.novel_project import NovelProject
+            project_id = f"novel-{plan.title}"
             project = NovelProject(
-                project_id=f"novel-{plan.title}",
+                project_id=project_id,
                 title=plan.title,
                 genre=plan.genre,
                 target_platform=plan.target_platform,
@@ -287,7 +291,7 @@ class NovelPlannerAdapter:
             for char in plan.characters:
                 nc = NovelCharacter(
                     character_id=f"char-{plan.title}-{char.name}",
-                    project_id=project.project_id,
+                    project_id=project_id,
                     name=char.name,
                     role=char.role,
                     personality=char.core_trait,
@@ -300,16 +304,21 @@ class NovelPlannerAdapter:
             for vol in plan.volumes:
                 vp = VolumePlan(
                     volume_id=f"vol-{plan.title}-{vol.volume_index}",
-                    project_id=project.project_id,
+                    project_id=project_id,
                     index=vol.volume_index,
                     title=vol.title,
                     chapter_count=vol.chapter_count,
+                    objective=vol.objective,
+                    key_results=vol.key_results,
                     core_conflict=vol.core_conflict,
                     emotional_arc=vol.emotional_arc,
                     major_payoffs=vol.major_payoffs,
                     foreshadowing_plan=vol.foreshadowing_plan,
                 )
                 self._registry.novel_volume_store.save(vp)
+
+            # Persist the full NovelPlan (core outline, world setting, chapter OKRs, tags)
+            self._registry.novel_plan_store.save(plan, project_id)
 
         except Exception:
             pass  # Don't fail planning if persistence fails

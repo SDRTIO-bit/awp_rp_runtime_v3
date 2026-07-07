@@ -45,11 +45,20 @@ class NovelPromptAssembler:
 
         # Director guidance
         if packet.director_guidance.guidance_id:
-            parts.append(f"\n=== DIRECTOR GUIDANCE ===\n"
-                        f"方向: {packet.director_guidance.chapter_direction}\n"
-                        f"情绪弧线: {packet.director_guidance.emotional_arc}\n"
-                        f"节奏策略: {packet.director_guidance.pacing_strategy}\n"
-                        f"对话基调: {packet.director_guidance.dialogue_tone}")
+            dg = packet.director_guidance
+            guidance_parts = []
+            if dg.character_anchor:
+                guidance_parts.append(f"角色锚点: {dg.character_anchor}")
+            if dg.timeline_anchor:
+                guidance_parts.append(f"时间锚点: {dg.timeline_anchor}")
+            if dg.beat_details:
+                for bd in dg.beat_details:
+                    guidance_parts.append(f"  [{bd.beat_id}] {bd.content_outline}")
+                    if bd.gap:
+                        guidance_parts.append(f"    gap: {bd.gap}")
+                    if bd.emotion_shift:
+                        guidance_parts.append(f"    情绪: {bd.emotion_shift}")
+            parts.append(f"\n=== DIRECTOR GUIDANCE ===\n" + "\n".join(guidance_parts))
 
         # Writing intent
         if packet.writing_intent:

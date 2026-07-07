@@ -553,3 +553,7 @@ export async function batchWriteNovel(projectId: string, chapterStart: number, c
 export async function listNovelLedger(projectId: string): Promise<NovelLedgerItem[]> {
   return get<NovelLedgerItem[]>(`/novels/${encodeURIComponent(projectId)}/ledger`);
 }
+
+export async function getNovelOutline(projectId: string): Promise<NovelPlanResult> {
+  return get<NovelPlanResult>(`/novels/${encodeURIComponent(projectId)}/outline`);
+}

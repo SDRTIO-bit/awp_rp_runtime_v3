@@ -13,7 +13,7 @@ from typing import Any
 from ..novel_interfaces import (
     NovelProjectStore, NovelVolumeStore, NovelChapterPlanStore,
     NovelChapterDraftStore, NovelLedgerStore, NovelCharacterStore,
-    NovelBatchProgressStore, NovelReferenceBookStore,
+    NovelBatchProgressStore, NovelReferenceBookStore, NovelPlanStore,
 )
 from ...contracts.novel_project import NovelProject
 from ...contracts.novel_volume import VolumePlan
@@ -23,6 +23,7 @@ from ...contracts.novel_ledger import LedgerItem
 from ...contracts.novel_character import NovelCharacter
 from ...contracts.novel_batch import BatchProgress
 from ...contracts.novel_reference import ReferenceBook
+from ...contracts.novel_plan import NovelPlan
 
 from .database import Database
 
@@ -429,4 +430,39 @@ class SqliteNovelReferenceBookStore(NovelReferenceBookStore):
     def delete(self, book_id: str) -> None:
         conn = self._db.connect()
         conn.execute("DELETE FROM novel_reference_books WHERE book_id = ?", (book_id,))
+        conn.commit()
+
+
+class SqliteNovelPlanStore(NovelPlanStore):
+    """SQLite implementation for full NovelPlan persistence."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def save(self, plan: NovelPlan, project_id: str) -> None:
+        conn = self._db.connect()
+        conn.execute(
+            """INSERT OR REPLACE INTO novel_plans
+               (project_id, plan_json, updated_at)
+               VALUES (?, ?, datetime('now'))""",
+            (
+                project_id,
+                json.dumps(plan.to_dict(), ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+
+    def load(self, project_id: str) -> NovelPlan | None:
+        conn = self._db.connect()
+        row = conn.execute(
+            "SELECT plan_json FROM novel_plans WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return NovelPlan.from_dict(json.loads(row["plan_json"]))
+
+    def delete(self, project_id: str) -> None:
+        conn = self._db.connect()
+        conn.execute("DELETE FROM novel_plans WHERE project_id = ?", (project_id,))
         conn.commit()

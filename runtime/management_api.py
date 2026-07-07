@@ -1071,8 +1071,22 @@ try:
         project_id = request.match_info["project_id"]
         try:
             factory = _factory()
+            factory.registry.novel_plan_store.delete(project_id)
             factory.registry.novel_project_store.delete(project_id)
             return _json({"success": True})
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/outline")
+    async def get_novel_outline(request):
+        """Get the full novel outline (core outline, world setting, characters, volumes, chapter OKRs)."""
+        project_id = request.match_info["project_id"]
+        try:
+            factory = _factory()
+            plan = factory.registry.novel_plan_store.load(project_id)
+            if not plan:
+                return _json({"error": "Outline not found for this project"}, 404)
+            return _json(plan.to_dict())
         except Exception as e:
             return _json({"error": str(e)[:200]}, 500)
 

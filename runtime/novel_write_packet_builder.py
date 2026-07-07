@@ -26,6 +26,8 @@ class NovelWritePacketBuilder:
         previous_chapter_summary: str,
         character_states: dict[str, Any],
         director_guidance: DirectorGuidance,
+        active_memory_context: list[dict[str, Any]] | None = None,
+        memory_recall: list[dict[str, Any]] | None = None,
         reference_books: list[dict] | None = None,
     ) -> NovelWritePacket:
         """Build a NovelWritePacket with write-before-three-steps.
@@ -37,6 +39,9 @@ class NovelWritePacketBuilder:
         # Step 1: 状态筛选
         relevant_items = self._filter_relevant_ledger(chapter_plan, ledger_items)
         relevant_characters = self._filter_relevant_characters(chapter_plan, character_states)
+        foreshadowing_items = [
+            i.to_dict() for i in relevant_items if i.section == "foreshadowing"
+        ]
 
         # Step 2: 模块召回
         ref_books = reference_books or []
@@ -57,6 +62,9 @@ class NovelWritePacketBuilder:
             previous_chapter_summary=previous_chapter_summary,
             relevant_ledger_items=relevant_items,
             character_states=relevant_characters,
+            active_memory_context=list(active_memory_context or []),
+            memory_recall=list(memory_recall or []),
+            foreshadowing_items=foreshadowing_items,
             director_guidance=director_guidance,
             writing_intent=writing_intent,
             emotion_module=emotion_module,
@@ -71,9 +79,14 @@ class NovelWritePacketBuilder:
         chapter_plan: ChapterPlan,
         director_guidance: DirectorGuidance,
         ledger_items: list[LedgerItem],
+        active_memory_context: list[dict[str, Any]] | None = None,
+        memory_recall: list[dict[str, Any]] | None = None,
     ) -> NovelWritePacket:
         """Build a packet for a single beat."""
         relevant_items = self._filter_relevant_ledger(chapter_plan, ledger_items)
+        foreshadowing_items = [
+            i.to_dict() for i in relevant_items if i.section == "foreshadowing"
+        ]
 
         return NovelWritePacket(
             packet_id=f"pkt-{chapter_plan.chapter_id}-{beat.beat_id}",
@@ -81,6 +94,9 @@ class NovelWritePacketBuilder:
             chapter_id=chapter_plan.chapter_id,
             chapter_plan=chapter_plan,
             relevant_ledger_items=relevant_items,
+            active_memory_context=list(active_memory_context or []),
+            memory_recall=list(memory_recall or []),
+            foreshadowing_items=foreshadowing_items,
             director_guidance=director_guidance,
             current_scene_beat=beat,
             accumulated_text=accumulated_text,
@@ -155,7 +171,12 @@ class NovelWritePacketBuilder:
         """一句话写作意图。"""
         parts = []
         parts.append(f"目标情绪: {plan.target_emotion}")
-        parts.append(f"节奏: {guidance.pacing_strategy}")
+        if guidance.timeline_anchor:
+            parts.append(f"时间: {guidance.timeline_anchor}")
+        if guidance.beat_details:
+            beats_summary = " → ".join(bd.emotion_shift for bd in guidance.beat_details if bd.emotion_shift)
+            if beats_summary:
+                parts.append(f"情绪弧线: {beats_summary}")
         if emotion_module:
             parts.append(f"情绪模块: {emotion_module.get('name', '无')}")
         if rhythm:

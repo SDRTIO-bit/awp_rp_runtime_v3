@@ -15,6 +15,7 @@ from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_character import NovelCharacter
 from ..contracts.novel_batch import BatchProgress
 from ..contracts.novel_reference import ReferenceBook
+from ..contracts.novel_plan import NovelPlan
 
 
 class NovelProjectStore(ABC):
@@ -182,4 +183,20 @@ class NovelReferenceBookStore(ABC):
 
     @abstractmethod
     def delete(self, book_id: str) -> None:
+        ...
+
+
+class NovelPlanStore(ABC):
+    """Interface for full NovelPlan persistence (outline/world/characters/volumes/chapters)."""
+
+    @abstractmethod
+    def save(self, plan: NovelPlan, project_id: str) -> None:
+        ...
+
+    @abstractmethod
+    def load(self, project_id: str) -> NovelPlan | None:
+        ...
+
+    @abstractmethod
+    def delete(self, project_id: str) -> None:
         ...

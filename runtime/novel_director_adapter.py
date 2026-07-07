@@ -1,6 +1,7 @@
-"""NovelDirectorAdapter — Director LLM adapter for novel mode.
+"""NovelDirectorAdapter — Director LLM adapter for novel mode v2.
 
 Uses DeepSeekAdapter with thinking=high for global story optimization.
+v2: McKee 框架驱动，输出 beat 细纲 + 事实锚点。
 """
 
 from __future__ import annotations
@@ -9,77 +10,83 @@ from typing import Any
 
 from ..contracts.novel_director_guidance import DirectorGuidance
 
-# Thinking configuration for deep reasoning
-_THINKING_HIGH = {"thinking": {"type": "enabled", "reasoning_effort": "high"}}
-
-# Director system prompt (core rules from oh-story)
-DIRECTOR_SYSTEM_PROMPT = """=== STABLE DIRECTOR CONTRACT ===
+# Director system prompt (McKee framework)
+DIRECTOR_SYSTEM_PROMPT = """=== DIRECTOR CONTRACT v2 ===
 你是长篇网文的大纲优化导演。你的核心职责是**编排故事**，不是编排句式。
-
 你不是写手，你不出正文。你是"总编辑 + 导演"的结合体。
-你的任务是告诉 Writer：这个场景讲什么、用什么方式讲、信息怎么分配。句式、分段、用词是 Writer 的职责，你不要管。
+你的任务是告诉 Writer：这个场景讲什么、用什么方式讲、信息怎么分配。
 
-=== 第一原则：对话驱动 ===
-读者是为了看"故事内容"来的，不是看作者主观臆想的。故事内容 = 人物的行为和语言。
+=== 第一原则：事实锚定 ===
+你必须在输出开头明确两组事实，Writer 必须遵守，不可修改：
 
-你的 chapter_direction 和 pacing_strategy 必须明确：
-- 哪些信息通过**对话**传递（人物之间的交流、冲突、试探）
-- 哪些情绪通过**行为**展现（动作、反应、选择）
-- 哪些背景通过**叙述**交代（点到即止，不铺开）
+character_anchor：本章出场角色的基础事实。
+格式："角色名: 年龄性别, 核心身份, 关键特征 | 角色名: ..."
+要求：从角色状态和章节计划中提取，包含年龄、性别、核心身份、关键特征。不可编造。
+
+timeline_anchor：故事时间锚点。
+格式："第X章, 故事内时间描述"
+要求：从章节编号和已完成章节摘要中推算，明确当前是故事的第几天/什么时段。不可编造。
+
+=== 第二原则：beat 细纲（McKee 框架）===
+对 Architect 给出的每个 scene_beat，你必须展开成细纲。每个 beat 是一个最小故事单位：
+角色做出一个行为，产生一个不可逆的变化。
+
+每个 beat 包含以下字段：
+
+1. content_outline：具体事件。谁做了什么，发生了什么。不要写笼统的方向，要写具体的动作和事件。
+2. gap（McKee 差距）：角色的期望 vs 实际结果的落差。每个 beat 都应该有 gap——角色以为会发生X，结果发生了Y。
+3. complication（递进复杂化）：这个 beat 比上一个 beat 复杂/危险/紧迫在哪。故事的复杂度必须逐 beat 递增。
+4. pressure_point（压力点）：角色在这个 beat 面对什么压力或两难选择。McKee 说"角色在压力下的选择才暴露真面目"。
+5. dialogue_keys：关键对白要点。不是写完整对话，而是标注：谁对谁说了什么类型的话，潜台词是什么。
+   格式：["角色A→角色B: 表面说X（潜台词：真实意图是Y）", "..."]
+6. info_release：读者在这个 beat 新知道什么信息。每个 beat 必须推进读者的认知。
+7. emotion_shift：情绪翻转。从什么情绪变到什么情绪（如"压抑→怀疑"）。
+8. info_type：这个 beat 主要通过什么方式传递信息。"对话" / "行为" / "叙述" / "内心推断" / "物证发现"
+9. hook_execution：这个 beat 的钩子怎么落地。类型：悬念（留下未解问题）/ 情绪（制造缺口）/ 反转（颠覆预期）/ 信息差（读者知道角色不知道，或反过来）
+
+=== 第三原则：对话驱动 ===
+读者是为了看"故事内容"来的。故事内容 = 人物的行为和语言。
+- 哪些信息通过对话传递（人物之间的交流、冲突、试探）
+- 哪些情绪通过行为展现（动作、反应、选择）
+- 哪些背景通过叙述交代（点到即止，不铺开）
 - 对话占比目标：30-40%。如果某个 beat 没有对话对象，要设计自言自语、回忆别人的话、打电话等方式
 
-=== 第二原则：钩子编排 ===
-每个场景必须有钩子。钩子类型：
-- 悬念钩：留下未解的问题（"谁画的这幅画？"）
-- 情绪钩：制造情绪缺口（压抑→期待释放）
-- 反转钩：颠覆预期（"招租电话是我自己的"）
+=== 第四原则：钩子编排 ===
+每个 beat 必须有钩子。不要等到章末才留悬念。
+钩子类型：
+- 悬念钩：留下未解的问题
+- 情绪钩：制造情绪缺口
+- 反转钩：颠覆预期
 - 信息差：读者知道角色不知道，或反过来
-
-你的 key_scenes 必须标记每个场景的钩子类型。
-
-=== 第三原则：期待感管理 ===
-- 每章结束时，读者必须有一个想看下一章的理由
-- "不存在过渡章"——每个场景都是下一个期待感的铺垫
-- 节奏慢的时候加钩子，节奏快的时候加情绪
-
-=== chapter_direction 编写规范 ===
-不要写"用短句""用长句""内心独白密度25%"这种句式指导。
-要写：
-- 本章的核心冲突是什么
-- 哪些场景用对话推进（具体到哪个人物说哪类话）
-- 哪些场景用行为推进（具体到什么动作展现什么情绪）
-- 信息如何分层释放（先给什么线索，后揭什么真相）
-
-=== pacing_strategy 编写规范 ===
-不要写"短句密集事件""动后必静"这种节奏配方。
-要写：
-- 每个 beat 的信息类型（对话/行为/叙述/内心推断）
-- beat 之间的信息递进关系（A beat 给线索 → B beat 通过对话确认 → C beat 行动验证）
-- 哪里需要"慢下来"（通过对话深挖情绪），哪里需要"快起来"（通过行为推进剧情）
-
-=== key_scenes 编写规范 ===
-每个 scene 必须包含：
-1. 场景内容（一句话）
-2. 钩子类型（悬念/情绪/反转/信息差）
-3. 信息传递方式（对话/行为/叙述）
-4. 涉及人物
-
-示例：
-"袁护士交接钥匙并送安神香 | 钩子：悬念（为什么送香？）| 方式：对话为主（袁护士简短交代+林知夏追问+袁护士回避）| 人物：林知夏、袁护士"
 
 === OUTPUT FORMAT（必须严格遵守）===
 只输出一个 JSON 对象，不要任何 markdown、不要 ``` 代码块、不要前后解释文字。
-JSON 必须能直接被 json.loads 解析。字段如下（除标注外都是 string，缺失字段用空字符串）：
+JSON 必须能直接被 json.loads 解析。
 
 {
-  "guidance_id": "string",
-  "chapter_direction": "string — 本章叙事方向（核心冲突+信息分配方式，不要写句式指导）",
-  "emotional_arc": "string — 本章情绪弧线 开头→中间→结尾",
-  "pacing_strategy": "string — 节奏策略（每个beat的信息类型和递进关系，不要写句式配方）",
-  "key_scenes": ["string — 格式：内容|钩子类型|传递方式|人物", "..."],
-  "dialogue_tone": "string — 对话基调（每个主要人物的说话风格和对话中的潜台词）",
-  "reader_expectation_plan": "string — 读者预期操控（每章结束时读者想知道什么）",
-  "reasoning": "string — 推理过程（供审查）"
+  "guidance_id": "guid-ch{章节编号}",
+  "character_anchor": "角色名: 年龄性别, 核心身份, 关键特征 | ...",
+  "timeline_anchor": "第X章, 搬入第N天, DayN 时段→时段",
+  "beat_details": [
+    {
+      "beat_id": "b1",
+      "content_outline": "具体事件描述（谁做了什么，发生了什么）",
+      "gap": "期望vs结果的落差",
+      "complication": "比上一个beat复杂在哪",
+      "pressure_point": "角色面对的压力或两难选择",
+      "dialogue_keys": ["角色A→角色B: 表面说X（潜台词：Y）"],
+      "info_release": "读者新知道什么",
+      "emotion_shift": "从X情绪→Y情绪",
+      "info_type": "对话/行为/叙述/内心推断/物证发现",
+      "hook_execution": "钩子类型+具体怎么落地"
+    }
+  ],
+  "outline_enhancements": [],
+  "foreshadowing_schedule": [],
+  "subplot_status": [],
+  "risk_flags": [],
+  "opportunities": [],
+  "reasoning": "简要推理过程"
 }
 
 若你不确定某个字段，写空字符串或空数组，但不要省略字段，不要输出 JSON 以外的内容。
@@ -87,7 +94,7 @@ JSON 必须能直接被 json.loads 解析。字段如下（除标注外都是 st
 
 
 class NovelDirectorAdapter:
-    """Director LLM adapter for novel mode."""
+    """Director LLM adapter for novel mode v2."""
 
     def __init__(self, registry, model: str = "deepseek-v4-pro"):
         self._registry = registry
@@ -140,41 +147,39 @@ class NovelDirectorAdapter:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # Last resort: keep only a short chapter_direction, drop the long reasoning
-        # (previously we leaked the full reasoning text into the packet, wasting
-        #  tens of thousands of tokens downstream for no value).
-        cleaned = text.strip()
-        if len(cleaned) > 400:
-            cleaned = cleaned[:400]
+        # Fallback: construct minimal guidance
         return DirectorGuidance(
             guidance_id=f"guid-{chapter_plan.chapter_id}",
-            chapter_direction=cleaned or "推进主线",
+            character_anchor="",
+            timeline_anchor="",
         )
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:
         """Best-effort extract the first balanced top-level JSON object from text.
 
-        Strips ```json fences, then scans for the outermost {...}. Returns the
-        substring or None if no brace pair is found.
+        Handles: ```json fences, leading/trailing prose, nested braces,
+        truncated JSON (tries to close open braces).
         """
         if not text:
             return None
         t = text.strip()
-        # Strip markdown code fences
+
+        # 1. Strip markdown code fences
         if t.startswith("```"):
-            # remove opening fence (with optional language tag)
             first_newline = t.find("\n")
             if first_newline != -1:
                 t = t[first_newline + 1:]
-            # remove closing fence if present
-            if t.endswith("```"):
-                t = t[:-3]
+            last_fence = t.rfind("```")
+            if last_fence != -1:
+                t = t[:last_fence]
             t = t.strip()
-        # Find outermost brace pair
+
+        # 2. Find first { and extract balanced JSON
         start = t.find("{")
         if start == -1:
             return None
+
         depth = 0
         in_string = False
         escape = False
@@ -195,7 +200,32 @@ class NovelDirectorAdapter:
             elif ch == "}":
                 depth -= 1
                 if depth == 0:
-                    return t[start:i + 1]
+                    candidate = t[start:i + 1]
+                    import json
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except (json.JSONDecodeError, ValueError):
+                        repaired = candidate.replace("\n", "\\n").replace("\r", "\\r")
+                        try:
+                            json.loads(repaired)
+                            return repaired
+                        except (json.JSONDecodeError, ValueError):
+                            return None
+
+        # 3. Truncated JSON — try to close open braces
+        remaining = t[start:]
+        open_count = remaining.count("{")
+        close_count = remaining.count("}")
+        if open_count > close_count:
+            suffix = "}" * (open_count - close_count)
+            candidate = remaining + suffix
+            import json
+            try:
+                json.loads(candidate)
+                return candidate
+            except (json.JSONDecodeError, ValueError):
+                pass
         return None
 
     def _build_prompt(
@@ -215,13 +245,17 @@ class NovelDirectorAdapter:
             "3. 检查角色弧光：主要角色在本章应该有什么成长？\n"
             "4. 检查支线：哪些支线需要推进？哪些可以暂缓？\n"
             "5. 设计读者预期：本章应该给读者什么期待？如何误导或满足？\n"
-            "6. 最后：为 Writer 提供精确的本章方向",
+            "6. 确定事实锚点：角色年龄/身份/时间线，这些 Writer 不可修改\n"
+            "7. 逐 beat 展开细纲：content_outline → gap → complication → pressure_point → dialogue_keys → info_release → emotion_shift → info_type → hook_execution\n"
+            "8. 最后：检查 beat 之间的递进关系和钩子连贯性",
         ]
 
         # Varying context
         parts.append(f"\n=== CURRENT TASK ===\n当前要写第 {chapter_plan.chapter_index} 章")
         parts.append(f"\n章节计划:\n{chapter_plan.to_dict()}")
-        parts.append(f"\n前一章结尾:\n{previous_chapter_ending}")
+
+        if previous_chapter_ending:
+            parts.append(f"\n前一章结尾:\n{previous_chapter_ending}")
 
         if character_states:
             parts.append(f"\n角色状态:\n{character_states}")
@@ -236,11 +270,13 @@ class NovelDirectorAdapter:
             items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content}" for i in ledger_items[:20])
             parts.append(f"\n连续性账本:\n{items_text}")
 
-        parts.append(f"\n已完成章节摘要:\n{completed_chapters_summary}")
+        if completed_chapters_summary:
+            parts.append(f"\n已完成章节摘要:\n{completed_chapters_summary}")
 
         parts.append(
             "\n=== FINAL REMINDER ===\n"
-            "按 OUTPUT FORMAT 只输出一个 JSON 对象。不要 markdown，不要解释。"
+            "按 OUTPUT FORMAT 只输出一个 JSON 对象。不要 markdown，不要解释。\n"
+            "beat_details 的数量必须和章节计划里的 scene_beats 数量一致。"
         )
 
         return DIRECTOR_SYSTEM_PROMPT, "\n".join(parts)

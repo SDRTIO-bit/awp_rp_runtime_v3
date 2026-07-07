@@ -195,20 +195,30 @@ class NovelArchitectAdapter:
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:
-        """Best-effort extract the first balanced top-level JSON object from text."""
+        """Best-effort extract the first balanced top-level JSON object from text.
+
+        Handles: ```json fences, leading/trailing prose, nested braces.
+        """
         if not text:
             return None
         t = text.strip()
+
+        # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
         if t.startswith("```"):
             first_newline = t.find("\n")
             if first_newline != -1:
                 t = t[first_newline + 1:]
-            if t.endswith("```"):
-                t = t[:-3]
+            # Remove trailing fence (may have whitespace/newline before ```)
+            last_fence = t.rfind("```")
+            if last_fence != -1:
+                t = t[:last_fence]
             t = t.strip()
+
+        # 2. Find the first { and extract balanced JSON object
         start = t.find("{")
         if start == -1:
             return None
+
         depth = 0
         in_string = False
         escape = False
@@ -229,7 +239,37 @@ class NovelArchitectAdapter:
             elif ch == "}":
                 depth -= 1
                 if depth == 0:
-                    return t[start:i + 1]
+                    candidate = t[start:i + 1]
+                    # 3. Validate it's actually parseable JSON
+                    import json
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except (json.JSONDecodeError, ValueError):
+                        # Malformed JSON (e.g. unescaped newlines in strings).
+                        # Try to salvage by escaping bare newlines inside strings.
+                        repaired = candidate.replace("\n", "\\n").replace("\r", "\\r")
+                        try:
+                            json.loads(repaired)
+                            return repaired
+                        except (json.JSONDecodeError, ValueError):
+                            return None
+        # 4. No closing brace found — JSON truncated. Try to close it.
+        # Find the last } after start and attempt to close open braces.
+        remaining = t[start:]
+        # Count open vs close braces
+        open_count = remaining.count("{")
+        close_count = remaining.count("}")
+        if open_count > close_count:
+            # Try appending missing closing braces
+            suffix = "}" * (open_count - close_count)
+            candidate = remaining + suffix
+            import json
+            try:
+                json.loads(candidate)
+                return candidate
+            except (json.JSONDecodeError, ValueError):
+                pass
         return None
 
     def _build_prompt(

@@ -14,9 +14,13 @@ from ..contracts.novel_draft import ChapterDraft
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
 from ..contracts.novel_write_packet import NovelWritePacket
+from ..contracts.memory_recall_request import MemoryRecallRequest
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_write_packet_builder import NovelWritePacketBuilder
 from .novel_quality_pipeline import NovelQualityPipeline
+from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
+from .rag_recall_runtime import RagMemoryRecallRuntime
+from .novel_evolution_curator import novel_memory_scope
 
 
 class NovelEngine:
@@ -121,6 +125,11 @@ class NovelEngine:
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         characters = self._registry.novel_character_store.list_by_project(project_id)
         character_states = {c.name: c.current_state for c in characters}
+        active_memory_context, memory_recall = self._recall_novel_memory(
+            project_id=project_id,
+            plan=plan,
+            characters=characters,
+        )
 
         # Load previous chapter summary
         prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
@@ -156,11 +165,20 @@ class NovelEngine:
             ledger_items=ledger_items,
             previous_chapter_summary=previous_chapter_summary,
             character_states=character_states,
+            active_memory_context=active_memory_context,
+            memory_recall=memory_recall,
             director_guidance=director_guidance,
         )
 
         # Generate with beat-by-beat approach
-        text = self._generate_with_beats(plan, packet, director_guidance, ledger_items)
+        text = self._generate_with_beats(
+            plan,
+            packet,
+            director_guidance,
+            ledger_items,
+            active_memory_context=active_memory_context,
+            memory_recall=memory_recall,
+        )
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
@@ -186,8 +204,9 @@ class NovelEngine:
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
-        # Update ledger (placeholder)
-        self._update_ledger(project_id, plan, text, ledger_items)
+        self._update_ledger(
+            project_id, plan, text, ledger_items, characters, quality_decision
+        )
 
         return draft
 
@@ -197,6 +216,8 @@ class NovelEngine:
         packet: NovelWritePacket,
         director_guidance: DirectorGuidance,
         ledger_items: list[LedgerItem],
+        active_memory_context: list[dict[str, Any]] | None = None,
+        memory_recall: list[dict[str, Any]] | None = None,
     ) -> str:
         """Generate chapter text beat by beat."""
         if not plan.scene_beats:
@@ -218,6 +239,8 @@ class NovelEngine:
                     chapter_plan=plan,
                     director_guidance=director_guidance,
                     ledger_items=ledger_items,
+                    active_memory_context=active_memory_context,
+                    memory_recall=memory_recall,
                 )
                 try:
                     beat_text = self._call_writer_beat(beat_packet)
@@ -305,24 +328,121 @@ class NovelEngine:
         adapter = NovelWriterAdapter(self._registry)
         return adapter.generate_beat(packet)
 
+    def _recall_novel_memory(
+        self,
+        *,
+        project_id: str,
+        plan: ChapterPlan,
+        characters: list,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        card_id, session_id = novel_memory_scope(project_id)
+        query = self._build_memory_recall_query(plan, characters)
+        entity_refs = [
+            c.name for c in characters
+            if c.name and (c.name in query or c.name in str(plan.to_dict()))
+        ]
+        request = MemoryRecallRequest(
+            card_id=card_id,
+            session_id=session_id,
+            query=query,
+            entity_refs=entity_refs,
+            limit=8,
+            min_confidence=0.0,
+            min_importance=0.0,
+        )
+
+        active_result = ActiveMemoryRecallRuntime(
+            self._registry.active_memory_store
+        ).recall(request)
+        rag_result = RagMemoryRecallRuntime(
+            self._registry.rag_memory_store
+        ).recall(request)
+
+        if query and not active_result.hits:
+            active_result = ActiveMemoryRecallRuntime(
+                self._registry.active_memory_store
+            ).recall(MemoryRecallRequest(card_id=card_id, session_id=session_id, limit=8))
+        if query and not rag_result.hits:
+            rag_result = RagMemoryRecallRuntime(
+                self._registry.rag_memory_store
+            ).recall(MemoryRecallRequest(card_id=card_id, session_id=session_id, limit=8))
+
+        return (
+            [self._recall_hit_to_prompt_item(h) for h in active_result.hits],
+            [self._recall_hit_to_prompt_item(h) for h in rag_result.hits],
+        )
+
+    def _build_memory_recall_query(self, plan: ChapterPlan, characters: list) -> str:
+        parts = [
+            plan.title,
+            plan.opening_hook,
+            plan.main_payoff,
+            plan.target_emotion,
+            plan.content_summary.cause,
+            plan.content_summary.development,
+            plan.content_summary.turning_point,
+            plan.content_summary.climax,
+            plan.content_summary.ending,
+            plan.plot_arrangement.main_line,
+            plan.plot_arrangement.sub_line,
+            plan.plot_arrangement.event_line,
+            plan.plot_arrangement.emotion_line,
+            plan.ending_design.next_chapter_push,
+            plan.ending_design.hook_detail,
+        ]
+        parts.extend(c.name for c in characters if getattr(c, "name", ""))
+        query = " ".join(p for p in parts if p)
+        return query[:500]
+
+    def _recall_hit_to_prompt_item(self, hit) -> dict[str, Any]:
+        return {
+            "source": hit.layer,
+            "layer": hit.layer,
+            "memory_id": hit.memory_id,
+            "content": hit.content or hit.summary,
+            "summary": hit.summary,
+            "importance": hit.importance,
+            "confidence": hit.confidence,
+            "entity_refs": list(hit.entity_refs),
+            "source_refs": list(hit.source_refs),
+            "hit_reasons": list(hit.hit_reasons),
+        }
+
     def _update_ledger(
         self, project_id: str, plan: ChapterPlan,
         text: str, current_ledger: list[LedgerItem],
+        characters: list,
+        quality_decision,
     ) -> None:
-        """Update ledger after chapter acceptance."""
-        from .novel_ledger_curator import NovelLedgerCurator
+        """Update ledger and memory after chapter writing."""
+        from .novel_evolution_curator import NovelEvolutionCurator
+        from ..contracts.quality_decision import QualityDecision, QualityVerdict
         try:
-            curator = NovelLedgerCurator(self._registry)
-            result = curator.curate(text, plan, current_ledger)
-            # Apply updates
-            for item_data in result.get("ledger_updates", []):
-                from ..contracts.novel_ledger import LedgerItem
-                item = LedgerItem.from_dict(item_data)
-                self._registry.novel_ledger_store.upsert(item)
-            for item_id in result.get("ledger_resolves", []):
-                self._registry.novel_ledger_store.resolve(item_id)
+            side_effect_decision = quality_decision
+            if text and (
+                quality_decision is None or not quality_decision.is_accepted()
+            ):
+                side_effect_decision = QualityDecision(
+                    verdict=QualityVerdict.ACCEPTED,
+                    candidate_text=text,
+                    warnings=(
+                        list(getattr(quality_decision, "blocking_reasons", []))
+                        + list(getattr(quality_decision, "warnings", []))
+                    ) if quality_decision else [],
+                    acceptance_notes=[
+                        "novel_persisted_draft_memory_indexing",
+                    ],
+                )
+            curator = NovelEvolutionCurator(self._registry)
+            curator.curate(
+                chapter_text=text,
+                chapter_plan=plan,
+                current_ledger_items=current_ledger,
+                characters=characters,
+                quality_decision=side_effect_decision,
+            )
         except Exception:
-            pass  # Don't fail the chapter write if ledger update fails
+            pass  # Don't fail the chapter write if evolution update fails
 
     def revise_chapter(
         self,
@@ -347,7 +467,9 @@ class NovelEngine:
 
         director_guidance = DirectorGuidance(
             guidance_id=f"guid-revise-{plan.chapter_id}",
-            chapter_direction=feedback or "修订改进",
+            character_anchor="",
+            timeline_anchor=f"第{plan.chapter_index}章, 修订",
+            beat_details=(),
         )
 
         packet = self._packet_builder.build(

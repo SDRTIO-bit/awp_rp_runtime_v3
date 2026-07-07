@@ -136,7 +136,7 @@ class TestNovelWritePacketBuilder:
         items = [
             LedgerItem(item_id="li1", project_id="p1", section="foreshadowing", entity="金锁", status="active"),
         ]
-        guidance = DirectorGuidance(guidance_id="g1", pacing_strategy="紧凑")
+        guidance = DirectorGuidance(guidance_id="g1", timeline_anchor="第1章, 搬入第1天")
 
         packet = builder.build(
             chapter_plan=plan,

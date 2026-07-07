@@ -1,6 +1,9 @@
-"""DirectorGuidance, OutlineEnhancement, ForeshadowingAction, CharacterArcBeat, SubplotStatus.
+"""DirectorGuidance, BeatGuidance, OutlineEnhancement, ForeshadowingAction, SubplotStatus.
 
-schemaId: awp.novel.director-guidance.v1
+schemaId: awp.novel.director-guidance.v2
+
+v2: 融合 McKee 框架，将旧字段（chapter_direction/emotional_arc/pacing_strategy/
+key_scenes/dialogue_tone/reader_expectation_plan/character_arc_beats）拆入 beat_details。
 """
 
 from __future__ import annotations
@@ -8,8 +11,55 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-SCHEMA_ID = "awp.novel.director-guidance.v1"
-SCHEMA_VERSION = 1
+SCHEMA_ID = "awp.novel.director-guidance.v2"
+SCHEMA_VERSION = 2
+
+
+@dataclass(frozen=True)
+class BeatGuidance:
+    """单个 beat 的细纲（McKee 框架驱动）。"""
+    beat_id: str = ""
+    content_outline: str = ""      # 具体事件：谁做了什么，发生了什么
+    gap: str = ""                  # McKee gap：期望 vs 结果的落差
+    complication: str = ""         # 比上一个 beat 复杂在哪（递进复杂化）
+    pressure_point: str = ""       # 角色面对的压力/两难选择
+    dialogue_keys: tuple[str, ...] = ()  # 关键对白要点（含潜台词标注）
+    info_release: str = ""         # 读者在这个 beat 新知道什么
+    emotion_shift: str = ""        # 情绪翻转（如"压抑→怀疑"）
+    info_type: str = ""            # 信息传递方式：对话/行为/叙述/内心推断
+    hook_execution: str = ""       # 钩子怎么落地（悬念/情绪/反转/信息差）
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "beat_id": self.beat_id,
+            "content_outline": self.content_outline,
+            "gap": self.gap,
+            "complication": self.complication,
+            "pressure_point": self.pressure_point,
+            "dialogue_keys": list(self.dialogue_keys),
+            "info_release": self.info_release,
+            "emotion_shift": self.emotion_shift,
+            "info_type": self.info_type,
+            "hook_execution": self.hook_execution,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> BeatGuidance:
+        data = data if isinstance(data, dict) else {}
+        dk = data.get("dialogue_keys", [])
+        dk = tuple(dk) if isinstance(dk, (list, tuple)) else ()
+        return cls(
+            beat_id=str(data.get("beat_id", "") or ""),
+            content_outline=str(data.get("content_outline", "") or ""),
+            gap=str(data.get("gap", "") or ""),
+            complication=str(data.get("complication", "") or ""),
+            pressure_point=str(data.get("pressure_point", "") or ""),
+            dialogue_keys=dk,
+            info_release=str(data.get("info_release", "") or ""),
+            emotion_shift=str(data.get("emotion_shift", "") or ""),
+            info_type=str(data.get("info_type", "") or ""),
+            hook_execution=str(data.get("hook_execution", "") or ""),
+        )
 
 
 @dataclass(frozen=True)
@@ -71,32 +121,6 @@ class ForeshadowingAction:
 
 
 @dataclass(frozen=True)
-class CharacterArcBeat:
-    """角色弧光节拍。"""
-    character_name: str = ""
-    arc_phase: str = ""          # "setup" / "challenge" / "growth" / "crisis" / "transformation"
-    beat_description: str = ""
-    relationship_shifts: tuple[str, ...] = ()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "character_name": self.character_name,
-            "arc_phase": self.arc_phase,
-            "beat_description": self.beat_description,
-            "relationship_shifts": list(self.relationship_shifts),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> CharacterArcBeat:
-        return cls(
-            character_name=data.get("character_name", ""),
-            arc_phase=data.get("arc_phase", ""),
-            beat_description=data.get("beat_description", ""),
-            relationship_shifts=tuple(data.get("relationship_shifts", [])),
-        )
-
-
-@dataclass(frozen=True)
 class SubplotStatus:
     """支线进度。"""
     subplot_name: str = ""
@@ -124,30 +148,29 @@ class SubplotStatus:
 
 @dataclass(frozen=True)
 class DirectorGuidance:
-    """Director 的输出，包含当章方向 + 大纲优化建议 + 伏笔调度。"""
+    """Director 的输出 v2：事实锚点 + beat 细纲 + 全局辅助。
+
+    旧字段（chapter_direction/emotional_arc/pacing_strategy/key_scenes/
+    dialogue_tone/reader_expectation_plan/character_arc_beats）已融合入 beat_details。
+    """
     schema_id: str = SCHEMA_ID
     schema_version: int = SCHEMA_VERSION
 
     guidance_id: str = ""
 
-    # 当章方向
-    chapter_direction: str = ""
-    emotional_arc: str = ""
-    pacing_strategy: str = ""
-    key_scenes: tuple[str, ...] = ()
-    dialogue_tone: str = ""
+    # 事实锚点（Writer 必须遵守，不可修改）
+    character_anchor: str = ""    # "林知夏: 28岁女, 自由插画师, 失眠三年 | 袁护士: ~50岁, 护士"
+    timeline_anchor: str = ""     # "第3章, 搬入第2天, Day2 凌晨→清晨"
 
-    # 大纲优化
+    # beat 细纲（替代旧的 chapter_direction/emotional_arc/pacing_strategy/key_scenes/dialogue_tone/reader_expectation_plan/character_arc_beats）
+    beat_details: tuple[BeatGuidance, ...] = ()
+
+    # 全局辅助
     outline_enhancements: tuple[OutlineEnhancement, ...] = ()
     foreshadowing_schedule: tuple[ForeshadowingAction, ...] = ()
-    character_arc_beats: tuple[CharacterArcBeat, ...] = ()
-    reader_expectation_plan: str = ""
-
-    # 全局视角
     subplot_status: tuple[SubplotStatus, ...] = ()
     risk_flags: tuple[str, ...] = ()
     opportunities: tuple[str, ...] = ()
-
     reasoning: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -155,15 +178,11 @@ class DirectorGuidance:
             "schema_id": self.schema_id,
             "schema_version": self.schema_version,
             "guidance_id": self.guidance_id,
-            "chapter_direction": self.chapter_direction,
-            "emotional_arc": self.emotional_arc,
-            "pacing_strategy": self.pacing_strategy,
-            "key_scenes": list(self.key_scenes),
-            "dialogue_tone": self.dialogue_tone,
+            "character_anchor": self.character_anchor,
+            "timeline_anchor": self.timeline_anchor,
+            "beat_details": [b.to_dict() for b in self.beat_details],
             "outline_enhancements": [e.to_dict() for e in self.outline_enhancements],
             "foreshadowing_schedule": [f.to_dict() for f in self.foreshadowing_schedule],
-            "character_arc_beats": [c.to_dict() for c in self.character_arc_beats],
-            "reader_expectation_plan": self.reader_expectation_plan,
             "subplot_status": [s.to_dict() for s in self.subplot_status],
             "risk_flags": list(self.risk_flags),
             "opportunities": list(self.opportunities),
@@ -172,19 +191,16 @@ class DirectorGuidance:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DirectorGuidance:
+        data = data if isinstance(data, dict) else {}
         return cls(
             schema_id=data.get("schema_id", SCHEMA_ID),
             schema_version=data.get("schema_version", SCHEMA_VERSION),
             guidance_id=data.get("guidance_id", ""),
-            chapter_direction=data.get("chapter_direction", ""),
-            emotional_arc=data.get("emotional_arc", ""),
-            pacing_strategy=data.get("pacing_strategy", ""),
-            key_scenes=tuple(data.get("key_scenes", [])),
-            dialogue_tone=data.get("dialogue_tone", ""),
+            character_anchor=str(data.get("character_anchor", "") or ""),
+            timeline_anchor=str(data.get("timeline_anchor", "") or ""),
+            beat_details=tuple(BeatGuidance.from_dict(b) for b in data.get("beat_details", []) if isinstance(b, dict)),
             outline_enhancements=tuple(OutlineEnhancement.from_dict(e) for e in data.get("outline_enhancements", [])),
             foreshadowing_schedule=tuple(ForeshadowingAction.from_dict(f) for f in data.get("foreshadowing_schedule", [])),
-            character_arc_beats=tuple(CharacterArcBeat.from_dict(c) for c in data.get("character_arc_beats", [])),
-            reader_expectation_plan=data.get("reader_expectation_plan", ""),
             subplot_status=tuple(SubplotStatus.from_dict(s) for s in data.get("subplot_status", [])),
             risk_flags=tuple(data.get("risk_flags", [])),
             opportunities=tuple(data.get("opportunities", [])),
