@@ -22,6 +22,31 @@ def _get_writer_prompt() -> str:
 WRITER_SYSTEM_PROMPT = ""  # replaced at call time by _get_writer_prompt()
 
 
+_STYLE_BENCHMARK_CACHE: str | None = None
+
+def _get_style_benchmark(project_root: str = "") -> str:
+    global _STYLE_BENCHMARK_CACHE
+    if _STYLE_BENCHMARK_CACHE is not None:
+        return _STYLE_BENCHMARK_CACHE
+    import os
+    paths = []
+    if project_root:
+        paths.append(os.path.join(project_root, "reference_benchmark.txt"))
+    paths.append(os.path.join(os.path.dirname(__file__), "..", "novels", "steam_magic", "reference_benchmark.txt"))
+    for p in paths:
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                text = f.read().strip()
+            _STYLE_BENCHMARK_CACHE = (
+                "=== STYLE BENCHMARK ===\n"
+                "以下是你的写作风格参考（都市背景，蒸汽魔法项目需转换为西幻背景，\n"
+                "但要模仿其对话节奏、情绪表达方式、场景切换的流畅度）：\n\n"
+                + text
+            )
+            return _STYLE_BENCHMARK_CACHE
+    return ""
+
+
 class NovelWriterAdapter:
     """Chapter Writer LLM adapter for novel mode."""
 
@@ -42,81 +67,97 @@ class NovelWriterAdapter:
     def _build_prompt(self, packet: NovelWritePacket) -> tuple[str, str]:
         """Build the full chapter generation prompt. Returns (system_prompt, user_prompt).
 
-        Prompt structure optimized for DeepSeek prefix caching:
-        - Stable rules first (cacheable prefix)
-        - Varying context after
+        Cache-optimized order (DeepSeek prefix caching):
+        1. OUTPUT RULES (always same → full cache hit)
+        2. GLOBAL SUMMARIES (grows 1 line/ch → mostly cached)
+        3. CHARACTER STATES (stable)
+        4. Continuity / ledger (varies)
+        5. Chapter-specific: plan + ending (changes every call)
         """
-        # Stable prefix — same every call, maximizes cache hits
+        p = packet.chapter_plan
+
+        # ---- Tier 1: Stable prefix (cache hits) ----
+
         parts = [
             "=== OUTPUT RULES ===\n"
             "- 只输出正文，无标签、无 JSON、无元信息\n"
             "- 结尾必须留悬念/钩子\n"
-            "- 不复述上一章结尾\n"
+            "- 不复述上一章结尾即可\n"
             "- 对话+行为占正文60%以上，描写不超过40%\n"
-            "- 每个场景必须有对话（独处场景用自言自语/回忆/打电话）\n"
-            "- 严格遵循 Director 的情绪弧线和节奏策略",
+            "- 每个场景必须有对话（独处场景用自言自语/回忆/打电话）"
         ]
 
-        # Varying context — changes per chapter
-        parts.append(f"\n=== TARGET ===\n目标字数: {packet.chapter_plan.target_chars}")
+        # Style benchmark (stable, cache hit)
+        benchmark = _get_style_benchmark()
+        if benchmark:
+            parts.append(benchmark)
 
-        if packet.director_guidance.guidance_id:
-            dg = packet.director_guidance
-            guidance_parts = []
-            if dg.character_anchor:
-                guidance_parts.append(f"角色锚点: {dg.character_anchor}")
-            if dg.timeline_anchor:
-                guidance_parts.append(f"时间锚点: {dg.timeline_anchor}")
-            if dg.beat_details:
-                for bd in dg.beat_details:
-                    guidance_parts.append(f"  [{bd.beat_id}] {bd.content_outline}")
-                    if bd.emotion_shift:
-                        guidance_parts.append(f"    情绪: {bd.emotion_shift}")
-                    if bd.hook_execution:
-                        guidance_parts.append(f"    钩子: {bd.hook_execution}")
-            parts.append(f"\n=== DIRECTOR GUIDANCE ===\n" + "\n".join(guidance_parts))
+        # Global summaries: all completed chapters, 1 line each
+        if packet.global_summaries:
+            parts.append(f"\n=== STORY SO FAR ===\n{packet.global_summaries}")
 
-        if packet.writing_intent:
-            parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
-
-        parts.append(f"\n=== CHAPTER PLAN ===\n{packet.chapter_plan.to_dict()}")
-
-        if packet.previous_chapter_summary:
-            parts.append(f"\n=== PREVIOUS CHAPTER ===\n{packet.previous_chapter_summary}")
-
+        # Character states (stable)
         if packet.character_states:
             parts.append(f"\n=== CHARACTER STATES ===\n{packet.character_states}")
 
-        if packet.active_memory_context:
-            parts.append(
-                "\n=== ACTIVE MEMORY ===\n"
-                + self._format_memory_items(packet.active_memory_context)
-            )
+        # ---- Tier 2: Varying but compact ----
 
-        if packet.memory_recall:
-            parts.append(
-                "\n=== MEMORY RECALL ===\n"
-                + self._format_memory_items(packet.memory_recall)
+        # Continuity: ledger items (trimmed)
+        if packet.relevant_ledger_items:
+            items_text = "\n".join(
+                f"- [{i.section}] {i.entity}: {i.content[:200]}"
+                for i in packet.relevant_ledger_items[:6]
             )
+            parts.append(f"\n=== CONTINUITY ===\n{items_text}")
 
+        # Foreshadowing
         if packet.foreshadowing_items:
             parts.append(
                 "\n=== FORESHADOWING ===\n"
                 + "\n".join(
-                    f"- [{i.get('status', 'active')}] {i.get('entity', '')}: {i.get('content', '')}"
-                    for i in packet.foreshadowing_items
+                    f"- [{i.get('status','active')}] {i.get('entity','')}: {i.get('content','')}"
+                    for i in packet.foreshadowing_items[:5]
                 )
             )
 
-        if packet.relevant_ledger_items:
-            items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content}" for i in packet.relevant_ledger_items)
-            parts.append(f"\n=== CONTINUITY CONTEXT ===\n{items_text}")
+        # ---- Tier 3: Chapter-specific (changes every call) ----
+
+        # Chapter plan — lightweight: only title + emotion + position + beat outlines
+        plan_lines = [f"标题: {p.title} | 情绪: {p.target_emotion} | 定位: {p.chapter_position}"]
+        for b in p.scene_beats:
+            plan_lines.append(f"  [{b.beat_id}] {b.description} ({b.density}, {b.budget_chars}字)")
+        if p.main_payoff:
+            plan_lines.append(f"主要回报: {p.main_payoff}")
+        parts.append(f"\n=== CHAPTER PLAN ===\n" + "\n".join(plan_lines))
+
+        # Previous chapter ending — hook continuity only
+        if packet.prev_chapter_ending:
+            parts.append(
+                f"\n=== PREV CHAPTER ENDING ===\n"
+                f"(上一章结尾，本章从这里接续)\n{packet.prev_chapter_ending}"
+            )
+
+        # Director: character + timeline anchor only (not full beat detail)
+        if packet.director_guidance.guidance_id:
+            dg = packet.director_guidance
+            dg_lines = []
+            if dg.character_anchor:
+                dg_lines.append(f"角色: {dg.character_anchor}")
+            if dg.timeline_anchor:
+                dg_lines.append(f"时间: {dg.timeline_anchor}")
+            if dg_lines:
+                parts.append(f"\n=== DIRECTOR ===\n" + "\n".join(dg_lines))
+
+        if packet.writing_intent:
+            parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
 
         return _get_writer_prompt(), "\n".join(parts)
 
     def _build_beat_prompt(self, packet: NovelWritePacket) -> tuple[str, str]:
-        """Build prompt for a single beat. Returns (system_prompt, user_prompt)."""
+        """Build prompt for a single beat. Returns (system_prompt, user_prompt).
+        No accumulated_text — beats are independent to avoid drumbeat amplification."""
         beat = packet.current_scene_beat
+        p = packet.chapter_plan
 
         # Stable prefix
         parts = [
@@ -125,60 +166,57 @@ class NovelWriterAdapter:
             "- 无标签、无 JSON、无元信息\n"
             "- 对话+行为占正文60%以上，描写不超过40%\n"
             "- 必须有对话。即使 beat 描述没提对话，也要加入：自言自语、回忆别人说过的话、对物件说话、打电话\n"
-            "- 对话要有互动感和功能：不是轮流发言，要推进剧情/展示人设/制造冲突\n"
+            "- 对话要有互动感和功能：要推进剧情/展示人设/制造冲突\n"
             "- 描写点到即止：一个物件一句话，不要铺开写三句",
             f"\n=== TARGET ===\n字数: {beat.budget_chars} | 密度: {beat.density}",
         ]
 
-        # Varying context
-        parts.append(f"\n=== CURRENT BEAT ===\n"
-                    f"描述: {beat.description}\n"
-                    f"功能: {beat.function_tag}\n"
-                    f"注意：以上描述只是骨架。你必须用对话填充血肉。没有对话的beat是失败的。")
+        # Style benchmark (stable, cache hit)
+        benchmark = _get_style_benchmark()
+        if benchmark:
+            parts.append(benchmark)
 
-        if packet.accumulated_text:
-            # Show last 500 chars for style continuity
-            tail = packet.accumulated_text[-500:]
-            parts.append(f"\n=== ACCUMULATED TEXT (tail) ===\n{tail}")
+        # Global summaries
+        if packet.global_summaries:
+            parts.append(f"\n=== STORY SO FAR ===\n{packet.global_summaries}")
 
-        parts.append(f"\n=== CHAPTER PLAN (summary) ===\n"
-                    f"标题: {packet.chapter_plan.title}\n"
-                    f"情绪: {packet.chapter_plan.target_emotion}\n"
-                    f"位置: {packet.chapter_plan.chapter_position}")
+        # Character states
+        if packet.character_states:
+            parts.append(f"\n=== CHARACTER STATES ===\n{packet.character_states}")
 
+        # Current beat
+        parts.append(
+            f"\n=== CURRENT BEAT ===\n"
+            f"描述: {beat.description}\n"
+            f"功能: {beat.function_tag}\n"
+            f"注意：以上描述只是骨架。你必须用对话填充血肉。没有对话的beat是失败的。"
+        )
+
+        # Chapter context (lightweight)
+        parts.append(
+            f"\n=== CHAPTER CONTEXT ===\n"
+            f"标题: {p.title} | 情绪: {p.target_emotion} | 定位: {p.chapter_position}"
+        )
+
+        # Director anchor only
         if packet.director_guidance.guidance_id:
             dg = packet.director_guidance
             if dg.character_anchor:
-                parts.append(f"\n=== DIRECTOR GUIDANCE ===\n"
-                            f"角色锚点: {dg.character_anchor}\n"
-                            f"时间锚点: {dg.timeline_anchor}")
+                parts.append(f"\n=== DIRECTOR ===\n角色: {dg.character_anchor}")
 
-        if packet.active_memory_context:
+        # Prev chapter ending (hook)
+        if packet.prev_chapter_ending:
             parts.append(
-                "\n=== ACTIVE MEMORY ===\n"
-                + self._format_memory_items(packet.active_memory_context)
+                f"\n=== PREV CHAPTER ENDING ===\n{packet.prev_chapter_ending}"
             )
 
-        if packet.memory_recall:
-            parts.append(
-                "\n=== MEMORY RECALL ===\n"
-                + self._format_memory_items(packet.memory_recall)
+        # Continuity ledger
+        if packet.relevant_ledger_items:
+            items_text = "\n".join(
+                f"- [{i.section}] {i.entity}: {i.content[:150]}"
+                for i in packet.relevant_ledger_items[:5]
             )
-
-        if packet.foreshadowing_items:
-            parts.append(
-                "\n=== FORESHADOWING ===\n"
-                + "\n".join(
-                    f"- [{i.get('status', 'active')}] {i.get('entity', '')}: {i.get('content', '')}"
-                    for i in packet.foreshadowing_items
-                )
-            )
-
-        parts.append(f"\n=== OUTPUT RULES ===\n"
-                    f"- 只输出本 beat 的正文\n"
-                    f"- 目标 {beat.budget_chars} 字\n"
-                    f"- 密度: {beat.density}\n"
-                    f"- 无标签、无 JSON、无元信息")
+            parts.append(f"\n=== CONTINUITY ===\n{items_text}")
 
         return _get_writer_prompt(), "\n".join(parts)
 

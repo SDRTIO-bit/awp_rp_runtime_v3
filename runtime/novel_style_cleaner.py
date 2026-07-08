@@ -33,7 +33,12 @@ BANNED_WORDS_TIER2 = {
 
 # Banned patterns (most toxic)
 BANNED_PATTERNS = [
-    r"不是.{1,20}，(?:而)?是",      # "不是A，而是B"
+    r"不是.{1,20}，而是",             # "不是A，而是B"
+    r"不是.{1,20}。\s*是.{1,20}[。！]", # "不是A。是B。" (句号版)
+    r"没有.{1,20}。\s*没有.{1,20}。\s*只有", # 否定堆叠 "没有X。没有X。只有Y"
+    r"第一遍.{1,20}第二遍.{1,20}第三遍",    # 数字递增
+    r"(?m)^[^。\n]{1,8}[的着了]$",         # X的/Y的 short adjective fragment line
+    r"他看见.{1,20}然后.{1,20}[。！]",       # 感知流水账 "他看见A。然后B。"
     r"，带着[一几分些]",              # "，带着一丝..."
     r"声音不大，却带着",             # "声音不大，却带着一种..."
     r"眼中闪过一丝",                 # "眼中闪过一丝..."
@@ -179,6 +184,58 @@ class NovelStyleCleaner:
 
         return issues
 
+    def check_drumbeat_density(self, text: str) -> list[dict]:
+        """Detect excessive short-sentence drumbeat patterns.
+
+        When >25% of sentences are ≤12 chars, or there are >3 consecutive
+        isolated short paragraphs, the chapter has AI drumbeat syndrome.
+        """
+        issues = []
+        lines = text.split("\n")
+        all_sentences = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # Split each line into sentences
+            parts = re.split(r'[。！？]', stripped)
+            for p in parts:
+                p = p.strip()
+                if p:
+                    all_sentences.append(p)
+
+        if len(all_sentences) < 20:
+            return issues
+
+        short_count = sum(1 for s in all_sentences if len(s) <= 12)
+        short_ratio = short_count / len(all_sentences)
+
+        # Count consecutive isolated short paragraphs (≤15 chars, standalone)
+        consecutive_streak = 0
+        max_streak = 0
+        for line in lines:
+            stripped = line.strip()
+            if stripped and len(stripped) <= 15:
+                consecutive_streak += 1
+                max_streak = max(max_streak, consecutive_streak)
+            else:
+                consecutive_streak = 0
+
+        if short_ratio > 0.40:
+            issues.append({
+                "type": "drumbeat_density",
+                "severity": "blocking",
+                "detail": f"短句密度过高: {short_count}/{len(all_sentences)} 句 ≤12字 (比例 {short_ratio:.0%})，AI鼓点综合征",
+            })
+        if max_streak >= 3:
+            issues.append({
+                "type": "drumbeat_consecutive",
+                "severity": "blocking",
+                "detail": f"连续 {max_streak} 个短句独立成段，禁止节拍器式写法",
+            })
+
+        return issues
+
     def check_chapter_structure(self, text: str) -> list[str]:
         """Check chapter structure."""
         issues = []
@@ -226,6 +283,7 @@ class NovelStyleCleaner:
         all_issues.extend(self.check_banned_patterns(text))
         all_issues.extend(self.check_metadata_leak(text))
         all_issues.extend(self.check_degeneration(text))
+        all_issues.extend(self.check_drumbeat_density(text))
 
         structure_issues = self.check_chapter_structure(text)
         for si in structure_issues:
@@ -243,6 +301,134 @@ class NovelStyleCleaner:
             "blocking_count": blocking_count,
             "normalized_text": normalized,
         }
+
+    # ── 鼓点段落提取 + LLM 片段改写 ──────────────────────────────────
+
+    _DRUMBEAT_SNIPPET_PROMPT = """你是网文句式润色器。输入是一段文字片段（约100-300字），其中短句过多、节奏像节拍器。
+
+你的任务：把碎片化的短句串成自然流动的叙述。规则：
+1. 信息量、情节、对白、人物——都不改，只换句式。
+2. 两个短句能连起来就连成一个长句。三个孤立短句可以拆成一个长句+一个短句收尾。
+3. 禁止输出"不是A。是B。"、"没有X。只有Y。"等否定对比碎句。
+4. 允许一段只有1-2句话，但要保证句子内部的因果、动作、感官是串起来的。
+5. 输出只包含改写后的片段文字，不要标签、解释、标记。"""
+
+    def find_drumbeat_regions(
+        self, text: str,
+        short_threshold: int = 12,
+        density_threshold: float = 0.6,
+        context_radius: int = 80,
+    ) -> list[tuple[int, int, str]]:
+        """Scan text paragraph by paragraph, find regions with high short-sentence density.
+
+        Returns list of (start_char, end_char, snippet_text) where each snippet
+        includes ~context_radius chars of surrounding context.
+        """
+        paragraphs = text.split("\n")
+        # Build paragraph index: (line_num, text, char_start, char_end)
+        para_info = []
+        pos = 0
+        for i, para in enumerate(paragraphs):
+            start = pos
+            end = pos + len(para)
+            para_info.append((i, para, start, end))
+            pos = end + 1  # +1 for the newline
+
+        # Score each paragraph by short-sentence density
+        regions = []
+        for idx, para, p_start, p_end in para_info:
+            stripped = para.strip()
+            if not stripped or len(stripped) < 20:
+                continue
+            sentences = [s.strip() for s in re.split(r'[。！？]', stripped) if s.strip()]
+            if len(sentences) < 3:
+                continue
+            short_count = sum(1 for s in sentences if len(s) <= short_threshold)
+            density = short_count / len(sentences) if sentences else 0
+            if density >= density_threshold:
+                # Expand to include context paragraphs
+                ctx_start = p_start
+                ctx_end = p_end
+                # Include prev paragraph if exists
+                if idx > 0:
+                    ctx_start = para_info[idx - 1][2]
+                # Include next paragraph if exists
+                if idx < len(para_info) - 1:
+                    ctx_end = para_info[idx + 1][3]
+                # Further expand to meet ~context_radius
+                snippet = text[ctx_start:ctx_end].strip()
+                if len(snippet) < 40:
+                    continue
+                regions.append((ctx_start, ctx_end, snippet))
+
+        # Merge overlapping regions
+        if not regions:
+            return []
+        merged = [regions[0]]
+        for r in regions[1:]:
+            prev = merged[-1]
+            if r[0] <= prev[1] + 50:  # overlap or very close
+                # Extend prev
+                merged[-1] = (prev[0], max(prev[1], r[1]),
+                              text[prev[0]:max(prev[1], r[1])].strip())
+            else:
+                merged.append(r)
+        return merged
+
+    def rewrite_drumbeat_snippets(
+        self,
+        text: str,
+        max_retries: int = 1,
+    ) -> str:
+        """Find drumbeat regions and rewrite each snippet via flash LLM."""
+        regions = self.find_drumbeat_regions(text)
+        if not regions:
+            return text
+
+        from .novel_llm_factory import NovelLLMFactory
+        factory = NovelLLMFactory.get_instance()
+        adapter = factory.get_adapter("style_cleaner")
+        thinking = factory.get_thinking_config("style_cleaner")
+        model = factory.get_model("style_cleaner")
+
+        # Process regions from end to start to preserve positions
+        result = text
+        for start, end, snippet in reversed(regions):
+            snippet_len = len(snippet)
+            if snippet_len > 600:
+                # Too large, skip
+                continue
+
+            user_prompt = (
+                "=== 需要改写的片段 ===\n"
+                f"{snippet}\n\n"
+                "=== 输出 ===\n"
+                "改写后的片段（只改句式，不改内容）："
+            )
+
+            for attempt in range(max_retries + 1):
+                try:
+                    out, _ = adapter.generate_text(
+                        user_prompt,
+                        max_tokens=max(500, int(snippet_len * 1.5)),
+                        provider_role="novel_drumbeat_rewriter",
+                        model=model,
+                        extra_body=thinking,
+                        system_prompt=self._DRUMBEAT_SNIPPET_PROMPT,
+                    )
+                except Exception:
+                    continue
+                if not out or not out.strip():
+                    continue
+                cleaned = out.strip()
+                # Guard: rewritten must not be drastically different in length
+                if len(cleaned) < snippet_len * 0.4 or len(cleaned) > snippet_len * 2.0:
+                    continue
+                # Splice back
+                result = result[:start] + cleaned + result[end:]
+                break
+
+        return result
 
     # ── 定向改写：把质量门查出的问题反馈给 LLM 做去 AI 味改写 ──────────────
 
@@ -385,3 +571,99 @@ class NovelStyleCleaner:
             if top >= 3:
                 return True
         return False
+
+    # ---- Plan text cleaning (strip drumbeat from architect plans) ----
+
+    @staticmethod
+    def clean_drumbeat_text(text):
+        """Remove drumbeat sentence patterns from a text snippet.
+
+        Converts:
+            "不是X。是Y。" → "不是X，而是Y。"
+            "不是X。\n是Y。" → "不是X，而是Y。"
+            "不是X。\n\n是Y" → "不是X，而是Y"
+        """
+        if not text:
+            return text
+        if not isinstance(text, str):
+            return text
+        t = re.sub(r'不是([^。；]{1,30})。[\n\s]*是([^。；]{1,30}[。！？\n]?)',
+                   r'不是\1，而是\2', text)
+        return t
+
+    @staticmethod
+    def clean_plan(plan):
+        """Clean drumbeat from a ChapterPlan. Returns a new ChapterPlan."""
+        from contracts.novel_chapter import (
+            ChapterPlan, ContentSummary, PlotArrangement,
+            CharacterAppearance, BeatDetail, EndingDesign,
+        )
+
+        ct = NovelStyleCleaner.clean_drumbeat_text
+
+        cs = plan.content_summary
+        new_cs = ContentSummary(
+            cause=ct(cs.cause),
+            development=ct(cs.development),
+            turning_point=ct(cs.turning_point),
+            climax=ct(cs.climax),
+            ending=ct(cs.ending),
+        )
+
+        pa = plan.plot_arrangement
+        new_pa = PlotArrangement(
+            main_line=ct(pa.main_line),
+            sub_line=ct(pa.sub_line),
+            event_line=ct(pa.event_line),
+            emotion_line=ct(pa.emotion_line),
+            logic_line=ct(pa.logic_line),
+        )
+
+        ca = plan.character_appearance
+        new_ca = CharacterAppearance(
+            appearance_order=ca.appearance_order,
+            relationship_changes=tuple(ct(r) for r in ca.relationship_changes),
+            information_gap=ct(ca.information_gap),
+        )
+
+        new_beats = tuple(
+            BeatDetail(
+                beat_id=b.beat_id,
+                description=ct(b.description),
+                function_tag=b.function_tag,
+                density=b.density,
+                budget_chars=b.budget_chars,
+            )
+            for b in plan.scene_beats
+        )
+
+        ed = plan.ending_design
+        new_ed = EndingDesign(
+            closing_state=ct(ed.closing_state),
+            open_questions=tuple(ct(q) for q in ed.open_questions),
+            next_chapter_push=ct(ed.next_chapter_push),
+            hook_type=ct(ed.hook_type),
+            hook_detail=ct(ed.hook_detail),
+            hook_strength=ed.hook_strength,
+        )
+
+        return ChapterPlan(
+            schema_id=plan.schema_id,
+            schema_version=plan.schema_version,
+            chapter_id=plan.chapter_id,
+            project_id=plan.project_id,
+            volume_id=plan.volume_id,
+            chapter_index=plan.chapter_index,
+            title=plan.title,
+            target_chars=plan.target_chars,
+            chapter_position=plan.chapter_position,
+            target_emotion=plan.target_emotion,
+            opening_hook=ct(plan.opening_hook),
+            main_payoff=ct(plan.main_payoff),
+            content_summary=new_cs,
+            plot_arrangement=new_pa,
+            character_appearance=new_ca,
+            scene_beats=new_beats,
+            ending_design=new_ed,
+            cost_and_reward=ct(plan.cost_and_reward),
+        )

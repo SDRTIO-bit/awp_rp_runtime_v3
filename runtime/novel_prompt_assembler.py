@@ -28,8 +28,10 @@ class NovelPromptAssembler:
         parts.append(f"\n=== CHAPTER PLAN ===\n{packet.chapter_plan.to_dict()}")
 
         # Previous chapter
-        if packet.previous_chapter_summary:
-            parts.append(f"\n=== PREVIOUS CHAPTER ===\n{packet.previous_chapter_summary}")
+        if packet.prev_chapter_ending:
+            parts.append(f"\n=== PREV CHAPTER ENDING ===\n{packet.prev_chapter_ending}")
+        if packet.global_summaries:
+            parts.append(f"\n=== STORY SO FAR ===\n{packet.global_summaries}")
 
         # Continuity context
         if packet.relevant_ledger_items:

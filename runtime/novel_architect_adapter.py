@@ -215,7 +215,8 @@ class NovelArchitectAdapter:
             "chapter_position, target_emotion, opening_hook, main_payoff, "
             "content_summary(五段式), plot_arrangement(多线), "
             "character_appearance(出场顺序), scene_beats(beat预算), "
-            "ending_design(钩子), cost_and_reward。",
+            "ending_design(钩子), cost_and_reward。\n"
+            "所有字段必须有实质内容，不允许空字符串或空数组。",
         ]
 
         # Varying context
@@ -231,10 +232,15 @@ class NovelArchitectAdapter:
             parts.append(f"\n卷计划:\n{volume_plan.to_dict() if hasattr(volume_plan, 'to_dict') else volume_plan}")
 
         if completed_chapters:
-            parts.append(f"\n已完成章节:\n{completed_chapters[-5:]}")
+            summary = []
+            for p in completed_chapters[-2:]:
+                d = p if isinstance(p, dict) else p.to_dict()
+                summary.append(f"- ch{d.get('chapter_index','?')}: {d.get('title','')} ({d.get('target_emotion','')})")
+            parts.append(f"\n已完成章节:\n" + "\n".join(summary))
 
         if ledger_items:
-            items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content}" for i in ledger_items[:15])
-            parts.append(f"\n连续性账本:\n{items_text}")
+            recent = sorted(ledger_items, key=lambda i: i.updated_at or "", reverse=True)[:8]
+            items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content[:150]}" for i in recent)
+            parts.append(f"\n连续性账本(最近):\n{items_text}")
 
         return _get_architect_prompt(), "\n".join(parts)

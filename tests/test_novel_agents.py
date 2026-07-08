@@ -141,7 +141,8 @@ class TestNovelWritePacketBuilder:
         packet = builder.build(
             chapter_plan=plan,
             ledger_items=items,
-            previous_chapter_summary="上一章摘要",
+            prev_chapter_ending="上一章结尾",
+            global_summaries="",
             character_states={"主角": "状态"},
             director_guidance=guidance,
         )

@@ -1,0 +1,47 @@
+{
+  "project": {
+    "id": "nsfw-test",
+    "title": "NSFW鼓点测试",
+    "genre": "都市·情欲",
+    "core_emotion": "紧张→羞耻→释放",
+    "one_sentence_pitch": "加班到深夜的女助理被老板锁在办公室，一场权力与欲望的博弈。",
+    "target_reader": "成人读者",
+    "target_platform": "测试"
+  },
+  "volume": {
+    "index": 1,
+    "title": "办公室一夜",
+    "chapter_start": 1,
+    "chapter_end": 1,
+    "objective": "完整描写一场办公室情欲戏——从权力对峙到身体沦陷的全过程。字数不少于5000字。",
+    "core_conflict": "老板（强势、掌控）vs 女助理（抗拒→迎合），职场权力关系下的情欲张力"
+  },
+  "characters": [
+    {
+      "character_id": "boss",
+      "name": "陆景川",
+      "role": "protagonist",
+      "personality": "冷静克制外表下极强的控制欲，事业成功的男人，习惯掌控一切",
+      "voice_style": "简洁、命令式、偶尔低沉",
+      "pov_eligible": true,
+      "core_motivation": "觊觎助理已久，今晚不再忍",
+      "current_state": {
+        "emotion": "隐忍的渴望"
+      },
+      "first_appearance": 1
+    },
+    {
+      "character_id": "assistant",
+      "name": "苏晚",
+      "role": "deuteragonist",
+      "personality": "职场新人的紧张与羞耻，外表乖巧内心有被压制的欲望",
+      "voice_style": "结巴、断续、求饶",
+      "pov_eligible": true,
+      "core_motivation": "想保住工作但逐渐沦陷",
+      "current_state": {
+        "emotion": "害怕又想逃"
+      },
+      "first_appearance": 1
+    }
+  ]
+}

@@ -52,6 +52,15 @@ class NovelQualityPipeline:
             # 还有 blocking 但轮次用尽 → 不再改写，交给上层（降级接受）
             if round_idx >= MAX_REWRITE_ROUNDS:
                 break
+            # 鼓点片段改写（优先级最高）：抽取短句密集段落，flash 逐段改写
+            drumbeat_reasons = [r for r in decision.blocking_reasons if "短句" in r or "鼓点" in r or "独立成段" in r]
+            if drumbeat_reasons:
+                rewritten = self._style_cleaner.rewrite_drumbeat_snippets(current)
+                if rewritten and rewritten.strip() and rewritten != current:
+                    ratio = len(rewritten) / max(1, len(current))
+                    if 0.5 < ratio < 1.6:
+                        current = rewritten
+                        continue
             # 定向改写：把 blocking 原始问题清单交给 StyleCleaner
             style_issues = self._style_cleaner.full_check(current)["issues"]
             raw_issues = [i for i in style_issues if i.get("severity") == "blocking"]
@@ -125,6 +134,18 @@ class NovelQualityPipeline:
                 severity=IssueSeverity.ERROR if d["severity"] == "blocking" else IssueSeverity.WARNING,
                 description=d["detail"],
                 fixable=True,
+            ))
+
+        # 4.5 Drumbeat density — 短句密度超标时硬错误，触发改写
+        drumbeat_issues = self._style_cleaner.check_drumbeat_density(text)
+        for di in drumbeat_issues:
+            issues.append(QualityIssue(
+                gate_name="drumbeat",
+                category="style",
+                severity=IssueSeverity.ERROR if di["severity"] == "blocking" else IssueSeverity.WARNING,
+                description=di["detail"],
+                fixable=True,
+                fix_guidance="减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下",
             ))
 
         # 5. Structure checks — warning 级（开头天气/结尾总结），不阻塞

@@ -76,7 +76,7 @@ class NovelContinuityChecker:
         chapter_plan: Any,
         ledger_items: list,
         character_states: dict,
-        previous_chapter_summary: str,
+        prev_chapter_ending: str,
     ) -> dict:
         """Check a chapter for continuity issues.
 
@@ -87,7 +87,7 @@ class NovelContinuityChecker:
         """
         system_prompt, user_prompt = self._build_prompt(
             chapter_text, chapter_plan, ledger_items,
-            character_states, previous_chapter_summary,
+            character_states, prev_chapter_ending,
         )
         # Call LLM and parse JSON response
         from .novel_llm_factory import NovelLLMFactory
@@ -123,7 +123,7 @@ class NovelContinuityChecker:
 
     def _build_prompt(
         self, chapter_text, chapter_plan, ledger_items,
-        character_states, previous_chapter_summary,
+        character_states, prev_chapter_ending,
     ) -> tuple[str, str]:
         """Returns (system_prompt, user_prompt)."""
         parts = []
@@ -140,8 +140,8 @@ class NovelContinuityChecker:
         if character_states:
             parts.append(f"\n=== CHARACTER STATES ===\n{character_states}")
 
-        if previous_chapter_summary:
-            parts.append(f"\n=== PREVIOUS CHAPTER ===\n{previous_chapter_summary}")
+        if prev_chapter_ending:
+            parts.append(f"\n=== PREVIOUS CHAPTER ENDING ===\n{prev_chapter_ending}")
 
         parts.append("\n=== OUTPUT FORMAT ===\n"
                     "JSON: {\"issues\": [...], \"severity\": \"blocking|warning|info\", \"suggestions\": [...]}")

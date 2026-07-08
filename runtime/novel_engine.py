@@ -91,6 +91,10 @@ class NovelEngine:
             task_description,
         )
 
+        # Clean drumbeat patterns from plan text before storing
+        from .novel_style_cleaner import NovelStyleCleaner
+        plan = NovelStyleCleaner.clean_plan(plan)
+
         # Persist
         self._registry.novel_chapter_plan_store.save(plan)
 
@@ -123,7 +127,8 @@ class NovelEngine:
 
         # Load context
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
-        characters = self._registry.novel_character_store.list_by_project(project_id)
+        all_characters = self._registry.novel_character_store.list_by_project(project_id)
+        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
         character_states = {c.name: c.current_state for c in characters}
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id,
@@ -131,13 +136,16 @@ class NovelEngine:
             characters=characters,
         )
 
-        # Load previous chapter summary
+        # Load previous chapter ending (hook continuity, not full summary)
         prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
-        previous_chapter_summary = ""
+        prev_chapter_ending = ""
         if prev_plan:
             prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
             if prev_draft:
-                previous_chapter_summary = prev_draft.text[:500]
+                prev_chapter_ending = prev_draft.text[-500:]
+
+        # Build global chapter summaries (lightweight, no plan detail)
+        global_summaries = self._build_global_summaries(project_id, chapter_index)
 
         # Build completed-chapters summary + foreshadowing + subplot for Director's
         # global view. Previously these were all empty, so Director's "全局优化"
@@ -153,7 +161,7 @@ class NovelEngine:
         # Call Director (placeholder)
         director_guidance = self._call_director(
             project_id, plan, ledger_items, character_states,
-            previous_chapter_summary,
+            prev_chapter_ending,
             completed_chapters_summary=completed_chapters_summary,
             foreshadowing_list=foreshadowing_list,
             subplot_status=subplot_status,
@@ -163,7 +171,8 @@ class NovelEngine:
         packet = self._packet_builder.build(
             chapter_plan=plan,
             ledger_items=ledger_items,
-            previous_chapter_summary=previous_chapter_summary,
+            prev_chapter_ending=prev_chapter_ending,
+            global_summaries=global_summaries,
             character_states=character_states,
             active_memory_context=active_memory_context,
             memory_recall=memory_recall,
@@ -191,7 +200,7 @@ class NovelEngine:
             chapter_plan=plan,
             ledger_items=ledger_items,
             character_states=character_states,
-            previous_chapter_summary=previous_chapter_summary,
+            prev_chapter_ending=prev_chapter_ending,
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
@@ -283,7 +292,7 @@ class NovelEngine:
 
     def _call_director(
         self, project_id, plan, ledger_items, character_states,
-        previous_chapter_summary,
+        prev_chapter_ending,
         completed_chapters_summary: str = "",
         foreshadowing_list: list | None = None,
         subplot_status: list | None = None,
@@ -299,7 +308,7 @@ class NovelEngine:
             character_states=character_states,
             foreshadowing_list=foreshadowing_list or [],
             subplot_status=subplot_status or [],
-            previous_chapter_ending=previous_chapter_summary,
+            previous_chapter_ending=prev_chapter_ending,
         )
 
     def _check_continuity(
@@ -309,7 +318,7 @@ class NovelEngine:
         chapter_plan: ChapterPlan,
         ledger_items: list[LedgerItem],
         character_states: dict,
-        previous_chapter_summary: str,
+        prev_chapter_ending: str,
     ) -> list[str]:
         """Run continuity checker. Returns list of warning messages."""
         try:
@@ -320,7 +329,7 @@ class NovelEngine:
                 chapter_plan=chapter_plan,
                 ledger_items=ledger_items,
                 character_states=character_states,
-                previous_chapter_summary=previous_chapter_summary,
+                prev_chapter_ending=prev_chapter_ending,
             )
             issues = result.get("issues", [])
             severity = result.get("severity", "info")
@@ -352,6 +361,26 @@ class NovelEngine:
                 f"第{p.chapter_index}章《{p.title}》[{p.chapter_position}/{p.target_emotion}]"
                 f"主线:{p.plot_arrangement.main_line or '未记'}"
                 + (f" 摘要:{tail}" if tail else "")
+            )
+        return "\n".join(lines)
+
+    def _build_global_summaries(
+        self, project_id: str, chapter_index: int
+    ) -> str:
+        """Build all-chapter summaries for Writer context. Lightweight:
+        only title + emotion + ending_snippet per chapter."""
+        plans = self._registry.novel_chapter_plan_store.list_by_project(project_id)
+        prior = [p for p in plans if p.chapter_index < chapter_index]
+        if not prior:
+            return "（开篇章节，前无正文。）"
+        prior.sort(key=lambda p: p.chapter_index)
+        lines = []
+        for p in prior:
+            cs = p.content_summary
+            # Use ending for setting/vehicle continuity
+            end_snip = cs.ending[:150].rstrip("。！？，") + "。"
+            lines.append(
+                f"- ch{p.chapter_index}《{p.title}》({p.target_emotion}) 结尾: {end_snip}"
             )
         return "\n".join(lines)
 
@@ -514,7 +543,8 @@ class NovelEngine:
         packet = self._packet_builder.build(
             chapter_plan=plan,
             ledger_items=ledger_items,
-            previous_chapter_summary="",
+            prev_chapter_ending="",
+            global_summaries="",
             character_states=character_states,
             director_guidance=director_guidance,
         )

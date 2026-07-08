@@ -26,7 +26,8 @@ class NovelWritePacket:
     project_id: str = ""
     chapter_id: str = ""
     chapter_plan: ChapterPlan = field(default_factory=ChapterPlan)
-    previous_chapter_summary: str = ""
+    prev_chapter_ending: str = ""          # last 300 chars, hook continuity only
+    global_summaries: str = ""             # all-chapter lightweight summaries
     relevant_ledger_items: list[LedgerItem] = field(default_factory=list)
     character_states: dict[str, Any] = field(default_factory=dict)
     active_memory_context: list[dict[str, Any]] = field(default_factory=list)
@@ -55,7 +56,8 @@ class NovelWritePacket:
             "project_id": self.project_id,
             "chapter_id": self.chapter_id,
             "chapter_plan": self.chapter_plan.to_dict(),
-            "previous_chapter_summary": self.previous_chapter_summary,
+            "prev_chapter_ending": self.prev_chapter_ending,
+            "global_summaries": self.global_summaries,
             "relevant_ledger_items": [i.to_dict() for i in self.relevant_ledger_items],
             "character_states": self.character_states,
             "active_memory_context": list(self.active_memory_context),
@@ -82,7 +84,8 @@ class NovelWritePacket:
             project_id=data.get("project_id", ""),
             chapter_id=data.get("chapter_id", ""),
             chapter_plan=ChapterPlan.from_dict(data.get("chapter_plan", {})),
-            previous_chapter_summary=data.get("previous_chapter_summary", ""),
+            prev_chapter_ending=data.get("prev_chapter_ending", ""),
+            global_summaries=data.get("global_summaries", ""),
             relevant_ledger_items=[LedgerItem.from_dict(i) for i in data.get("relevant_ledger_items", [])],
             character_states=dict(data.get("character_states", {})),
             active_memory_context=list(data.get("active_memory_context", [])),
