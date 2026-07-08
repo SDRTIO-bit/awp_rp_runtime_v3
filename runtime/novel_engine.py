@@ -184,6 +184,18 @@ class NovelEngine:
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
         quality_decision, text = self._quality_pipeline.run_chapter(text, plan)
 
+        # Continuity check: 检查遗忘的伏笔/承诺、断层、角色矛盾。
+        # 结果作为 informational warnings 注入，不阻塞存盘。
+        continuity_issues = self._check_continuity(
+            text=text,
+            chapter_plan=plan,
+            ledger_items=ledger_items,
+            character_states=character_states,
+            previous_chapter_summary=previous_chapter_summary,
+        )
+        if continuity_issues:
+            quality_decision.warnings.extend(continuity_issues)
+
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
         # status 仍如实标记，便于事后筛选。
         verdict_value = quality_decision.verdict.value
@@ -201,6 +213,7 @@ class NovelEngine:
             text=text,
             char_count=len(text),
             status=status,
+            quality_decision_id=quality_decision.trace_id,
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
@@ -288,6 +301,39 @@ class NovelEngine:
             subplot_status=subplot_status or [],
             previous_chapter_ending=previous_chapter_summary,
         )
+
+    def _check_continuity(
+        self,
+        *,
+        text: str,
+        chapter_plan: ChapterPlan,
+        ledger_items: list[LedgerItem],
+        character_states: dict,
+        previous_chapter_summary: str,
+    ) -> list[str]:
+        """Run continuity checker. Returns list of warning messages."""
+        try:
+            from .novel_continuity_checker import NovelContinuityChecker
+            checker = NovelContinuityChecker(self._registry)
+            result = checker.check_chapter(
+                chapter_text=text,
+                chapter_plan=chapter_plan,
+                ledger_items=ledger_items,
+                character_states=character_states,
+                previous_chapter_summary=previous_chapter_summary,
+            )
+            issues = result.get("issues", [])
+            severity = result.get("severity", "info")
+            warnings: list[str] = []
+            for issue in issues:
+                label = f"[continuity:{severity}] {issue}"
+                warnings.append(label)
+            if result.get("suggestions"):
+                for s in result["suggestions"]:
+                    warnings.append(f"[continuity:suggestion] {s}")
+            return warnings
+        except Exception:
+            return []
 
     def _build_completed_chapters_summary(
         self, project_id: str, chapter_index: int
@@ -485,6 +531,7 @@ class NovelEngine:
             text=text,
             char_count=len(text),
             status=status,
+            quality_decision_id=quality_decision.trace_id,
         )
         self._registry.novel_chapter_draft_store.save(draft)
 

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..contracts.novel_director_guidance import DirectorGuidance, BeatGuidance
+from ..contracts.novel_director_guidance import (
+    DirectorGuidance, BeatGuidance, ForeshadowingAction, SubplotStatus, OutlineEnhancement,
+)
 from .prompt_loader import load_prompt
 
 def _get_director_prompt() -> str:
@@ -38,17 +40,28 @@ class NovelDirectorAdapter:
         character_anchor = self._build_character_anchor(character_states)
         timeline_anchor = f"第{chapter_plan.chapter_index}章"
 
-        # 调 LLM 只生成 beat_details
-        beat_details = self._call_llm_for_beats(
+        # 调 LLM 只生成 beat_details + 全局优化
+        result = self._call_llm_for_beats(
             chapter_plan, character_anchor, timeline_anchor,
             previous_chapter_ending, ledger_items,
         )
+        beat_details = result.get("beat_details", [])
+        foreshadowing_schedule = result.get("foreshadowing_schedule", [])
+        subplot_status = result.get("subplot_status", [])
+        outline_enhancements = result.get("outline_enhancements", [])
+        risk_flags = result.get("risk_flags", [])
+        opportunities = result.get("opportunities", [])
 
         return DirectorGuidance(
             guidance_id=f"guid-ch{chapter_plan.chapter_index}",
             character_anchor=character_anchor,
             timeline_anchor=timeline_anchor,
             beat_details=tuple(beat_details),
+            foreshadowing_schedule=tuple(foreshadowing_schedule),
+            subplot_status=tuple(subplot_status),
+            outline_enhancements=tuple(outline_enhancements),
+            risk_flags=tuple(risk_flags) if isinstance(risk_flags, (list, tuple)) else (),
+            opportunities=tuple(opportunities) if isinstance(opportunities, (list, tuple)) else (),
         )
 
     def _build_character_anchor(self, character_states: dict) -> str:
@@ -77,8 +90,8 @@ class NovelDirectorAdapter:
     def _call_llm_for_beats(
         self, chapter_plan, character_anchor, timeline_anchor,
         previous_chapter_ending, ledger_items,
-    ) -> list[BeatGuidance]:
-        """调 LLM 生成 beat 细纲。"""
+    ) -> dict[str, Any]:
+        """调 LLM 生成 beat 细纲 + 全局优化。返回完整 JSON 解析结果。"""
         from .novel_llm_factory import NovelLLMFactory
         import json
 
@@ -123,16 +136,38 @@ class NovelDirectorAdapter:
             try:
                 data = json.loads(extracted)
                 beats = data.get("beat_details", [])
+                result: dict[str, Any] = {
+                    "beat_details": [],
+                    "foreshadowing_schedule": [],
+                    "subplot_status": [],
+                    "outline_enhancements": [],
+                    "risk_flags": data.get("risk_flags", []),
+                    "opportunities": data.get("opportunities", []),
+                }
                 if beats:
-                    return [BeatGuidance.from_dict(b) for b in beats if isinstance(b, dict)]
+                    result["beat_details"] = [
+                        BeatGuidance.from_dict(b) for b in beats if isinstance(b, dict)
+                    ]
+                for fa in data.get("foreshadowing_schedule", []):
+                    if isinstance(fa, dict):
+                        result["foreshadowing_schedule"].append(ForeshadowingAction.from_dict(fa))
+                for ss in data.get("subplot_status", []):
+                    if isinstance(ss, dict):
+                        result["subplot_status"].append(SubplotStatus.from_dict(ss))
+                for oe in data.get("outline_enhancements", []):
+                    if isinstance(oe, dict):
+                        result["outline_enhancements"].append(OutlineEnhancement.from_dict(oe))
+                return result
             except (json.JSONDecodeError, TypeError):
                 pass
 
         # Fallback: 用 Architect 的原始 beat 描述
-        return [
-            BeatGuidance(beat_id=b.beat_id, content_outline=b.description)
-            for b in chapter_plan.scene_beats
-        ]
+        return {
+            "beat_details": [
+                BeatGuidance(beat_id=b.beat_id, content_outline=b.description)
+                for b in chapter_plan.scene_beats
+            ],
+        }
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:

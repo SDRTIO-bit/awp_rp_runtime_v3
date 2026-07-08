@@ -24,7 +24,7 @@ THINKING_DISABLED = {"thinking": {"type": "disabled"}}
 # max_tokens 对齐 plan 表格，避免无限消耗。
 ROLE_CONFIGS = {
     "director":          {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
-    "architect":         {"model": "deepseek-v4-pro",   "max_tokens": 6000, "thinking": THINKING_HIGH},
+    "architect":         {"model": "deepseek-v4-pro",   "max_tokens": 12000, "thinking": THINKING_HIGH},
     "writer":            {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_MEDIUM},
     "continuity_checker": {"model": "deepseek-v4-flash", "max_tokens": 4000, "thinking": THINKING_DISABLED},
     "style_cleaner":     {"model": "deepseek-v4-flash", "max_tokens": 2000, "thinking": THINKING_DISABLED},

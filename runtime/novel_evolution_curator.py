@@ -51,7 +51,7 @@ class NovelEvolutionCurator:
         self._use_ledger_llm = (
             use_ledger_llm
             if use_ledger_llm is not None
-            else os.environ.get("NOVEL_EVOLUTION_USE_LEDGER_LLM") == "1"
+            else os.environ.get("NOVEL_EVOLUTION_USE_LEDGER_LLM", "1") != "0"
         )
 
     def curate(
@@ -64,23 +64,36 @@ class NovelEvolutionCurator:
         quality_decision: QualityDecision | None,
     ) -> dict[str, Any]:
         ledger_result = self._curate_ledger(
-            chapter_text, chapter_plan, current_ledger_items
+            chapter_text, chapter_plan, current_ledger_items, characters
         )
+        chapter_summary = ledger_result.get("chapter_summary", "") if ledger_result else ""
         ledger_updates = []
-        for item in ledger_result.get("ledger_updates", []):
+        llm_items = ledger_result.get("ledger_updates", [])
+        if llm_items and isinstance(llm_items, list) and len(llm_items) > 0:
+            print(f"[LedgerCurator] LLM returned {len(llm_items)} ledger_updates, first item keys={list(llm_items[0].keys()) if isinstance(llm_items[0], dict) else type(llm_items[0])}", flush=True)
+        for item in llm_items:
             if isinstance(item, LedgerItem):
                 normalized = self._normalize_ledger_item(item, chapter_plan)
+                if normalized:
+                    print(f"[LedgerCurator] ACCEPTED LedgerItem: section={normalized.section} entity={normalized.entity}", flush=True)
             elif isinstance(item, dict):
-                normalized = self._normalize_ledger_item(
-                    LedgerItem.from_dict(item), chapter_plan
-                )
+                conv = self._convert_llm_ledger_item(item, chapter_plan)
+                if conv:
+                    normalized = self._normalize_ledger_item(conv, chapter_plan)
+                    if normalized:
+                        print(f"[LedgerCurator] ACCEPTED dict→LedgerItem: section={normalized.section} entity={normalized.entity}", flush=True)
+                    else:
+                        print(f"[LedgerCurator] REJECTED by normalize: section={conv.section!r} content_len={len(conv.content)}", flush=True)
+                else:
+                    print(f"[LedgerCurator] REJECTED by convert: keys={list(item.keys())}", flush=True)
+                    normalized = None
             else:
                 normalized = None
             if normalized is not None:
                 ledger_updates.append(normalized)
         ledger_updates.extend(
             self._deterministic_ledger_updates(
-                chapter_text, chapter_plan, current_ledger_items, ledger_updates
+                chapter_text, chapter_plan, current_ledger_items, ledger_updates, characters
             )
         )
 
@@ -98,6 +111,7 @@ class NovelEvolutionCurator:
                 chapter_plan=chapter_plan,
                 characters=characters,
                 quality_decision=quality_decision,
+                chapter_summary=chapter_summary,
             )
             request = self._build_commit_request(plan)
             active_result = ActiveMemoryCommitRuntime(
@@ -123,15 +137,24 @@ class NovelEvolutionCurator:
         chapter_text: str,
         chapter_plan: ChapterPlan,
         current_ledger_items: list[LedgerItem],
+        characters: list[NovelCharacter],
     ) -> dict[str, Any]:
+        ch_idx = getattr(chapter_plan, "chapter_index", 0)
+        print(f"[LedgerCurator] _curate_ledger called for ch{ch_idx}, use_llm={self._use_ledger_llm}", flush=True)
         if not self._use_ledger_llm:
+            print(f"[LedgerCurator] SKIPPED (use_ledger_llm=False)", flush=True)
             return {}
         try:
+            print(f"[LedgerCurator] Calling curator.curate() for ch{ch_idx}...", flush=True)
             result = self._ledger_curator.curate(
                 chapter_text, chapter_plan, current_ledger_items
             )
+            print(f"[LedgerCurator] curator.curate() returned OK, type={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}", flush=True)
             return result if isinstance(result, dict) else {}
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"[LedgerCurator] LLM call FAILED for ch{ch_idx}: {e}", flush=True)
+            traceback.print_exc()
             return {}
 
     def _normalize_ledger_item(
@@ -141,7 +164,7 @@ class NovelEvolutionCurator:
             return None
         project_id = item.project_id or chapter_plan.project_id
         source_chapter = item.source_chapter or chapter_plan.chapter_index
-        entity = item.entity or chapter_plan.title or f"第{chapter_plan.chapter_index}章"
+        entity = item.entity or (chapter_plan.title or f"第{chapter_plan.chapter_index}章")
         item_id = item.item_id or (
             f"novel-ledger-{project_id}-ch{source_chapter}-"
             f"{item.section}-{_hash(entity + item.content)}"
@@ -156,12 +179,83 @@ class NovelEvolutionCurator:
             updated_at=item.updated_at or _now(),
         )
 
+    @staticmethod
+    def _convert_llm_ledger_item(item: dict, chapter_plan: ChapterPlan) -> LedgerItem | None:
+        """Convert LLM output format to LedgerItem.
+
+        Uses heuristic field detection to handle any LLM output format.
+        """
+        # ── 1. Detect SECTION ──
+        section_keys = ["section", "type", "category"]
+        section = ""
+        for k in section_keys:
+            v = item.get(k)
+            if v and isinstance(v, str) and v.strip():
+                section = v.strip()
+                break
+        known_sections = {
+            "character_state", "relationship", "timeline",
+            "foreshadowing", "world_rules", "open_threads",
+            "character", "state", "char",
+        }
+        if section and section.lower().replace(" ", "_") not in known_sections:
+            section = "character_state"
+
+        if not section:
+            section = "character_state"
+
+        # ── 2. Detect ENTITY ──
+        entity_keys = ["entity", "target", "name", "character", "person", "field"]
+        entity = ""
+        for k in entity_keys:
+            v = item.get(k)
+            if v and isinstance(v, str) and v.strip():
+                entity = v.strip()
+                break
+        if not entity:
+            entity = str(item.get("entity") or item.get("target") or item.get("name") or item.get("field") or "")
+
+        # ── 3. Detect CONTENT ──
+        content_keys = ["content", "update", "description", "summary", "detail"]
+        content = ""
+        for k in content_keys:
+            v = item.get(k)
+            if v and isinstance(v, str) and v.strip():
+                content = v.strip()
+                break
+
+        # Fallback: build content from all remaining string fields
+        if not content:
+            extra_keys = {"attribute", "old_value", "new_value", "location", "emotion", "tension", "tag"}
+            parts = []
+            for k in extra_keys:
+                v = item.get(k, "")
+                if v and isinstance(v, str) and v.strip():
+                    parts.append(f"{k}: {v.strip()}")
+            if parts:
+                content = "; ".join(parts)
+            elif not entity:
+                return None
+
+        if not entity or not content:
+            return None
+
+        return LedgerItem(
+            project_id=chapter_plan.project_id,
+            item_id=str(item.get("id") or item.get("item_id") or ""),
+            section=section,
+            entity=entity,
+            content=content,
+            source_chapter=chapter_plan.chapter_index,
+        )
+
     def _deterministic_ledger_updates(
         self,
         chapter_text: str,
         chapter_plan: ChapterPlan,
         current_ledger_items: list[LedgerItem],
         proposed_updates: list[LedgerItem],
+        characters: list[NovelCharacter],
     ) -> list[LedgerItem]:
         existing_keys = {
             (i.section, i.entity, i.content)
@@ -191,7 +285,8 @@ class NovelEvolutionCurator:
                 )
             )
 
-        entity = chapter_plan.title or f"第{chapter_plan.chapter_index}章"
+        present_chars = [c.name for c in characters if c.name and c.name in chapter_text]
+        entity = ", ".join(present_chars[:2]) if present_chars else (chapter_plan.title or f"第{chapter_plan.chapter_index}章")
         if any(k in chapter_text for k in ("伏笔", "悬念", "秘密")):
             add("foreshadowing", entity, self._summary(chapter_text, 80))
         if "规则" in chapter_text:
@@ -207,6 +302,7 @@ class NovelEvolutionCurator:
         chapter_plan: ChapterPlan,
         characters: list[NovelCharacter],
         quality_decision: QualityDecision,
+        chapter_summary: str = "",
     ) -> MemoryCommitPlan:
         card_id, session_id = novel_memory_scope(chapter_plan.project_id)
         turn_id = self._turn_id(chapter_plan)
@@ -216,13 +312,15 @@ class NovelEvolutionCurator:
         active_entries = self._active_entries(
             chapter_text, chapter_plan, card_id, session_id, turn_id, entity_refs
         )
+        rag_content = chapter_summary if chapter_summary else self._summary(chapter_text, 300)
+        rag_summary = self._summary(chapter_text, 120)
         rag_entry = RagMemoryRecord(
             memory_id=f"novel-rag-{_hash(turn_id)}",
             card_id=card_id,
             session_id=session_id,
             scope="session",
-            content=chapter_text[:1200],
-            summary=self._summary(chapter_text, 80),
+            content=rag_content,
+            summary=rag_summary,
             entity_refs=entity_refs,
             event_tags=["novel_chapter", f"chapter_{chapter_plan.chapter_index}"],
             source_turn_ids=[turn_id],
@@ -354,10 +452,10 @@ class NovelEvolutionCurator:
     def _active_summary(self, text: str, keyword: str) -> str:
         if keyword and keyword in text:
             idx = text.index(keyword)
-            start = max(0, idx - 28)
-            raw = text[start: start + 70]
+            start = max(0, idx - 80)
+            raw = text[start: start + 200]
         else:
-            raw = text[:70]
+            raw = text[:200]
         return self._fit_active_summary(raw)
 
     def _summary(self, text: str, limit: int) -> str:
@@ -365,11 +463,11 @@ class NovelEvolutionCurator:
         return compact[:limit]
 
     def _fit_active_summary(self, text: str) -> str:
-        compact = self._summary(text, 80)
-        if len(compact) >= 30:
+        compact = self._summary(text, 120)
+        if len(compact) >= 60:
             return compact
         suffix = "，需要在后续章节保持连续性和因果回收。"
-        return (compact + suffix)[:80]
+        return (compact + suffix)[:120]
 
 
 __all__ = ["NovelEvolutionCurator", "novel_memory_scope"]

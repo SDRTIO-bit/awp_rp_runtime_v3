@@ -173,9 +173,12 @@ class NovelQualityPipeline:
                 ))
 
         # Build decision
+        import uuid
         blocking_count = sum(1 for i in issues if i.severity == IssueSeverity.ERROR)
         verdict = QualityVerdict.ACCEPTED if blocking_count == 0 else QualityVerdict.REVISE
         return QualityDecision(
+            trace_id=f"qd-{chapter_plan.chapter_id}-{uuid.uuid4().hex[:8]}",
+            source_turn_id=f"ch-{chapter_plan.chapter_index}",
             verdict=verdict,
             blocking_reasons=[i.description for i in issues if i.severity == IssueSeverity.ERROR],
             warnings=[i.description for i in issues if i.severity == IssueSeverity.WARNING],
