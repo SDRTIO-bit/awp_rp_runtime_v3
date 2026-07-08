@@ -1,0 +1,58 @@
+{
+  "project": {
+    "id": "desire-city",
+    "title": "欲望都市",
+    "genre": "都市·情色·悬疑",
+    "core_emotion": "压抑→诱惑→沉沦→觉醒→禁忌之爱",
+    "one_sentence_pitch": "一个被公司压榨的青年社畜，在一个深夜的酒吧里遇到了一位神秘女人。一夜的激情之后，他发现她是他新公司的CEO——而她正在被一个地下性爱俱乐部追杀。",
+    "target_reader": "25-40岁都市青年",
+    "target_platform": "情色成人小说"
+  },
+  "volume": {
+    "index": 1,
+    "title": "第一卷·初夜迷情",
+    "chapter_start": 1,
+    "chapter_end": 10,
+    "core_conflict": "陆晨与苏曼宁的禁忌关系逐步升级，从一夜情到情感纠葛，地下俱乐部的黑手开始收紧",
+    "emotional_arc": "日常压抑→意外艳遇→极致快感→发现真相→共同逃亡",
+    "major_payoffs": ["酒吧初遇一夜情", "公司会议室里两人对视的尴尬", "地下俱乐部的第一次暴露", "陆晨为保护苏曼宁第一次动手"],
+    "objective": "每章至少一场高质量激情戏，情色描写细腻不低俗，情欲驱动剧情",
+    "key_results": ["sex_scene_per_chapter≥1", "plot_advances_by_desire", "两个主角关系逐渐复杂化"]
+  },
+  "characters": [
+    {
+      "character_id": "char-01",
+      "name": "陆晨",
+      "aliases": ["阿晨"],
+      "role": "protagonist",
+      "personality": "外表冷漠内心躁动，长期压抑导致的性幻想丰富，有责任心但经不住诱惑",
+      "voice_style": "内敛但有暗涌，独白充满身体感受的细节",
+      "pov_eligible": true,
+      "core_motivation": "从996社畜中解脱，在欲望中找到真正的自我",
+      "weakness": "欲望强烈但压抑太久，一旦释放难以自控",
+      "current_state": {"location": "城南合租公寓", "emotion": "压抑"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_character_id": "char-02", "target_name": "苏曼宁", "relation_type": "一夜情对象/老板", "description": "强烈的性吸引力，复杂的情感纠葛", "tension": "极度诱惑但危险"}
+      ]
+    },
+    {
+      "character_id": "char-02",
+      "name": "苏曼宁",
+      "aliases": ["曼宁"],
+      "role": "love_interest",
+      "personality": "外表冷艳高贵，私下性感奔放，有着不为人知的过去和癖好",
+      "voice_style": "低沉性感，话中带钩，喜欢用身体语言而非言语表达",
+      "pov_eligible": false,
+      "core_motivation": "逃离地下俱乐部的控制，寻找真正的自由和爱情",
+      "weakness": "对危险关系的成瘾性依赖，无法拒绝身体的诱惑",
+      "current_state": {"location": "云端酒吧·VIP卡座", "emotion": "落寞"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_character_id": "char-01", "target_name": "陆晨", "relation_type": "猎物/救赎", "description": "本打算利用他，但逐渐动了真情", "tension": "利用与真心的矛盾"}
+      ]
+    }
+  ]
+}

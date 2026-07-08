@@ -15,6 +15,12 @@ from ..contracts.novel_plan import (
     CharacterBlueprint, VolumeOKR, ChapterOKR,
 )
 
+# Planner system prompt — loaded from prompts/planner.md
+from .prompt_loader import load_prompt
+
+def _get_planner_prompt() -> str:
+    return load_prompt("planner")
+
 PLANNER_SYSTEM_PROMPT = """=== NOVEL PLANNER CONTRACT ===
 你是小说大纲规划师。用户只会给你一点思路（可能是一句话、一个设定、一个角色、一个桥段），你需要把它扩展成完整的小说大纲。
 
@@ -197,7 +203,7 @@ class NovelPlannerAdapter:
             target_platform: Optional platform (番茄/起点/etc)
             additional_requirements: Any extra requirements from user
         """
-        system_prompt = PLANNER_SYSTEM_PROMPT
+        system_prompt = _get_planner_prompt()
         user_prompt = self._build_user_prompt(
             concept, title, genre, target_platform, additional_requirements
         )

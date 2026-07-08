@@ -20,9 +20,9 @@ class NovelPromptAssembler:
 
     def assemble_writer_prompt(self, packet: NovelWritePacket) -> str:
         """Assemble the full prompt for Chapter Writer."""
-        from .novel_writer_adapter import WRITER_SYSTEM_PROMPT
+        from .novel_writer_adapter import _get_writer_prompt
 
-        parts = [WRITER_SYSTEM_PROMPT]
+        parts = [_get_writer_prompt()]
 
         # Chapter plan
         parts.append(f"\n=== CHAPTER PLAN ===\n{packet.chapter_plan.to_dict()}")
@@ -84,9 +84,9 @@ class NovelPromptAssembler:
         previous_chapter_ending: str,
     ) -> str:
         """Assemble the full prompt for Director."""
-        from .novel_director_adapter import DIRECTOR_SYSTEM_PROMPT
+        from .novel_director_adapter import _get_director_prompt
 
-        parts = [DIRECTOR_SYSTEM_PROMPT]
+        parts = [_get_director_prompt()]
 
         parts.append(f"\n=== PROJECT CONTEXT ===")
         parts.append(f"\n已完成章节摘要:\n{completed_chapters_summary}")
@@ -131,9 +131,9 @@ class NovelPromptAssembler:
         character_states: dict,
     ) -> str:
         """Assemble the full prompt for Architect."""
-        from .novel_architect_adapter import ARCHITECT_SYSTEM_PROMPT
+        from .novel_architect_adapter import _get_architect_prompt
 
-        parts = [ARCHITECT_SYSTEM_PROMPT]
+        parts = [_get_architect_prompt()]
 
         parts.append(f"\n=== PROJECT ===\n项目ID: {project_id}")
         parts.append(f"\n=== TASK ===\n规划第 {chapter_index} 章")

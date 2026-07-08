@@ -81,6 +81,7 @@ class NovelWritePacketBuilder:
         ledger_items: list[LedgerItem],
         active_memory_context: list[dict[str, Any]] | None = None,
         memory_recall: list[dict[str, Any]] | None = None,
+        sibling_outlines: list[str] | None = None,
     ) -> NovelWritePacket:
         """Build a packet for a single beat."""
         relevant_items = self._filter_relevant_ledger(chapter_plan, ledger_items)
@@ -100,6 +101,7 @@ class NovelWritePacketBuilder:
             director_guidance=director_guidance,
             current_scene_beat=beat,
             accumulated_text=accumulated_text,
+            sibling_outlines=list(sibling_outlines or []),
         )
 
     def _filter_relevant_ledger(

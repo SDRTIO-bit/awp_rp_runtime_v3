@@ -1,0 +1,58 @@
+{
+  "project": {
+    "id": "abyss-library",
+    "title": "深渊图书馆",
+    "genre": "都市奇幻·冒险",
+    "core_emotion": "好奇→迷失→恐惧→觉醒→守护",
+    "one_sentence_pitch": "一个大学生在图书馆深处发现了一本能穿越进书中世界的古书，每个世界都是危险的奇遇，而图书馆最深处，封印着一本会吞噬现实的「禁忌之书」。",
+    "target_reader": "18-30岁轻小说/网文读者",
+    "target_platform": "起点中文网"
+  },
+  "volume": {
+    "index": 1,
+    "title": "第一卷·觉醒之章",
+    "chapter_start": 1,
+    "chapter_end": 10,
+    "core_conflict": "林默闯入第一本书中世界，在极限求生中觉醒「书行者」能力，同时发现图书馆的黑暗秘密",
+    "emotional_arc": "日常→意外→恐慌→初窥力量→决意",
+    "major_payoffs": ["首次穿越书中世界", "觉醒书行者能力", "发现禁忌之书的蛛丝马迹"],
+    "objective": "读者跟随主角从普通人成长为冒险者，感受书中世界的神秘与危险",
+    "key_results": ["主角形象鲜明", "世界观逐步展开", "每章有悬念钩子"]
+  },
+  "characters": [
+    {
+      "character_id": "char-01",
+      "name": "林默",
+      "aliases": ["小默", "书行者"],
+      "role": "protagonist",
+      "personality": "内向但好奇心极强，遇事会怕但不会退缩，擅长观察细节，有考古专业训练的逻辑推理能力",
+      "voice_style": "内心独白偏多，对话简洁直接，紧张时会自嘲",
+      "pov_eligible": true,
+      "core_motivation": "想弄清父母失踪的真相（父母曾是图书馆研究员）",
+      "weakness": "优柔寡断，容易陷入自我怀疑",
+      "current_state": {"location": "东华大学图书馆", "emotion": "无聊"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_character_id": "char-02", "target_name": "方老", "relation_type": "导师", "description": "神秘的图书馆管理员，引导者", "tension": "信任但有疑虑"}
+      ]
+    },
+    {
+      "character_id": "char-02",
+      "name": "方砚秋",
+      "aliases": ["方老", "老馆长"],
+      "role": "mentor",
+      "personality": "外表温和的退休教授，实则对「深渊图书馆」的秘密了如指掌，说话总留一半",
+      "voice_style": "慢条斯理，引经据典，喜欢用比喻",
+      "pov_eligible": false,
+      "core_motivation": "守护禁忌之书不被开启，寻找有资格的继承者",
+      "weakness": "年迈力衰，过去的失误导致上一任书行者死亡",
+      "current_state": {"location": "东华大学图书馆·地下一层", "emotion": "警惕"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_character_id": "char-01", "target_name": "林默", "relation_type": "守护对象", "description": "看中他的潜力，暗中观察已久", "tension": "希望且担忧"}
+      ]
+    }
+  ]
+}

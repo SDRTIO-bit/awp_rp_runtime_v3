@@ -1,0 +1,76 @@
+{
+  "project": {
+    "id": "douluo-dalu-fanfic",
+    "title": "斗罗凌辱·柔骨兔的噩梦",
+    "genre": "同人·凌辱·肉文",
+    "core_emotion": "纯真→恐惧→崩溃→屈辱的麻木",
+    "one_sentence_pitch": "诺丁城外深夜，不乐在密林中逮到独自外出的少女小舞，柔骨兔魂兽化形的绝世美人就此堕入噩梦。",
+    "target_reader": "斗罗大陆同人读者，凌辱肉文爱好者",
+    "target_platform": "P站/海棠"
+  },
+  "volume": {
+    "index": 1,
+    "title": "诺丁城之夜",
+    "chapter_start": 1,
+    "chapter_end": 3,
+    "objective": "不乐对小舞实施凌辱的三个阶段：破处→调教→彻底征服。让读者感受一个纯真少女如何被彻底摧毁又无力反抗。",
+    "key_results": ["第一次凌辱的完整描写(不少于6000字)", "小舞从反抗到崩溃的心理转变", "胁迫机制建立(以唐三性命威胁)"],
+    "core_conflict": "不乐（好色中年魂王）vs 小舞（天真少女柔骨兔），力量碾压+凌辱征服",
+    "emotional_arc": "天真好奇→震惊反抗→绝望求饶→崩溃麻木→接受现实",
+    "major_payoffs": ["破处的高潮描写", "小舞被胁迫后无法呼救的绝望", "不乐满足地离去后小舞瘫软的收尾"]
+  },
+  "characters": [
+    {
+      "character_id": "bule",
+      "name": "不乐",
+      "aliases": ["老子", "爷"],
+      "role": "protagonist",
+      "personality": "好色成性、粗鄙下流、实力强大所以有恃无恐。开妓院的老油条，对付女人驾轻就熟。言语粗俗爱羞辱。",
+      "voice_style": "自称老子/爷，满口脏话，对女性称呼随意变换（小美人/小淫妇/骚货），语气轻佻带着戏弄",
+      "pov_eligible": true,
+      "core_motivation": "在诺丁城外偶遇小舞这个极品小美人，兽欲爆发，必须占有她",
+      "weakness": "好色是最大弱点，但也因此不会轻易放过任何女人",
+      "current_state": {"location": "诺丁城外密林", "emotion": "饥渴亢奋"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target": "xiaowu", "type": "猎人与猎物", "description": "一眼就看上了这个水灵的少女，决定非上不可"}
+      ]
+    },
+    {
+      "character_id": "xiaowu",
+      "name": "小舞",
+      "aliases": ["小舞姐"],
+      "role": "deuteragonist",
+      "personality": "天真活泼、善良单纯、还没经历过男女之事。对唐三有朦胧好感，把他当哥哥。骨子里倔强不服输。",
+      "voice_style": "撒娇用「呀」「嘛」，哭喊用省略号和重复，求饶时气若游丝话不成句。喊唐三「哥」或「三哥」。",
+      "pov_eligible": true,
+      "core_motivation": "本来只是去城外采药，遇到不乐后拼死反抗保护贞洁",
+      "weakness": "实力远不如不乐（魂王vs魂尊），涉世未深不懂防范，身为魂兽化形对男性胁迫没有经验",
+      "current_state": {"location": "诺丁城外密林", "emotion": "恐惧崩溃"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target": "bule", "type": "受害者与加害者", "description": "被不乐强行占有，以唐三性命威胁后不得不屈服"},
+        {"target": "唐三", "type": "暗恋与依赖", "description": "把唐三当最重要的哥哥，被凌辱后最怕的就是被唐三知道"}
+      ]
+    },
+    {
+      "character_id": "tangsan",
+      "name": "唐三",
+      "aliases": ["三哥", "小三"],
+      "role": "supporting",
+      "personality": "沉稳冷静、对小舞保护欲强、天赋异禀。原著男主，本文中作为小舞的心理支柱和被威胁的筹码存在。",
+      "voice_style": "不直接出场，仅在小舞的心理活动中出现",
+      "pov_eligible": false,
+      "core_motivation": "（不出场）保护小舞",
+      "weakness": "（不出场）",
+      "current_state": {"location": "诺丁学院宿舍", "emotion": "不知情"},
+      "arc_phase": "background",
+      "first_appearance": 0,
+      "relationships": [
+        {"target": "xiaowu", "type": "兄长般的保护者", "description": "从头到尾不知道小舞遭遇了什么"}
+      ]
+    }
+  ]
+}

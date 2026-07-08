@@ -1,0 +1,93 @@
+{
+  "project": {
+    "id": "bluebird",
+    "title": "青鸟不传云外信",
+    "genre": "都市悬疑",
+    "core_emotion": "冷静→怀疑→执着→真相的震撼",
+    "one_sentence_pitch": "一个遗物清理师在一台旧相机里发现了三十年前连环谋杀案的证据",
+    "target_reader": "22-35岁悬疑推理爱好者",
+    "target_platform": "番茄长篇"
+  },
+  "volume": {
+    "index": 1,
+    "title": "第一卷：遗物",
+    "chapter_start": 1,
+    "chapter_end": 5,
+    "objective": "通过遗物清理师的视角，逐步揭开一桩被掩埋三十年的连环谋杀案，让读者感受从日常到深渊的悬疑张力",
+    "key_results": ["建立主角独特职业视角", "第一起案件全貌浮出水面", "主角与警察建立脆弱联盟"],
+    "core_conflict": "江渡（遗物清理师）VS 被掩盖的真相",
+    "emotional_arc": "冷静日常 → 偶然发现 → 怀疑加深 → 主动追查 → 第一次直面危险",
+    "major_payoffs": ["相机里发现血迹照片", "找到三十年第一位目击者", "发现凶手仍在活动"],
+    "foreshadowing_plan": ["相机主人赵素珍的真实身份", "旧照片中的第六人", "江渡外婆的记忆碎片"]
+  },
+  "characters": [
+    {
+      "character_id": "char-jiang",
+      "name": "江渡",
+      "aliases": ["小江", "阿渡"],
+      "role": "protagonist",
+      "personality": "24岁遗物清理师，父母早亡由外婆带大。沉默寡言但不冷漠，擅长从遗物中拼凑逝者的人生。对被遗忘这件事有近乎偏执的在意，因为外婆正在逐渐失去记忆。",
+      "voice_style": "短句为主，偶尔冷幽默但不轻浮。描述事物时用细节取代评价，不解释感受但让读者感受到。",
+      "pov_eligible": true,
+      "core_motivation": "搞清楚相机里的旧照片为什么被藏了三十年——以及拍照的人后来去哪了",
+      "weakness": "过度沉浸在他人的过去里，忽视自己的当下生活；对老人的遗物有特殊感情",
+      "current_state": {"location": "老城区出租屋", "emotion": "平静但孤独"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_character_id": "char-xu", "target_name": "徐槐", "relation_type": "老板/朋友", "description": "徐姐给了江渡第一份工作，把他当半个儿子看", "tension": "low"},
+        {"target_character_id": "char-grandma", "target_name": "外婆", "relation_type": "亲人", "description": "唯一在世的亲人，老年痴呆症初期，住在养老院", "tension": "low"},
+        {"target_character_id": "char-old", "target_name": "赵素珍", "relation_type": "已故委托人", "description": "遗物清理的委托人——一个独居老人，死后无人知晓她的秘密", "tension": "none"}
+      ]
+    },
+    {
+      "character_id": "char-xu",
+      "name": "徐槐",
+      "aliases": ["徐姐"],
+      "role": "supporting",
+      "personality": "42岁遗物清理公司老板。早年做过护士、殡仪馆接待，见惯生死。嘴硬心软，处世哲学是\"活着的人比死了的人重要\"。对江渡保护欲强。",
+      "voice_style": "语速快，喜欢反问，关心人的时候反而更凶。偶尔冒出殡仪馆的黑色笑话。",
+      "pov_eligible": false,
+      "core_motivation": "公司活下去，手底下几个年轻人别走歪路",
+      "weakness": "过度保护江渡，有时候反而挡了他的路",
+      "current_state": {"location": "城南办公室", "emotion": "日常操心"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_character_id": "char-jiang", "target_name": "江渡", "relation_type": "老板/朋友", "description": "半个儿子，嘴上嫌弃心里比谁都上心", "tension": "low"}
+      ]
+    },
+    {
+      "character_id": "char-old",
+      "name": "赵素珍",
+      "aliases": ["赵婆婆"],
+      "role": "supporting",
+      "personality": "已故。独居老人，退休纺织厂女工，沉默寡言，从不与人来往。邻居说她\"像不存在一样\"。生前没人知道她的过去。",
+      "voice_style": "无直接台词，通过遗物和他人回忆呈现",
+      "pov_eligible": false,
+      "core_motivation": "不为人知。她留下的相机是揭开真相的唯一线索",
+      "weakness": "已故",
+      "current_state": {"location": "已故", "emotion": "无"},
+      "arc_phase": "legacy",
+      "first_appearance": 1,
+      "relationships": []
+    },
+    {
+      "character_id": "char-grandma",
+      "name": "外婆",
+      "aliases": ["阿婆"],
+      "role": "supporting",
+      "personality": "73岁，江渡唯一在世的亲人。老年痴呆症初期，记忆时好时坏。偶尔会说出一些和赵素珍有关的碎片——但她自己也不记得说过什么。",
+      "voice_style": "温和缓慢，偶尔冒出年轻时工厂的词汇。清醒时说话有条理，糊涂时把不同年代的事混在一起",
+      "pov_eligible": false,
+      "core_motivation": "在彻底忘记之前多看看孙子",
+      "weakness": "记忆正在消失，偶尔的清醒比糊涂更让人心疼",
+      "current_state": {"location": "城西养老院", "emotion": "时好时坏"},
+      "arc_phase": "setup",
+      "first_appearance": 2,
+      "relationships": [
+        {"target_character_id": "char-jiang", "target_name": "江渡", "relation_type": "亲人", "description": "外婆一手带大江渡，是他在世上唯一的牵挂", "tension": "low"}
+      ]
+    }
+  ]
+}

@@ -68,6 +68,7 @@ from .memory_curator_tool_profile import (
     MEMORY_CURATOR_TOOLS, MEMORY_CURATOR_ROLE_SPEC,
     create_memory_curator_tool_registry,
 )
+from .novel_evolution_curator import NovelEvolutionCurator, novel_memory_scope
 
 # P-FirstTurn: First Turn Execution pipeline
 from .first_turn_pipeline import FirstTurnPipeline
@@ -141,6 +142,7 @@ __all__ = [
     "FakeMemoryCuratorAdapter",
     "MEMORY_CURATOR_TOOLS", "MEMORY_CURATOR_ROLE_SPEC",
     "create_memory_curator_tool_registry",
+    "NovelEvolutionCurator", "novel_memory_scope",
     # D-Integration
     "TurnAgentBudgetPolicy", "SIMPLE_TURN_POLICY", "NORMAL_TURN_POLICY", "COMPLEX_TURN_POLICY",
     "DynamicAgentScheduler", "ScheduledWave", "WAVE_A_ROLES", "WAVE_B_ROLES",

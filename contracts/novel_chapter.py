@@ -221,8 +221,27 @@ class ChapterPlan:
             "cost_and_reward": self.cost_and_reward,
         }
 
+    @staticmethod
+    def _stringify_chapter_position(v: Any) -> str:
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            parts = []
+            for key in ("type", "function", "has_strong_hook", "has_payoff"):
+                val = v.get(key, None)
+                if val is True:
+                    parts.append(key)
+                elif val is False:
+                    pass
+                elif val and isinstance(val, str):
+                    parts.append(val)
+            return " | ".join(parts) if parts else json.dumps(v, ensure_ascii=False)
+        return str(v) if v else ""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ChapterPlan:
+        import json as _json
+
         data = data if isinstance(data, dict) else {}
 
         def _as_dict(v) -> dict:
@@ -270,7 +289,7 @@ class ChapterPlan:
             chapter_index=int(data.get("chapter_index", 0) or 0),
             title=data.get("title", ""),
             target_chars=int(data.get("target_chars", 3000) or 3000),
-            chapter_position=data.get("chapter_position", ""),
+            chapter_position=cls._stringify_chapter_position(data.get("chapter_position", "")),
             target_emotion=data.get("target_emotion", ""),
             opening_hook=data.get("opening_hook", ""),
             main_payoff=data.get("main_payoff", ""),

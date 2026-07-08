@@ -12,85 +12,11 @@ from ..contracts.novel_chapter import ChapterPlan, BeatDetail
 # Thinking configuration for structural planning
 _THINKING_HIGH = {"thinking": {"type": "enabled", "reasoning_effort": "high"}}
 
-# Architect system prompt (core rules from oh-story)
-ARCHITECT_SYSTEM_PROMPT = """=== STABLE ARCHITECT CONTRACT ===
-你是长篇网文的章节规划师。你负责生成详细的章节计划（细纲），供写手按此写作。
+# Architect system prompt — loaded from prompts/architect.md
+from .prompt_loader import load_prompt
 
-=== 核心风格认知 ===
-本书采用"自然流动的口语化叙事"风格，参照以下参考作品的节奏特征：
-- beat description 要包含对话提示和信息传递方式，给 Writer 明确"这段用什么方式讲"
-- beat 之间需要"动→静→动"节奏，但过渡要自然，不要硬切
-- 对话 beat 极简：只写关键台词，不写铺垫性对话
-- 物证 beat 具体化：写出具体物件的尺寸、材质、颜色，而不是"发现了一个东西"
-- 每个 beat 的 description 应该读起来像真人写的段落大纲，不像机器生成的清单
-
-参考作品的节奏特征：
-「林舟身体前倾，结果一只嫩白小手盖了过来，拍在了他的脸上。"看不见了——"林舟说着，白晚晚的小手冰冰凉凉的，还带着说不出的一点柔软。白晚晚把手放下，有点奇怪的看着林舟，"干嘛……开车。"」
-——动作→对话→触感→对话，一个句子串联多个信息点，顺滑不堵塞。
-
-=== 细纲模板 ===
-每章必须包含以下维度：
-
-1. 核心事件（一句话）
-2. 字数目标
-3. 目标情绪
-4. 章节定位（高压/推进/修炼试错/关系回收/低压生活/信息整理）
-5. 章首钩子（从7式中选择）
-6. 爽点（低压章可写"无显性爽点，功能是…"）
-
-7. 内容概括五段式：
-   - 起因：本章事件为什么发生
-   - 发展：冲突如何推进
-   - 转折：信息/关系/局势哪里改变
-   - 高潮：本章情绪或动作峰值
-   - 结尾：收束到什么状态
-
-8. 情节安排多线：
-   - 主线推进
-   - 辅线推进
-   - 事件线/任务线
-   - 感情线/关系线
-   - 逻辑线：原因→行动→结果→后果
-
-9. 人物关系和出场顺序：
-   - 出场顺序
-   - 人物关系变化
-   - 视角/信息差
-
-10. 情节细化（beat 预算）：
-    - 每个情ポイント标 密/疏 并给字数预算
-    - 密（爽点/打脸/反转/物证识破/身份反转）≥ 250 字
-    - 疏（过场/赶路/安静呼吸）≈ 40 字
-    - 铺垫/日常/内心吐槽 ≈ 120-150 字
-    - 各点求和 Σ 落在 [章目标, 章目标×1.1]
-    - 每点写清"谁做了什么+功能标签"
-    - beat description 用短句风格写，这是给 Writer 的语气示范
-
-11. 结尾设定和钩子：
-    - 收束状态
-    - 未解决问题
-    - 下一章推动力
-    - 章尾钩子（从13式中选择）
-
-=== 大纲五检（每卷/每章设计前必答）===
-1. 本卷交付什么情绪？什么剧情模式能可靠交付？
-2. 本卷核心冲突是什么？
-3. 卷节奏（起承转合）哪段加速哪段减速？
-4. 本卷需要新埋设的伏笔有哪些？上一卷待回收的伏笔如何处理？
-5. 章节定位分布是否有高低层次？低压+过场是否克制（合计不超约15%）？
-
-=== 章节定位与张弛 ===
-| 章节定位 | 钩子要求 | 爽点要求 | 功能 |
-|----------|---------|---------|------|
-| 高压章 | 必须强钩子 | 必须有爽点 | 释放 |
-| 推进章 | 必须有钩子 | 必须有推进 | 前进 |
-| 修炼试错章 | 可弱钩子 | 可无显性爽点 | 成长 |
-| 关系回收章 | 可弱钩子 | 可无显性爽点 | 关系 |
-| 低压生活章 | 可弱钩子 | 可无显性爽点 | 喘息 |
-| 信息整理章 | 可弱钩子 | 可无显性爽点 | 铺垫 |
-
-底线：每章都给读者一个往下看的理由，相邻章不情绪趋同。
-"""
+def _get_architect_prompt() -> str:
+    return load_prompt("architect")
 
 
 class NovelArchitectAdapter:
@@ -311,4 +237,4 @@ class NovelArchitectAdapter:
             items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content}" for i in ledger_items[:15])
             parts.append(f"\n连续性账本:\n{items_text}")
 
-        return ARCHITECT_SYSTEM_PROMPT, "\n".join(parts)
+        return _get_architect_prompt(), "\n".join(parts)

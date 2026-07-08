@@ -219,10 +219,8 @@ class NovelEngine:
         active_memory_context: list[dict[str, Any]] | None = None,
         memory_recall: list[dict[str, Any]] | None = None,
     ) -> str:
-        """Generate chapter text beat by beat."""
+        """Generate chapter text beat by beat (sequential, 3 beats)."""
         if not plan.scene_beats:
-            # No beats defined, generate whole chapter. 容错：Writer 空返回不抛，
-            # 交由 run_chapter 字数门判定 + 降级接受处理。
             try:
                 return self._call_writer(packet)
             except RuntimeError:
@@ -230,7 +228,6 @@ class NovelEngine:
 
         accumulated_text = ""
         for beat in plan.scene_beats:
-            # beat 级重试：单个 beat 空输出最多重试 2 次，只重写这一段。
             beat_text = ""
             for attempt in range(3):
                 beat_packet = self._packet_builder.build_beat_packet(
@@ -249,11 +246,7 @@ class NovelEngine:
                 except RuntimeError:
                     beat_text = ""
                     continue
-            if not beat_text or not beat_text.strip():
-                # 该 beat 多次失败仍空：用占位续接，保持后续 beat 上下文连贯；
-                # 整章质量由 run_chapter 的字数门判定与降级接受兜底。
-                beat_text = ""
-            accumulated_text += beat_text
+            accumulated_text += beat_text or ""
 
         return accumulated_text
 
@@ -391,7 +384,7 @@ class NovelEngine:
             plan.ending_design.hook_detail,
         ]
         parts.extend(c.name for c in characters if getattr(c, "name", ""))
-        query = " ".join(p for p in parts if p)
+        query = " ".join(str(p) for p in parts if p)
         return query[:500]
 
     def _recall_hit_to_prompt_item(self, hit) -> dict[str, Any]:

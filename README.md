@@ -371,43 +371,54 @@ python -m awp_rp_runtime_v2.testing.user_simulation_harness \
 ```
 awp_rp_runtime_v2/
 ├─ contracts/          # 数据合同 (schema_id + schema_version)
+│   ├─ novel_*.py      # 小说模式合同 (project/chapter/draft/ledger 等)
+│   └─ ...             # RP 模式合同
 ├─ policies/           # 纯策略 (无 I/O)
-├─ storage/            # 存储接口 + SQLite 实现 (10 stores)
+├─ storage/            # 存储接口 + SQLite 实现
+│   ├─ novel_interfaces.py      # 小说存储接口
+│   ├─ sqlite/novel_stores.py   # 小说 SQLite 实现
+│   └─ ...             # RP 存储 (10 stores)
 ├─ runtime/            # 运行时编排 (~115 文件)
-│   ├─ persistent_turn_engine.py    # 主引擎
+│   ├─ persistent_turn_engine.py    # RP 主引擎
+│   ├─ novel_engine.py              # 小说章节生成引擎
+│   ├─ novel_writer_adapter.py      # 小说 Writer LLM 适配器
+│   ├─ novel_director_adapter.py    # 小说 Director LLM 适配器
+│   ├─ novel_architect_adapter.py   # 小说 Architect LLM 适配器
+│   ├─ novel_llm_factory.py         # 小说 LLM 工厂（DeepSeek/OpenCode 切换）
+│   ├─ novel_quality_pipeline.py    # 小说质量管线
+│   ├─ novel_ledger_curator.py      # 小说账本策展
 │   ├─ turn_evolution_curator.py    # LLM 驱动状态+记忆策展
-│   ├─ sub_agent_llm_runner.py      # 子 Agent LLM 调用
-│   ├─ management_api.py            # REST API + SPA 路由
-│   ├─ dynamic_subagent_pool.py     # 动态子 Agent 池
-│   ├─ dynamic_agent_scheduler.py   # Wave A/B 调度
+│   ├─ management_api.py            # REST API + SPA 路由（ComfyUI 插件模式）
 │   └─ ...
-├─ nodes/              # ComfyUI 节点 (114 个)
+├─ nodes/              # ComfyUI 节点 (122 个)
+│   ├─ novel_nodes.py  # 小说模式节点 (8 个)
+│   └─ ...             # RP 模式节点 (114 个)
 ├─ adapters/           # 外部接口
-│   ├─ llm/            # DeepSeek Anthropic/OpenAI 双端点
+│   ├─ llm/
+│   │   ├─ deepseek_adapter.py       # DeepSeek 适配器
+│   │   ├─ openai_compatible.py      # OpenAI 兼容适配器（OpenCode 等网关）
+│   │   └─ ...
 │   ├─ character_card.py
 │   ├─ worldbook.py
 │   └─ preset.py
 ├─ services/           # 业务服务层
-│   ├─ card_state_service.py
-│   ├─ memory_service.py
-│   ├─ trace_service.py
-│   └─ worldbook_service.py
 ├─ web/                # 管理面板前端 (React + Vite + Antd)
 ├─ testing/            # 验收测试 + E2E + 调试工具
 ├─ tests/              # 单元测试 (981 个)
-├─ presets/             # Writer 预设
+├─ presets/             # Writer 预设（仅 RP 模式）
 ├─ workflows/          # ComfyUI 工作流 JSON (14 个)
-│   ├─ api/            # API 工作流
-│   └─ persistent_rp_*.json  # 持久化 RP 工作流
-├─ test_fixtures/      # 测试夹具
-├─ frontend/           # 前端资源
 ├─ scripts/            # 脚本工具
+│   ├─ awp_server.py   # 独立 HTTP 服务器（不依赖 ComfyUI）
+│   ├─ awp_console.py  # 终端控制台
+│   └─ ...
+├─ test_fixtures/      # 测试夹具
+├─ frontend/           # 前端构建产物
 └─ docs/               # 文档
-   ├─ handoffs/        # 阶段验收报告 (19 份)
-   ├─ architecture/    # 架构文档 (12 份)
+   ├─ architecture/    # 架构文档
+   ├─ handoffs/        # 阶段验收报告
+   ├─ superpowers/     # 设计规格与计划
    ├─ decisions/       # 决策记录
-   ├─ reference/       # 参考文档
-   └─ testing/         # 测试文档
+   └─ ...
 ```
 
 ---
@@ -488,16 +499,375 @@ npm run build
 
 ---
 
+## 18. 独立服务器（不依赖 ComfyUI）
+
+项目自带独立 HTTP 服务器，无需 ComfyUI 即可运行全部 RP 和小说功能。
+
+### 启动
+
+```bash
+# 默认端口 8188，自动创建数据库
+python scripts/awp_server.py
+
+# 自定义端口和数据库路径
+python scripts/awp_server.py --port 8189 --db-path ./my_data.db
+```
+
+启动后访问：
+- **前端面板**: `http://localhost:8188/awp/`
+- **API 前缀**: `http://localhost:8188/awp/api/v1/`
+
+### 终端控制台
+
+```bash
+# REPL 模式（交互式）
+python scripts/awp_console.py --session sess-xxx
+
+# 单条命令
+python scripts/awp_console.py --session sess-xxx transcript
+
+# 流式回合
+python scripts/awp_console.py --session sess-xxx stream "你好"
+
+# 控制台命令列表
+# help / context / cards / sessions / new / session / history /
+# turns / transcript / state / send / continue / workflows / presets
+```
+
+### ComfyUI 插件模式
+
+当作为 ComfyUI 插件加载时，管理面板自动在 `http://localhost:8189/awp/` 启动（后台守护线程，端口 8189）。
+
+---
+
+## 19. API 使用指南
+
+### 会话管理
+
+```bash
+# 列出所有会话
+curl http://localhost:8188/awp/api/v1/sessions
+
+# 获取会话详情
+curl http://localhost:8188/awp/api/v1/sessions/sess-xxx
+
+# 从已有角色卡创建会话
+curl -X POST http://localhost:8188/awp/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"card_id": "card-xxx", "greeting_id": "g0"}'
+
+# 删除会话
+curl -X DELETE http://localhost:8188/awp/api/v1/sessions/sess-xxx
+```
+
+### 角色卡管理
+
+```bash
+# 列出角色卡
+curl http://localhost:8188/awp/api/v1/cards
+
+# 导入角色卡（本地路径）
+curl -X POST http://localhost:8188/awp/api/v1/cards/import \
+  -H "Content-Type: application/json" \
+  -d '{"source_path": "/path/to/card.json"}'
+
+# 上传角色卡（文件上传，支持 .json 和 .png）
+curl -X POST http://localhost:8188/awp/api/v1/cards/upload \
+  -F "file=@/path/to/card.json"
+
+# 获取角色卡的开场白列表
+curl http://localhost:8188/awp/api/v1/cards/card-xxx/greetings
+
+# 删除角色卡
+curl -X DELETE http://localhost:8188/awp/api/v1/cards/card-xxx
+```
+
+### RP 回合
+
+```bash
+# 发送玩家输入（同步，等待完整回合）
+curl -X POST http://localhost:8188/awp/api/v1/sessions/sess-xxx/turn \
+  -H "Content-Type: application/json" \
+  -d '{"player_input": "你好，这间房子有点奇怪"}'
+
+# 流式回合（SSE，实时获取步骤和正文）
+curl -N http://localhost:8188/awp/api/v1/sessions/sess-xxx/turn/stream \
+  -H "Content-Type: application/json" \
+  -d '{"player_input": "你好"}'
+
+# 首回合（Bootstrap 后的第一个回合）
+curl -X POST http://localhost:8188/awp/api/v1/sessions/sess-xxx/first-turn \
+  -H "Content-Type: application/json" \
+  -d '{"player_input": ""}'
+
+# AI 自走续写（无玩家输入）
+curl -X POST http://localhost:8188/awp/api/v1/sessions/sess-xxx/continue
+
+# 获取回合历史
+curl http://localhost:8188/awp/api/v1/sessions/sess-xxx/turns
+
+# 获取开场白
+curl http://localhost:8188/awp/api/v1/sessions/sess-xxx/opening
+
+# 获取回合管线详情（含子 Agent、记忆、状态变更）
+curl http://localhost:8188/awp/api/v1/sessions/sess-xxx/turns/turn-xxx/pipeline
+```
+
+### 执行模式参数
+
+生成类端点支持 `?mode=` 和 `?workflow=` 查询参数：
+
+```bash
+# Python 直调模式（不经过 ComfyUI）
+curl -X POST "http://localhost:8188/awp/api/v1/sessions/sess-xxx/turn?mode=python" \
+  -H "Content-Type: application/json" \
+  -d '{"player_input": "你好"}'
+
+# 指定 workflow
+curl -X POST "http://localhost:8188/awp/api/v1/sessions/sess-xxx/turn?mode=hybrid&workflow=send_turn" \
+  -H "Content-Type: application/json" \
+  -d '{"player_input": "你好"}'
+```
+
+| 模式 | 说明 |
+|------|------|
+| `python` | 直接调用 Python 运行时节点，不依赖 ComfyUI |
+| `hybrid` | 通过 ComfyUI API workflow 排队执行（需要 ComfyUI 运行） |
+
+环境变量 `AWP_EXECUTION_MODE` 设置默认模式，未设置时默认 `hybrid`。
+
+### SSE 流式事件格式
+
+`/turn/stream` 端点返回 Server-Sent Events：
+
+```
+event: started
+data: {"turn_id": "turn-xxx", "steps": ["round_snapshot", "director", "writer", ...]}
+
+event: step
+data: {"step": "director", "payload": {...}, "duration_ms": 1234}
+
+event: step
+data: {"step": "writer", "payload": {...}, "duration_ms": 5678}
+
+event: writer_text
+data: {"turn_id": "turn-xxx", "writer_output": "正文内容..."}
+
+event: done
+data: {"success": true, "turn_id": "turn-xxx", "turn_index": 3, "writer_output": "..."}
+```
+
+### Python 调用示例
+
+```python
+import requests
+
+BASE = "http://localhost:8188/awp/api/v1"
+
+# 创建会话
+resp = requests.post(f"{BASE}/sessions", json={
+    "card_id": "card-xxx",
+    "greeting_id": "g0",
+})
+session_id = resp.json()["data"]["session_id"]
+
+# 发送回合
+resp = requests.post(f"{BASE}/sessions/{session_id}/turn", json={
+    "player_input": "你好",
+})
+result = resp.json()["data"]
+print(result["writer_output"])  # AI 生成的 RP 正文
+```
+
+```python
+# SSE 流式读取
+import requests
+import json
+
+resp = requests.post(
+    f"{BASE}/sessions/{session_id}/turn/stream",
+    json={"player_input": "你好"},
+    stream=True,
+)
+for line in resp.iter_lines(decode_unicode=True):
+    if line.startswith("event: "):
+        event_type = line[7:]
+    elif line.startswith("data: "):
+        data = json.loads(line[6:])
+        if event_type == "writer_text":
+            print(data["writer_output"], end="", flush=True)
+        elif event_type == "done":
+            print("\n--- 完成 ---")
+```
+
+---
+
+## 20. 小说写作管线
+
+项目包含独立的小说章节生成引擎 `NovelEngine`，与 RP 管线共享基础设施但完全独立运行。
+
+### 架构
+
+```
+NovelEngine
+  ├── Architect Agent   (LLM: 规划章节结构)
+  ├── Director Agent    (LLM: 全局优化 + 情绪弧线)
+  ├── Writer Agent      (LLM: 逐 beat 生成正文)
+  ├── Quality Pipeline  (确定性检查 + 质量门控)
+  └── Ledger Curator    (LLM: 更新伏笔/角色状态/时间线)
+```
+
+### 小说生成流程
+
+```
+1. plan_chapter()     → Architect 规划章节（细纲、beat、情绪弧线）
+2. write_chapter()    → Director 指导 + Writer 逐 beat 生成 + 质量门控
+3. revise_chapter()   → 修订（可选）
+4. batch_write()      → 批量连续生成（串行，每章间隔 5 秒）
+```
+
+### Python 直调
+
+```python
+from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v2.storage.sqlite.database import Database
+from awp_rp_runtime_v2.contracts.novel_project import NovelProject
+from awp_rp_runtime_v2.contracts.novel_character import NovelCharacter, CharacterRelationship
+
+# 1. 初始化存储
+db = Database("my_novel.db")
+db.initialize()
+reg = SessionRuntimeStoreRegistry(db)
+engine = NovelEngine(reg)
+
+# 2. 创建项目
+project = NovelProject(
+    project_id="my-novel",
+    title="我的小说",
+    genre="都市悬疑",
+    target_platform="番茄长篇",
+    target_reader="22-35岁",
+    core_emotion="压抑→怀疑→接纳",
+    one_sentence_pitch="失眠三年的插画师搬进廉租房，发现房东是三十年前复活的护士。",
+    status="writing",
+)
+reg.novel_project_store.create(project)
+
+# 3. 创建角色
+protagonist = NovelCharacter(
+    character_id="char-lin",
+    project_id="my-novel",
+    name="林知夏",
+    role="protagonist",
+    personality="28岁自由插画师，失眠三年，过目不忘。",
+    voice_style="短句，自嘲优先。",
+    pov_eligible=True,
+    core_motivation="搞清楚每晚梦到废弃医院的原因。",
+    current_state={"location": "403室", "emotion": "压抑"},
+    arc_phase="setup",
+    first_appearance=1,
+)
+reg.novel_character_store.save(protagonist)
+
+# 4. 规划章节
+plan = engine.plan_chapter(
+    project_id="my-novel",
+    chapter_index=1,
+    task_description="开篇钩章，林知夏搬入403室",
+)
+
+# 5. 写章节
+draft = engine.write_chapter(project_id="my-novel", chapter_index=1)
+print(f"字数: {draft.char_count}, 状态: {draft.status}")
+print(draft.text[:500])
+
+# 6. 批量生成
+drafts = engine.batch_write(
+    project_id="my-novel",
+    chapter_start=1,
+    chapter_end=10,
+    on_chapter_complete=lambda idx, d: print(f"第{idx}章完成: {d.char_count}字"),
+)
+```
+
+### 小说 ComfyUI 节点
+
+| 节点 | 功能 | 输出 |
+|------|------|------|
+| `AWPV2NovelProjectCreate` | 创建小说项目 | NOVEL_PROJECT, project_id |
+| `AWPV2NovelVolumePlan` | 创建卷计划 | NOVEL_VOLUME, volume_id |
+| `AWPV2NovelChapterPlan` | Architect 规划章节 | NOVEL_CHAPTER_PLAN |
+| `AWPV2NovelChapterWrite` | Writer 生成章节正文 | NOVEL_DRAFT, text |
+| `AWPV2NovelChapterRevise` | 修订章节 | NOVEL_DRAFT |
+| `AWPV2NovelLedgerView` | 查看账本 | LEDGER_JSON |
+| `AWPV2NovelExport` | 导出 Markdown | MARKDOWN_TEXT |
+| `AWPV2NovelBatchWrite` | 批量写多章 | NOVEL_DRAFT[] |
+
+### 小说模式环境变量
+
+```powershell
+# LLM 提供者选择（默认 deepseek）
+$env:NOVEL_LLM_PROVIDER = "opencode"     # 走 OpenCode Zen 网关
+$env:NOVEL_LLM_PROVIDER = "deepseek"     # 走 DeepSeek API（默认）
+
+# OpenCode Zen 网关配置
+$env:OPENCODE_API_KEY = "your-key"
+$env:NOVEL_LLM_BASE_URL = "https://opencode.ai/zen/go/v1"  # 默认值
+
+# 按角色覆盖模型（可选）
+$env:NOVEL_LLM_MODEL_WRITER = "qwen3.7-plus"
+$env:NOVEL_LLM_MODEL_DIRECTOR = "qwen3.7-plus"
+$env:NOVEL_LLM_MODEL_ARCHITECT = "qwen3.7-plus"
+$env:NOVEL_LLM_MODEL_CONTINUITY_CHECKER = "qwen3.7-plus"
+$env:NOVEL_LLM_MODEL_STYLE_CLEANER = "qwen3.7-plus"
+$env:NOVEL_LLM_MODEL_LEDGER_CURATOR = "qwen3.7-plus"
+```
+
+### 小说模式 LLM 角色配置
+
+| 角色 | 模型（默认） | max_tokens | thinking |
+|------|-------------|------------|----------|
+| director | deepseek-v4-pro | 8000 | high |
+| architect | deepseek-v4-pro | 6000 | high |
+| writer | deepseek-v4-pro | 4000 | medium |
+| continuity_checker | deepseek-v4-flash | 4000 | disabled |
+| style_cleaner | deepseek-v4-flash | 2000 | disabled |
+| ledger_curator | deepseek-v4-flash | 4000 | disabled |
+
+OpenCode 模式下默认全部走 `qwen3.7-plus`。
+
+### 小说数据存储
+
+小说模式在 SQLite 中使用独立的表：
+
+| 表 | 内容 |
+|----|------|
+| `novel_projects` | 项目元数据 |
+| `novel_characters` | 角色设定与状态 |
+| `novel_volumes` | 卷计划 |
+| `novel_chapter_plans` | 章节细纲 |
+| `novel_chapter_drafts` | 章节正文（含修订历史） |
+| `novel_ledger_items` | 伏笔/时间线/角色状态/世界观 |
+| `novel_batch_progress` | 批量生成进度 |
+
+---
+
 ## 文档索引
 
 | 文档 | 内容 |
 |------|------|
-| [docs/P2_HANDOFF.md](docs/P2_HANDOFF.md) | P2 管理面板 + 子 Agent LLM 交接 |
-| [docs/P1_HANDOFF.md](docs/P1_HANDOFF.md) | P1 真实 RP 演化交接 |
-| [docs/alpha-status-v0.1.md](docs/alpha-status-v0.1.md) | Alpha 状态报告 |
-| [docs/handoffs/](docs/handoffs/) | 全部阶段验收报告（19 份） |
-| [docs/architecture/](docs/architecture/) | 架构文档（12 份） |
+| [docs/architecture/system-overview.md](docs/architecture/system-overview.md) | RP 系统架构总览 |
+| [docs/architecture/turn-lifecycle.md](docs/architecture/turn-lifecycle.md) | RP 回合生命周期 |
+| [docs/architecture/agent-boundaries-v1.md](docs/architecture/agent-boundaries-v1.md) | Agent 边界与权限 |
+| [docs/architecture/state-and-memory.md](docs/architecture/state-and-memory.md) | 状态与记忆架构 |
+| [docs/architecture/retry-and-replay.md](docs/architecture/retry-and-replay.md) | 重试与重放机制 |
+| [docs/superpowers/specs/2026-07-02-independent-novel-runtime-design.md](docs/superpowers/specs/2026-07-02-independent-novel-runtime-design.md) | 小说模式设计规格 |
+| [docs/superpowers/plans/2026-07-04-novel-runtime-adaptation-plan.md](docs/superpowers/plans/2026-07-04-novel-runtime-adaptation-plan.md) | 小说模式适配计划 |
+| [docs/handoffs/2026-07-05-opencode-zen-novel-handoff.md](docs/handoffs/2026-07-05-opencode-zen-novel-handoff.md) | OpenCode Zen 接入交接 |
+| [docs/contributing.md](docs/contributing.md) | 贡献指南 |
+| [docs/security.md](docs/security.md) | 安全文档 |
+| [docs/handoffs/](docs/handoffs/) | 全部阶段验收报告 |
+| [docs/architecture/](docs/architecture/) | 架构文档 |
 | [docs/reference/](docs/reference/) | 参考文档 |
 | [docs/decisions/](docs/decisions/) | 决策记录 |
-| [docs/security.md](docs/security.md) | 安全文档 |
-| [docs/contributing.md](docs/contributing.md) | 贡献指南 |
