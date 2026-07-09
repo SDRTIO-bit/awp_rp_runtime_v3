@@ -5,6 +5,7 @@ Independent from PersistentTurnEngine, shares infrastructure (LLM adapters, stor
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable
 
 from ..contracts.novel_project import NovelProject
@@ -21,6 +22,13 @@ from .novel_quality_pipeline import NovelQualityPipeline
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
+from .novel_trace import (
+    NovelStreamCallbacks,
+    safe_on_phase,
+    safe_on_beat,
+    safe_on_chunk,
+    safe_on_error,
+)
 
 
 class NovelEngine:
@@ -40,11 +48,25 @@ class NovelEngine:
     - SubAgentLLMRunner（RP 的 thinking 被硬编码禁用）
     """
 
-    def __init__(self, registry: SessionRuntimeStoreRegistry, profile: str = "production"):
+    def __init__(self, registry: SessionRuntimeStoreRegistry, profile: str = "production",
+                 callbacks: NovelStreamCallbacks | None = None):
         self._registry = registry
         self._profile = profile
         self._packet_builder = NovelWritePacketBuilder(registry)
         self._quality_pipeline = NovelQualityPipeline(registry)
+        self._callbacks = callbacks or NovelStreamCallbacks()
+
+    def _safe_on_phase(self, event: str, name: str, payload: dict[str, Any]) -> None:
+        safe_on_phase(self._callbacks.on_phase, event, name, payload)
+
+    def _safe_on_beat(self, event: str, beat_index: int, payload: dict[str, Any]) -> None:
+        safe_on_beat(self._callbacks.on_beat, event, beat_index, payload)
+
+    def _safe_on_chunk(self, text: str) -> None:
+        safe_on_chunk(self._callbacks.on_chunk, text)
+
+    def _safe_on_error(self, phase: str, message: str) -> None:
+        safe_on_error(self._callbacks.on_error, phase, message)
 
     def plan_chapter(
         self,
@@ -125,6 +147,12 @@ class NovelEngine:
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
 
+        # Load project config for writer_prompt / genre overrides
+        project = self._registry.novel_project_store.load(project_id)
+        project_config = getattr(project, "config", {}) or {}
+        writer_prompt_name = project_config.get("writer_prompt", "writer")
+        skip_drumbeat = writer_prompt_name != "writer"
+
         # Load context
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
@@ -187,11 +215,12 @@ class NovelEngine:
             ledger_items,
             active_memory_context=active_memory_context,
             memory_recall=memory_recall,
+            writer_prompt_name=writer_prompt_name,
         )
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan)
+        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
 
         # Continuity check: 检查遗忘的伏笔/承诺、断层、角色矛盾。
         # 结果作为 informational warnings 注入，不阻塞存盘。
@@ -240,11 +269,13 @@ class NovelEngine:
         ledger_items: list[LedgerItem],
         active_memory_context: list[dict[str, Any]] | None = None,
         memory_recall: list[dict[str, Any]] | None = None,
+        *,
+        writer_prompt_name: str = "writer",
     ) -> str:
         """Generate chapter text beat by beat (sequential, 3 beats)."""
         if not plan.scene_beats:
             try:
-                return self._call_writer(packet)
+                return self._call_writer(packet, writer_prompt_name=writer_prompt_name)
             except RuntimeError:
                 return ""
 
@@ -262,7 +293,7 @@ class NovelEngine:
                     memory_recall=memory_recall,
                 )
                 try:
-                    beat_text = self._call_writer_beat(beat_packet)
+                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name)
                     if beat_text and beat_text.strip():
                         break
                 except RuntimeError:
@@ -384,17 +415,233 @@ class NovelEngine:
             )
         return "\n".join(lines)
 
-    def _call_writer(self, packet: NovelWritePacket) -> str:
+    def _call_writer(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer") -> str:
         """Call Writer agent."""
         from .novel_writer_adapter import NovelWriterAdapter
-        adapter = NovelWriterAdapter(self._registry)
+        adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
         return adapter.generate_chapter(packet)
 
-    def _call_writer_beat(self, packet: NovelWritePacket) -> str:
+    def _call_writer_beat(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer") -> str:
         """Call Writer for a single beat."""
         from .novel_writer_adapter import NovelWriterAdapter
-        adapter = NovelWriterAdapter(self._registry)
+        adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
         return adapter.generate_beat(packet)
+
+    def _call_writer_beat_stream(self, packet: NovelWritePacket, on_chunk,
+                                  *, writer_prompt_name: str = "writer") -> str:
+        """Call Writer for a single beat with streaming."""
+        from .novel_writer_adapter import NovelWriterAdapter
+        adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
+        return adapter.generate_beat_stream(packet, on_chunk)
+
+    def _generate_with_beats_stream(
+        self,
+        plan: ChapterPlan,
+        packet: NovelWritePacket,
+        director_guidance: DirectorGuidance,
+        ledger_items: list[LedgerItem],
+        active_memory_context: list[dict[str, Any]] | None = None,
+        memory_recall: list[dict[str, Any]] | None = None,
+        *,
+        writer_prompt_name: str = "writer",
+    ) -> str:
+        """Generate chapter text beat by beat with streaming callbacks."""
+        if not plan.scene_beats:
+            try:
+                text = self._call_writer(packet, writer_prompt_name=writer_prompt_name)
+                self._safe_on_chunk(text)
+                return text
+            except RuntimeError:
+                return ""
+
+        beat_count = len(plan.scene_beats)
+        accumulated_text = ""
+        for i, beat in enumerate(plan.scene_beats):
+            beat_idx = i + 1
+            self._safe_on_beat("start", beat_idx, {
+                "beat_count": beat_count,
+                "budget_chars": beat.budget_chars,
+                "description": beat.description[:80],
+                "density": beat.density,
+            })
+
+            beat_text = ""
+            for attempt in range(3):
+                beat_packet = self._packet_builder.build_beat_packet(
+                    beat=beat,
+                    accumulated_text=accumulated_text,
+                    chapter_plan=plan,
+                    director_guidance=director_guidance,
+                    ledger_items=ledger_items,
+                    active_memory_context=active_memory_context,
+                    memory_recall=memory_recall,
+                )
+                try:
+                    t_start = time.time()
+                    beat_text = self._call_writer_beat_stream(
+                        beat_packet, self._safe_on_chunk,
+                        writer_prompt_name=writer_prompt_name,
+                    )
+                    duration_ms = int((time.time() - t_start) * 1000)
+                    if beat_text and beat_text.strip():
+                        self._safe_on_beat("end", beat_idx, {
+                            "duration_ms": duration_ms,
+                            "char_count": len(beat_text),
+                            "attempt": attempt + 1,
+                        })
+                        break
+                except RuntimeError:
+                    duration_ms = int((time.time() - t_start) * 1000)
+                    self._safe_on_beat("error", beat_idx, {
+                        "duration_ms": duration_ms,
+                        "attempt": attempt + 1,
+                        "message": "LLM returned empty output",
+                    })
+                    beat_text = ""
+                    continue
+            accumulated_text += beat_text or ""
+
+        return accumulated_text
+
+    def write_chapter_stream(
+        self,
+        *,
+        project_id: str,
+        chapter_index: int,
+        revision: int = 1,
+    ) -> ChapterDraft:
+        """Streaming variant of write_chapter — emits phase/beat/chunk callbacks.
+
+        Identical to write_chapter in logic, but fires callbacks at each
+        pipeline stage so a TUI consumer can render progress in real time.
+        """
+        plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index)
+        if not plan:
+            raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
+
+        project = self._registry.novel_project_store.load(project_id)
+        project_config = getattr(project, "config", {}) or {}
+        writer_prompt_name = project_config.get("writer_prompt", "writer")
+
+        ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
+        all_characters = self._registry.novel_character_store.list_by_project(project_id)
+        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        character_states = {c.name: c.current_state for c in characters}
+        active_memory_context, memory_recall = self._recall_novel_memory(
+            project_id=project_id, plan=plan, characters=characters,
+        )
+
+        prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
+        prev_chapter_ending = ""
+        if prev_plan:
+            prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
+            if prev_draft:
+                prev_chapter_ending = prev_draft.text[-500:]
+
+        global_summaries = self._build_global_summaries(project_id, chapter_index)
+        completed_chapters_summary = self._build_completed_chapters_summary(project_id, chapter_index)
+        foreshadowing_list = [i for i in ledger_items if i.section == "foreshadowing"]
+        subplot_status = [i for i in ledger_items if i.section == "open_threads"]
+
+        # Phase: director
+        self._safe_on_phase("start", "director", {"ch": chapter_index, "thinking": "high"})
+        t = time.time()
+        director_guidance = self._call_director(
+            project_id, plan, ledger_items, character_states,
+            prev_chapter_ending,
+            completed_chapters_summary=completed_chapters_summary,
+            foreshadowing_list=foreshadowing_list,
+            subplot_status=subplot_status,
+        )
+        self._safe_on_phase("end", "director", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - t) * 1000),
+            "character_anchor": director_guidance.character_anchor[:200] if director_guidance.character_anchor else "",
+            "timeline_anchor": director_guidance.timeline_anchor[:200] if director_guidance.timeline_anchor else "",
+            "beat_details": [{"name": b.name, "goal": b.narrative_strategy[:80]} for b in (director_guidance.beat_details or [])],
+        })
+
+        packet = self._packet_builder.build(
+            chapter_plan=plan, ledger_items=ledger_items,
+            prev_chapter_ending=prev_chapter_ending,
+            global_summaries=global_summaries,
+            character_states=character_states,
+            active_memory_context=active_memory_context,
+            memory_recall=memory_recall,
+            director_guidance=director_guidance,
+        )
+
+        # Phase: writer (with streaming beats)
+        self._safe_on_phase("start", "writer", {"ch": chapter_index, "thinking": "medium"})
+        t = time.time()
+        text = self._generate_with_beats_stream(
+            plan, packet, director_guidance, ledger_items,
+            active_memory_context=active_memory_context,
+            memory_recall=memory_recall,
+            writer_prompt_name=writer_prompt_name,
+        )
+        self._safe_on_phase("end", "writer", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - t) * 1000),
+            "total_chars": len(text),
+        })
+
+        skip_drumbeat = writer_prompt_name != "writer"
+
+        # Phase: quality
+        self._safe_on_phase("start", "quality", {"ch": chapter_index})
+        t = time.time()
+        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        self._safe_on_phase("end", "quality", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - t) * 1000),
+            "verdict": quality_decision.verdict.value,
+            "blocking_reasons": list(getattr(quality_decision, "blocking_reasons", [])),
+            "warnings": [w[:120] for w in getattr(quality_decision, "warnings", [])],
+        })
+
+        # Phase: continuity
+        self._safe_on_phase("start", "continuity", {"ch": chapter_index})
+        t = time.time()
+        continuity_issues = self._check_continuity(
+            text=text, chapter_plan=plan, ledger_items=ledger_items,
+            character_states=character_states, prev_chapter_ending=prev_chapter_ending,
+        )
+        if continuity_issues:
+            quality_decision.warnings.extend(continuity_issues)
+        self._safe_on_phase("end", "continuity", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - t) * 1000),
+            "issue_count": len(continuity_issues),
+            "issues": continuity_issues[:5],
+        })
+
+        verdict_value = quality_decision.verdict.value
+        status = "accepted" if verdict_value == "accept" else "rejected"
+
+        draft = ChapterDraft(
+            draft_id=f"draft-{plan.chapter_id}-r{revision}",
+            chapter_id=plan.chapter_id,
+            revision=revision,
+            text=text,
+            char_count=len(text),
+            status=status,
+            quality_decision_id=quality_decision.trace_id,
+        )
+        self._registry.novel_chapter_draft_store.save(draft)
+
+        # Phase: ledger
+        self._safe_on_phase("start", "ledger", {"ch": chapter_index})
+        t = time.time()
+        self._update_ledger(
+            project_id, plan, text, ledger_items, characters, quality_decision
+        )
+        self._safe_on_phase("end", "ledger", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - t) * 1000),
+        })
+
+        return draft
 
     def _recall_novel_memory(
         self,
@@ -550,7 +797,7 @@ class NovelEngine:
         )
 
         text = self._generate_with_beats(plan, packet, director_guidance, ledger_items)
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan)
+        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
         status = "accepted" if quality_decision.verdict.value == "accept" else "rejected"
 
         new_revision = current_draft.revision + 1

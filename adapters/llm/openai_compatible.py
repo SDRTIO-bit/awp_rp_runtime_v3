@@ -261,6 +261,54 @@ class OpenAICompatibleAdapter(BaseLlmAdapter):
         self._receipts.append(receipt)
         return text, receipt
 
+    def generate_text_stream(
+        self,
+        prompt: str,
+        on_chunk,
+        max_tokens: int = 0,
+        provider_role: str = "writer",
+        model: str = "",
+        extra_body: dict[str, Any] | None = None,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Streaming variant. Calls on_chunk(text_delta) per token."""
+        if not max_tokens:
+            max_tokens = self._default_max_tokens
+        use_model = model or self._model
+
+        try:
+            self._init_client()
+
+            messages: list[dict[str, str]] = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            kwargs: dict[str, Any] = {
+                "model": use_model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            if extra_body:
+                filtered = {
+                    k: v for k, v in extra_body.items()
+                    if k not in _DEEPSEEK_ONLY_KEYS
+                }
+                if filtered:
+                    kwargs["extra_body"] = filtered
+
+            stream = self._client.chat.completions.create(**kwargs)
+            accumulated = ""
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    accumulated += delta.content
+                    on_chunk(delta.content)
+            return accumulated
+        except Exception:
+            raise RuntimeError("OpenAI-compatible writer LLM streaming failed")
+
     def generate_structured(
         self,
         prompt: str,

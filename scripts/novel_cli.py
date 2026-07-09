@@ -32,13 +32,31 @@ from awp_rp_runtime_v3.contracts.novel_project import NovelProject
 from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter, CharacterRelationship
 from awp_rp_runtime_v3.contracts.novel_volume import VolumePlan
 from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
+from awp_rp_runtime_v3.runtime.novel_trace import NovelStreamCallbacks
 
 GREEN = "\033[92m"
 RED = "\033[91m"
 DIM = "\033[2m"
 YELLOW = "\033[93m"
 CYAN = "\033[96m"
+MAGENTA = "\033[95m"
+BOLD = "\033[1m"
 RESET = "\033[0m"
+CLEAR_LINE = "\033[2K"
+CURSOR_UP = "\033[1A"
+
+_RICH_AVAILABLE = False
+try:
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.layout import Layout
+    from rich.console import Console
+    from rich import box
+    _RICH_AVAILABLE = True
+except ImportError:
+    pass
 
 TEMPLATE_NOVEL_JSON = """{
   "project": {
@@ -161,11 +179,180 @@ def _parse_outline(md_text: str) -> list[dict]:
     return chapters
 
 
-def _get_engine(db_path: str) -> NovelEngine:
+def _get_engine(db_path: str, callbacks=None) -> NovelEngine:
     db = Database(db_path)
     db.initialize()
     reg = SessionRuntimeStoreRegistry(db)
-    return NovelEngine(reg)
+    return NovelEngine(reg, callbacks=callbacks)
+
+
+def _create_stream_callbacks_rich(live_refresh=None):
+    console = Console()
+
+    phases_data: dict[str, dict] = {
+        "director": {"status": "○", "detail": "", "time": ""},
+        "writer": {"status": "○", "detail": "", "time": ""},
+        "quality": {"status": "○", "detail": "", "time": ""},
+        "continuity": {"status": "○", "detail": "", "time": ""},
+        "ledger": {"status": "○", "detail": "", "time": ""},
+    }
+    phase_order = ["director", "writer", "quality", "continuity", "ledger"]
+    writer_text_parts: list[str] = []
+    current_chapter = 0
+    project_title = ""
+
+    def _mk_layout() -> Layout:
+        phase_table = Table(box=box.SIMPLE, show_header=False, expand=True)
+        phase_table.add_column("status", width=1)
+        phase_table.add_column("phase", width=18)
+        phase_table.add_column("time", width=8)
+        phase_table.add_column("detail")
+
+        for p in phase_order:
+            ph = phases_data[p]
+            style = ""
+            if ph["status"] == "✓":
+                style = "green"
+            elif ph["status"] == "⟳":
+                style = "bold yellow"
+            elif ph["status"] == "✗":
+                style = "red"
+            phase_table.add_row(
+                f"[{style}]{ph['status']}[/{style}]" if style else ph["status"],
+                f"[{style}]{p}[/{style}]" if style else p,
+                ph["time"],
+                Text(ph["detail"][:60], style="dim"),
+            )
+
+        header = Panel(
+            f"[bold]Novel CLI[/bold] — {project_title} · Chapter {current_chapter}",
+            box=box.SIMPLE,
+        )
+        out_text = Text("".join(writer_text_parts[-2000:]) if writer_text_parts else "")
+        layout = Layout()
+        layout.split_column(
+            Layout(header, name="header", size=3),
+            Layout(Panel(phase_table, title="Pipeline", box=box.SIMPLE), name="phases", size=11),
+            Layout(Panel(out_text, title="Writer Output", box=box.SIMPLE), name="output"),
+        )
+        return layout
+
+    layout = _mk_layout()
+
+    def _refresh():
+        nonlocal layout
+        layout = _mk_layout()
+
+    def on_phase(event: str, name: str, payload: dict):
+        nonlocal current_chapter, project_title
+        if "ch" in payload:
+            current_chapter = payload["ch"]
+        if event == "start":
+            phases_data[name]["status"] = "⟳"
+            phases_data[name]["detail"] = ""
+            phases_data[name]["time"] = ""
+        elif event == "end":
+            phases_data[name]["status"] = "✓"
+            phases_data[name]["time"] = f"{payload.get('duration_ms', 0) / 1000:.1f}s"
+            if name == "director":
+                anchor = payload.get("character_anchor", "")
+                beats = payload.get("beat_details", [])
+                phases_data[name]["detail"] = f"角色锚: {anchor[:30]}" if anchor else f"Beats: {len(beats)}"
+            elif name == "writer":
+                phases_data[name]["detail"] = f"总计 {payload.get('total_chars', 0)}字"
+            elif name == "quality":
+                phases_data[name]["detail"] = f"判决: {payload.get('verdict', '?')}"
+            elif name == "continuity":
+                phases_data[name]["detail"] = f"问题: {payload.get('issue_count', 0)}"
+        elif event == "error":
+            phases_data[name]["status"] = "✗"
+            phases_data[name]["detail"] = payload.get("message", "")[:60]
+        _refresh()
+        if live_refresh:
+            live_refresh(layout)
+
+    def on_beat(event: str, beat_index: int, payload: dict):
+        phases_data["writer"]["status"] = "⟳"
+        if event == "start":
+            bc = payload.get("beat_count", "?")
+            phases_data["writer"]["detail"] = f"Beat {beat_index}/{bc} ..."
+        elif event == "end":
+            chars = payload.get("char_count", 0)
+            dur = payload.get("duration_ms", 0) / 1000
+            phases_data["writer"]["detail"] = f"Beat {beat_index} 完成 · {chars}字 · {dur:.1f}s"
+        _refresh()
+        if live_refresh:
+            live_refresh(layout)
+
+    def on_chunk(text: str):
+        writer_text_parts.append(text)
+        _refresh()
+        if live_refresh:
+            live_refresh(layout)
+
+    def on_error(phase: str, message: str):
+        phases_data[phase]["status"] = "✗"
+        phases_data[phase]["detail"] = message[:60]
+        _refresh()
+        if live_refresh:
+            live_refresh(layout)
+
+    return NovelStreamCallbacks(on_phase=on_phase, on_beat=on_beat,
+                                on_chunk=on_chunk, on_error=on_error), layout
+
+
+def _create_stream_callbacks_basic():
+    """Fallback when Rich is not installed — prints to stdout."""
+    chapter = 0
+
+    def on_phase(event: str, name: str, payload: dict):
+        nonlocal chapter
+        if "ch" in payload:
+            chapter = payload["ch"]
+        if event == "start":
+            thinking = payload.get("thinking", "")
+            t_tag = f" ({thinking})" if thinking else ""
+            print(f"{BOLD}[{name}]{RESET}{t_tag} {DIM}...{RESET}", flush=True)
+        elif event == "end":
+            ms = payload.get("duration_ms", 0)
+            dur = f"{ms / 1000:.1f}s"
+            print(f"{CLEAR_LINE}{GREEN}✓{RESET} {name}  {dur}")
+            if name == "director":
+                anchor = payload.get("character_anchor", "")
+                if anchor:
+                    print(f"  {DIM}角色锚: {anchor[:80]}{RESET}")
+                for b in payload.get("beat_details", []):
+                    print(f"  {DIM}├ Beat: {b.get('name', '?')}{RESET}")
+            elif name == "quality":
+                v = payload.get("verdict", "?")
+                c = GREEN if v == "accept" else RED
+                print(f"  {c}判决: {v}{RESET}")
+            elif name == "writer":
+                print(f"  {DIM}总字数: {payload.get('total_chars', 0)}{RESET}")
+
+    def on_beat(event: str, beat_index: int, payload: dict):
+        if event == "start":
+            bc = payload.get("beat_count", "?")
+            desc = payload.get("description", "")[:60]
+            print(f"\n{CYAN}▸ Beat {beat_index}/{bc}{RESET} {DIM}{desc}{RESET}", flush=True)
+        elif event == "end":
+            dur = payload.get("duration_ms", 0) / 1000
+            chars = payload.get("char_count", 0)
+            print(f"  {GREEN}✓{RESET} {chars}字 · {dur:.1f}s")
+
+    def on_chunk(text: str):
+        sys.stdout.write(text)
+        sys.stdout.flush()
+
+    def on_error(phase: str, message: str):
+        print(f"{RED}✗ {phase}: {message}{RESET}")
+
+    return NovelStreamCallbacks(
+        on_phase=on_phase,
+        on_beat=on_beat,
+        on_chunk=on_chunk,
+        on_error=on_error,
+    )
 
 
 # ============================================================
@@ -364,32 +551,47 @@ def cmd_plan(args: argparse.Namespace) -> None:
 def cmd_write(args: argparse.Namespace) -> None:
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
-    engine = _get_engine(state["db_path"])
     pid = state["project_id"]
     chapter = int(args.chapter)
+    use_stream = getattr(args, "stream", False)
 
-    print(f"{DIM}Director + Writer 生成第{chapter}章...{RESET}")
-    print(f"{DIM}  (thinking=HIGH + MEDIUM, 可能需要几分钟){RESET}")
+    if use_stream:
+        callbacks = _create_stream_callbacks_basic()
+        engine = _get_engine(state["db_path"], callbacks=callbacks)
 
-    draft = engine.write_chapter(project_id=pid, chapter_index=chapter)
+        draft = engine.write_chapter_stream(
+            project_id=pid, chapter_index=chapter,
+        )
 
-    print(f"\n{GREEN}=== 第{chapter}章: {draft.char_count}字 | {draft.status} ==={RESET}\n")
-    print(draft.text)
+        print(f"\n{GREEN}=== 第{chapter}章: {draft.char_count}字 | {draft.status} ==={RESET}")
+        output_dir = _ensure_dir(novel_dir / "output")
+        out_file = output_dir / f"chapter_{chapter:02d}.md"
+        out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
+        print(f"{DIM}已保存: {out_file}{RESET}")
+    else:
+        engine = _get_engine(state["db_path"])
 
-    # Save to output/
-    output_dir = _ensure_dir(novel_dir / "output")
-    out_file = output_dir / f"chapter_{chapter:02d}.md"
-    out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
-    print(f"\n{DIM}已保存: {out_file}{RESET}")
+        print(f"{DIM}Director + Writer 生成第{chapter}章...{RESET}")
+        print(f"{DIM}  (thinking=HIGH + MEDIUM, 可能需要几分钟){RESET}")
+
+        draft = engine.write_chapter(project_id=pid, chapter_index=chapter)
+
+        print(f"\n{GREEN}=== 第{chapter}章: {draft.char_count}字 | {draft.status} ==={RESET}\n")
+        print(draft.text)
+
+        output_dir = _ensure_dir(novel_dir / "output")
+        out_file = output_dir / f"chapter_{chapter:02d}.md"
+        out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
+        print(f"\n{DIM}已保存: {out_file}{RESET}")
 
 
 def cmd_batch(args: argparse.Namespace) -> None:
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
-    engine = _get_engine(state["db_path"])
     pid = state["project_id"]
     start = int(args.start)
     end = int(args.end)
+    use_stream = getattr(args, "stream", False)
 
     print(f"{CYAN}批量生成: 第{start}-{end}章 @ {pid}{RESET}")
     print(f"{DIM}每章间隔5秒用于限流...{RESET}\n")
@@ -397,24 +599,50 @@ def cmd_batch(args: argparse.Namespace) -> None:
     total_chars = 0
     output_dir = _ensure_dir(novel_dir / "output")
 
-    def _on_chapter(idx: int, draft) -> None:
-        nonlocal total_chars
-        total_chars += draft.char_count
+    if use_stream:
+        for ch_idx in range(start, end + 1):
+            if ch_idx > start:
+                time.sleep(5)
 
-        out_file = output_dir / f"chapter_{idx:02d}.md"
-        out_file.write_text(f"# 第{idx}章\n\n{draft.text}", encoding="utf-8")
+            callbacks = _create_stream_callbacks_basic()
+            engine = _get_engine(state["db_path"], callbacks=callbacks)
 
-        status_icon = "✓" if draft.status == "accepted" else "⚠"
-        print(f"  {YELLOW}[{status_icon}] 第{idx}章: {draft.char_count:5d}字 | {draft.status:8s} → {out_file.name}{RESET}")
+            print(f"\n{CYAN}═══ 第{ch_idx}章 ═══{RESET}")
 
-    drafts = engine.batch_write(
-        project_id=pid,
-        chapter_start=start,
-        chapter_end=end,
-        on_chapter_complete=_on_chapter,
-    )
+            try:
+                draft = engine.write_chapter_stream(
+                    project_id=pid, chapter_index=ch_idx,
+                )
+            except Exception as exc:
+                print(f"{RED}第{ch_idx}章失败: {exc}{RESET}")
+                continue
 
-    print(f"\n{GREEN}批量完成: {len(drafts)}章, 总计{total_chars}字{RESET}")
+            total_chars += draft.char_count
+            out_file = output_dir / f"chapter_{ch_idx:02d}.md"
+            out_file.write_text(f"# 第{ch_idx}章\n\n{draft.text}", encoding="utf-8")
+            status_icon = "✓" if draft.status == "accepted" else "⚠"
+            print(f"  {YELLOW}[{status_icon}] 第{ch_idx}章: {draft.char_count:5d}字 | {draft.status:8s} → {out_file.name}{RESET}")
+    else:
+        engine = _get_engine(state["db_path"])
+
+        def _on_chapter(idx: int, draft) -> None:
+            nonlocal total_chars
+            total_chars += draft.char_count
+
+            out_file = output_dir / f"chapter_{idx:02d}.md"
+            out_file.write_text(f"# 第{idx}章\n\n{draft.text}", encoding="utf-8")
+
+            status_icon = "✓" if draft.status == "accepted" else "⚠"
+            print(f"  {YELLOW}[{status_icon}] 第{idx}章: {draft.char_count:5d}字 | {draft.status:8s} → {out_file.name}{RESET}")
+
+        drafts = engine.batch_write(
+            project_id=pid,
+            chapter_start=start,
+            chapter_end=end,
+            on_chapter_complete=_on_chapter,
+        )
+
+    print(f"\n{GREEN}批量完成: {end - start + 1}章, 总计{total_chars}字{RESET}")
     print(f"{DIM}输出目录: {output_dir}{RESET}")
 
 
@@ -581,12 +809,14 @@ p_plan.add_argument("--task", default="", help="本章任务描述（可选，�
 p_write = sub.add_parser("write", help="生成章节 (Director + Writer + Quality)")
 p_write.add_argument("dir")
 p_write.add_argument("chapter", type=int)
+p_write.add_argument("--stream", action="store_true", help="流式输出，实时展示 Agent 执行过程")
 
 # batch
 p_batch = sub.add_parser("batch", help="批量生成章节")
 p_batch.add_argument("dir")
 p_batch.add_argument("start", type=int)
 p_batch.add_argument("end", type=int)
+p_batch.add_argument("--stream", action="store_true", help="流式输出，实时展示 Agent 执行过程")
 
 # export
 p_export = sub.add_parser("export", help="导出全部数据（章节/账本/角色状态）")

@@ -16,8 +16,8 @@ _THINKING_MEDIUM = {"thinking": {"type": "enabled", "reasoning_effort": "medium"
 # Writer system prompt — loaded from prompts/writer.md
 from .prompt_loader import load_prompt
 
-def _get_writer_prompt() -> str:
-    return load_prompt("writer")
+def _get_writer_prompt(name: str = "writer") -> str:
+    return load_prompt(name)
 
 WRITER_SYSTEM_PROMPT = ""  # replaced at call time by _get_writer_prompt()
 
@@ -50,9 +50,10 @@ def _get_style_benchmark(project_root: str = "") -> str:
 class NovelWriterAdapter:
     """Chapter Writer LLM adapter for novel mode."""
 
-    def __init__(self, registry, model: str = "deepseek-v4-pro"):
+    def __init__(self, registry, model: str = "deepseek-v4-pro", writer_prompt_name: str = "writer"):
         self._registry = registry
         self._model = model
+        self._writer_prompt_name = writer_prompt_name
 
     def generate_chapter(self, packet: NovelWritePacket) -> str:
         """Generate full chapter text from a write packet."""
@@ -63,6 +64,11 @@ class NovelWriterAdapter:
         """Generate a single beat's text."""
         system_prompt, user_prompt = self._build_beat_prompt(packet)
         return self._call_llm(user_prompt, system_prompt)
+
+    def generate_beat_stream(self, packet: NovelWritePacket, on_chunk) -> str:
+        """Generate a single beat's text with streaming callback."""
+        system_prompt, user_prompt = self._build_beat_prompt(packet)
+        return self._call_llm_stream(user_prompt, system_prompt, on_chunk)
 
     def _build_prompt(self, packet: NovelWritePacket) -> tuple[str, str]:
         """Build the full chapter generation prompt. Returns (system_prompt, user_prompt).
@@ -151,7 +157,7 @@ class NovelWriterAdapter:
         if packet.writing_intent:
             parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
 
-        return _get_writer_prompt(), "\n".join(parts)
+        return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
 
     def _build_beat_prompt(self, packet: NovelWritePacket) -> tuple[str, str]:
         """Build prompt for a single beat. Returns (system_prompt, user_prompt).
@@ -218,7 +224,7 @@ class NovelWriterAdapter:
             )
             parts.append(f"\n=== CONTINUITY ===\n{items_text}")
 
-        return _get_writer_prompt(), "\n".join(parts)
+        return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
 
     def _format_memory_items(self, items: list[dict[str, Any]]) -> str:
         lines = []
@@ -259,3 +265,25 @@ class NovelWriterAdapter:
         # chapter text and silently counted as a "completed" chapter. Now raise
         # so the caller (NovelEngine retry loop / batch_write except) can handle it.
         raise RuntimeError("Novel writer LLM returned empty output")
+
+    def _call_llm_stream(self, prompt: str, system_prompt: str,
+                         on_chunk) -> str:
+        """Call LLM with streaming. Raises on failure."""
+        from .novel_llm_factory import NovelLLMFactory
+        factory = NovelLLMFactory.get_instance()
+        adapter = factory.get_adapter("writer")
+        thinking = factory.get_thinking_config("writer")
+        model = factory.get_model("writer")
+        max_tokens = factory.get_max_tokens("writer")
+
+        text = adapter.generate_text_stream(
+            prompt,
+            on_chunk=on_chunk,
+            max_tokens=max_tokens,
+            model=model,
+            extra_body=thinking,
+            system_prompt=system_prompt or None,
+        )
+        if text and text.strip():
+            return text
+        raise RuntimeError("Novel writer LLM streaming returned empty output")

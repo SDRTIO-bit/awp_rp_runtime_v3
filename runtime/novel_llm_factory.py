@@ -27,6 +27,7 @@ ROLE_CONFIGS = {
     "architect":         {"model": "deepseek-v4-flash",  "max_tokens": 20000, "thinking": THINKING_DISABLED},
     "writer":            {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_MEDIUM},
     "continuity_checker": {"model": "deepseek-v4-flash", "max_tokens": 4000, "thinking": THINKING_DISABLED},
+    "brain":              {"model": "deepseek-v4-pro",   "max_tokens": 2000, "thinking": THINKING_LOW},
     "style_cleaner":     {"model": "deepseek-v4-flash", "max_tokens": 2000, "thinking": THINKING_DISABLED},
     "ledger_curator":    {"model": "deepseek-v4-flash", "max_tokens": 4000, "thinking": THINKING_DISABLED},
 }

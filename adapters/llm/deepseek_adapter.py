@@ -355,6 +355,46 @@ class DeepSeekAdapter(BaseLlmAdapter):
                                        workflow_run_id, trace_id, turn_id, attempt_id,
                                        started_at, start_time)
 
+    def generate_text_stream(
+        self,
+        prompt: str,
+        on_chunk,
+        max_tokens: int = 0,
+        provider_role: str = "writer",
+        model: str = "",
+        extra_body: dict | None = None,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Streaming variant of generate_text. Calls on_chunk(text_delta) per token.
+        Returns the complete accumulated text. Raises on failure."""
+        if not max_tokens:
+            max_tokens = self._default_max_tokens
+        use_model = model or self._model
+
+        try:
+            self._init_client()
+
+            if self._use_anthropic:
+                stream_kwargs: dict = dict(
+                    model=use_model,
+                    max_tokens=max_tokens,
+                    temperature=0.8,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                accumulated = ""
+                with self._client.messages.stream(**stream_kwargs) as stream:
+                    for text in stream.text_stream:
+                        accumulated += text
+                        on_chunk(text)
+                return accumulated
+            else:
+                return self._call_openai_text_stream(
+                    prompt, max_tokens, use_model,
+                    extra_body, system_prompt, on_chunk,
+                )
+        except Exception:
+            raise RuntimeError("Novel writer LLM streaming failed")
+
     def generate_structured(
         self,
         prompt: str,
@@ -482,6 +522,30 @@ class DeepSeekAdapter(BaseLlmAdapter):
         return parsed, usage
 
     # ── OpenAI SDK calls ─────────────────────────────────────────────────
+
+    def _call_openai_text_stream(self, prompt: str, max_tokens: int, model: str,
+                                  extra_body: dict | None, system_prompt: str | None,
+                                  on_chunk) -> str:
+        """Streaming variant: calls on_chunk(text_delta) as tokens arrive."""
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        kwargs = dict(model=model, messages=messages, temperature=0.8, stream=True)
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+
+        stream = self._client.chat.completions.create(**kwargs)
+        accumulated = ""
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                accumulated += delta.content
+                on_chunk(delta.content)
+        return accumulated
 
     def _call_openai_text(self, prompt: str, max_tokens: int, model: str,
                           extra_body: dict | None = None,

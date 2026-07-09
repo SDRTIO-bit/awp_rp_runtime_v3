@@ -16,10 +16,16 @@ dependencies = [
     "certifi>=2023.0.0",
 ]
 
+[project.scripts]
+awp-tui = "awp_rp_runtime_v3.scripts.awp_tui:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+]
+tui = [
+    "textual>=1.0.0",
 ]
 
 [tool.pytest.ini_options]

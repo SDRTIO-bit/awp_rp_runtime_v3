@@ -36,6 +36,8 @@ class NovelQualityPipeline:
         self,
         text: str,
         chapter_plan: ChapterPlan,
+        *,
+        skip_drumbeat_check: bool = False,
     ) -> tuple[QualityDecision, str]:
         """检测 → (必要时)定向改写 → 复检。返回 (decision, 最终文本)。
 
@@ -45,7 +47,7 @@ class NovelQualityPipeline:
         """
         current = text
         for round_idx in range(MAX_REWRITE_ROUNDS + 1):
-            decision = self.check_chapter(current, chapter_plan)
+            decision = self.check_chapter(current, chapter_plan, skip_drumbeat_check=skip_drumbeat_check)
             # 无 blocking 视为通过
             if not decision.blocking_reasons:
                 return decision, current
@@ -84,6 +86,8 @@ class NovelQualityPipeline:
         self,
         text: str,
         chapter_plan: ChapterPlan,
+        *,
+        skip_drumbeat_check: bool = False,
     ) -> QualityDecision:
         """Run all deterministic quality checks on a chapter draft."""
         issues: list[QualityIssue] = []
@@ -136,10 +140,11 @@ class NovelQualityPipeline:
                 fixable=True,
             ))
 
-        # 4.5 Drumbeat density — 短句密度超标时硬错误，触发改写
-        drumbeat_issues = self._style_cleaner.check_drumbeat_density(text)
-        for di in drumbeat_issues:
-            issues.append(QualityIssue(
+        # 4.5 Drumbeat density — 短句密度超标时硬错误，触发改写（NSFW项目跳过）
+        if not skip_drumbeat_check:
+            drumbeat_issues = self._style_cleaner.check_drumbeat_density(text)
+            for di in drumbeat_issues:
+                issues.append(QualityIssue(
                 gate_name="drumbeat",
                 category="style",
                 severity=IssueSeverity.ERROR if di["severity"] == "blocking" else IssueSeverity.WARNING,
