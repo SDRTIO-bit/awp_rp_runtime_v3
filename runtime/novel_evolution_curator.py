@@ -144,12 +144,32 @@ class NovelEvolutionCurator:
         if not self._use_ledger_llm:
             print(f"[LedgerCurator] SKIPPED (use_ledger_llm=False)", flush=True)
             return {}
+
+        previous_chapter_summaries = [
+            i.content for i in current_ledger_items
+            if i.section == "chapter_summary" and i.content
+        ]
+
         try:
-            print(f"[LedgerCurator] Calling curator.curate() for ch{ch_idx}...", flush=True)
+            print(f"[LedgerCurator] Calling curator.curate() for ch{ch_idx} (prev_summaries={len(previous_chapter_summaries)})...", flush=True)
             result = self._ledger_curator.curate(
-                chapter_text, chapter_plan, current_ledger_items
+                chapter_text, chapter_plan, current_ledger_items,
+                previous_chapter_summaries=previous_chapter_summaries,
             )
             print(f"[LedgerCurator] curator.curate() returned OK, type={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}", flush=True)
+
+            if result and isinstance(result, dict):
+                ch_summary = (result.get("chapter_summary") or "").strip()
+                project_id = getattr(chapter_plan, "project_id", "")
+                if ch_summary:
+                    result.setdefault("ledger_updates", [])
+                    result["ledger_updates"].insert(0, {
+                        "section": "chapter_summary",
+                        "entity": f"ch{ch_idx}",
+                        "content": ch_summary,
+                        "status": "active",
+                    })
+
             return result if isinstance(result, dict) else {}
         except Exception as e:
             import traceback
@@ -194,7 +214,7 @@ class NovelEvolutionCurator:
                 section = v.strip()
                 break
         known_sections = {
-            "character_state", "relationship", "timeline",
+            "chapter_summary", "character_state", "relationship", "timeline",
             "foreshadowing", "world_rules", "open_threads",
             "character", "state", "char",
         }

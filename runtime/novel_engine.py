@@ -104,7 +104,7 @@ class NovelEngine:
 
         # Load character states
         characters = self._registry.novel_character_store.list_by_project(project_id)
-        character_states = {c.name: c.current_state for c in characters}
+        character_states = self._build_character_context(characters)
 
         # Call Architect (placeholder - would use LLM adapter)
         plan = self._call_architect(
@@ -157,7 +157,7 @@ class NovelEngine:
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
         characters = [c for c in all_characters if c.first_appearance <= chapter_index]
-        character_states = {c.name: c.current_state for c in characters}
+        character_states = self._build_character_context(characters)
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id,
             plan=plan,
@@ -375,10 +375,56 @@ class NovelEngine:
         except Exception:
             return []
 
+    def _build_character_context(self, characters: list) -> dict:
+        """Build rich character context for Writer/Architect/Director.
+
+        Includes personality, voice, relationships, motivations —
+        everything needed to write accurate character interactions.
+        Not just the thin 'location + emotion' from current_state.
+        """
+        context = {}
+        for c in characters:
+            info = {}
+            info["role"] = c.role or ""
+            info["personality"] = c.personality or ""
+            info["voice_style"] = c.voice_style or ""
+            info["core_motivation"] = c.core_motivation or ""
+            info["weakness"] = c.weakness or ""
+            info["arc_phase"] = c.arc_phase or ""
+            info["first_appearance"] = c.first_appearance
+
+            state = getattr(c, "current_state", {}) or {}
+            info["location"] = state.get("location", "")
+            info["emotion"] = state.get("emotion", "")
+
+            relationships = getattr(c, "relationships", None) or []
+            rels = []
+            for r in relationships:
+                rels.append(f"{r.target_name}({r.relation_type}, tension={r.tension})")
+            info["relationships"] = ", ".join(rels) if rels else ""
+
+            context[c.name] = info
+        return context
+
     def _build_completed_chapters_summary(
         self, project_id: str, chapter_index: int
     ) -> str:
-        """Build a concise summary of chapters before chapter_index for Director."""
+        """Build a concise summary of chapters before chapter_index for Director.
+
+        Uses chapter_summary ledger items (narrative summaries written by the
+        LedgerCurator after each chapter completes). Falls back to plan data
+        if no summaries exist yet.
+        """
+        ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
+        summaries: dict[int, str] = {}
+        for item in ledger_items:
+            if item.section == "chapter_summary" and item.entity and item.content:
+                try:
+                    ch = int(item.entity.replace("ch", ""))
+                    summaries[ch] = item.content
+                except ValueError:
+                    pass
+
         plans = self._registry.novel_chapter_plan_store.list_by_project(project_id)
         prior = [p for p in plans if p.chapter_index < chapter_index]
         if not prior:
@@ -386,20 +432,33 @@ class NovelEngine:
         prior.sort(key=lambda p: p.chapter_index)
         lines = []
         for p in prior[-5:]:
-            draft = self._registry.novel_chapter_draft_store.load_latest(p.chapter_id)
-            tail = (draft.text[:200] + "...") if draft and draft.text else ""
-            lines.append(
-                f"第{p.chapter_index}章《{p.title}》[{p.chapter_position}/{p.target_emotion}]"
-                f"主线:{p.plot_arrangement.main_line or '未记'}"
-                + (f" 摘要:{tail}" if tail else "")
-            )
+            ch = p.chapter_index
+            summary = summaries.get(ch)
+            if summary:
+                lines.append(f"第{ch}章: {summary}")
+            else:
+                tail = f"标题:{p.title} 情绪:{p.target_emotion}"
+                lines.append(f"第{ch}章（无总结）: {tail}")
         return "\n".join(lines)
 
     def _build_global_summaries(
         self, project_id: str, chapter_index: int
     ) -> str:
-        """Build all-chapter summaries for Writer context. Lightweight:
-        only title + emotion + ending_snippet per chapter."""
+        """Build all-chapter summaries for Writer context.
+
+        Reads chapter_summary ledger items (narrative summaries produced
+        by LedgerCurator after each chapter). Falls back to plan data.
+        """
+        ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
+        summaries: dict[int, str] = {}
+        for item in ledger_items:
+            if item.section == "chapter_summary" and item.entity and item.content:
+                try:
+                    ch = int(item.entity.replace("ch", ""))
+                    summaries[ch] = item.content
+                except ValueError:
+                    pass
+
         plans = self._registry.novel_chapter_plan_store.list_by_project(project_id)
         prior = [p for p in plans if p.chapter_index < chapter_index]
         if not prior:
@@ -407,12 +466,14 @@ class NovelEngine:
         prior.sort(key=lambda p: p.chapter_index)
         lines = []
         for p in prior:
-            cs = p.content_summary
-            # Use ending for setting/vehicle continuity
-            end_snip = cs.ending[:150].rstrip("。！？，") + "。"
-            lines.append(
-                f"- ch{p.chapter_index}《{p.title}》({p.target_emotion}) 结尾: {end_snip}"
-            )
+            ch = p.chapter_index
+            summary = summaries.get(ch)
+            if summary:
+                lines.append(f"- 第{ch}章《{p.title}》: {summary}")
+            else:
+                cs = p.content_summary
+                end_snip = cs.ending[:150].rstrip("。！？，") + "。"
+                lines.append(f"- 第{ch}章《{p.title}》({p.target_emotion}) [plan]: {end_snip}")
         return "\n".join(lines)
 
     def _call_writer(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer") -> str:
@@ -526,7 +587,7 @@ class NovelEngine:
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
         characters = [c for c in all_characters if c.first_appearance <= chapter_index]
-        character_states = {c.name: c.current_state for c in characters}
+        character_states = self._build_character_context(characters)
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id, plan=plan, characters=characters,
         )
@@ -778,7 +839,7 @@ class NovelEngine:
         # Load context and regenerate
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         characters = self._registry.novel_character_store.list_by_project(project_id)
-        character_states = {c.name: c.current_state for c in characters}
+        character_states = self._build_character_context(characters)
 
         director_guidance = DirectorGuidance(
             guidance_id=f"guid-revise-{plan.chapter_id}",

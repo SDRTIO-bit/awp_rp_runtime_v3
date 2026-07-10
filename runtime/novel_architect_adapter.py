@@ -226,12 +226,19 @@ class NovelArchitectAdapter:
             parts.append(f"\n任务描述: {task_description}")
 
         if character_states:
-            parts.append(f"\n角色状态:\n{character_states}")
+            parts.append(f"\n=== CHARACTERS ===\n{character_states}")
 
         if volume_plan:
             parts.append(f"\n卷计划:\n{volume_plan.to_dict() if hasattr(volume_plan, 'to_dict') else volume_plan}")
 
-        if completed_chapters:
+        chapter_summaries = []
+        if ledger_items:
+            for item in ledger_items:
+                if item.section == "chapter_summary" and item.content:
+                    chapter_summaries.append(f"- {item.entity}: {item.content}")
+        if chapter_summaries:
+            parts.append(f"\n=== PREVIOUS CHAPTERS (narrative summaries) ===\n" + "\n".join(chapter_summaries))
+        elif completed_chapters:
             summary = []
             for p in completed_chapters[-2:]:
                 d = p if isinstance(p, dict) else p.to_dict()
@@ -239,8 +246,12 @@ class NovelArchitectAdapter:
             parts.append(f"\n已完成章节:\n" + "\n".join(summary))
 
         if ledger_items:
-            recent = sorted(ledger_items, key=lambda i: i.updated_at or "", reverse=True)[:8]
-            items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content[:150]}" for i in recent)
-            parts.append(f"\n连续性账本(最近):\n{items_text}")
+            recent = sorted(
+                [i for i in ledger_items if i.section != "chapter_summary"],
+                key=lambda i: i.updated_at or "", reverse=True
+            )[:10]
+            if recent:
+                items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content[:150]}" for i in recent)
+                parts.append(f"\n=== CONTINUITY FACTS ===\n{items_text}")
 
         return _get_architect_prompt(), "\n".join(parts)

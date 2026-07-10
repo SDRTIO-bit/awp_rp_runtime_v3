@@ -1,40 +1,47 @@
 """NovelLedgerCurator — Ledger Curator for novel mode.
 
-Uses DeepSeekAdapter with thinking=medium for extracting continuity information.
+Uses DeepSeekAdapter with thinking=medium for extracting continuity information
+and producing narrative chapter summaries.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-# Thinking configuration for extraction
-_THINKING_MEDIUM = {"thinking": {"type": "enabled", "reasoning_effort": "medium"}}
 
-# Ledger curator system prompt
 LEDGER_CURATOR_PROMPT = """=== STABLE LEDGER CURATOR CONTRACT ===
-你负责维护长篇小说的连续性账本。分析已接受的章节正文，更新追踪信息。
+你负责维护长篇小说的连续性账本。分析已接受的章节正文，产出叙事级章节总结 + 结构化事实更新。
 
-=== 分析维度 ===
-1. 角色状态变化：身份、能力、位置、情绪、关系
-2. 伏笔推进：新埋设、推进、回收、矛盾
-3. 时间线更新：时间流逝、事件顺序
-4. 世界规则：新设定、规则变化
-5. 开放线索：新出现的未解决问题
+=== 你的两项产出 ===
+A. 【章节总结】(chapter_summary): 叙事级的本章摘要，3-5句，供后续章节的 Architect/Director/Writer 直接阅读。
+   必须包含: 本章发生了什么事 / 谁出场做了什么 / 关键互动 / 新揭示的信息 / 结尾悬念。
+   示例: "陈默在苏念的催促下起床上学，在教室因迟到被班主任李建国批评。课间陈默在旧图书馆四楼发现一本1998年的旧日记，里面提到一个姓陈的男孩。沈溪来收作业时不小心暴露了她在看言情小说，被王磊起哄，课后走廊警告陈默不许说出去。放学时陈默从日记中掉落一张马尾少女的旧照片，苏念追问照片是谁。"
+B. 【事实更新】(ledger_updates): 结构化条目，用于角色状态追踪、伏笔管理、时间线。
 
-=== 伏笔状态机 ===
-- planted → active（已埋设）
-- advanced → active（已推进）
-- paid_off → resolved（已回收）
-- stale → stale（过期未回收）
-- contradicted → contradicted（被矛盾）
+=== ledger_updates 每个条目的精确 JSON Schema ===
+每个条目必须包含以下固定字段:
+{
+  "section": "character_state | timeline | foreshadowing | relationship | world_rules | open_threads",
+  "entity": "关联角色名或实体名",
+  "content": "具体事实描述，一句话",
+  "status": "active | resolved | stale",
+  "field": "可选，如果是角色状态变化，填写变化的字段名(location/emotion/identity/ability/relationship/public_image等)"
+}
 
-=== 角色状态快照格式 ===
-## {name}
-- 身份: {identity}
-- 能力: {ability}
-- 关系: {relationships}
-- 公众形象: {public_image}
-- 最近变化: {recent_changes}
+section 说明:
+- character_state: 角色位置/情绪/身份等变化
+- relationship: 角色间关系变化（亲近/疏远/对立/新建立）
+- timeline: 时间线事件
+- foreshadowing: 新埋设的伏笔
+- world_rules: 新设定的规则/背景信息
+- open_threads: 新出现的未解决线索/疑问
+
+伏笔状态: planted(新埋) | advanced(推进) | paid_off(回收) | stale(过期)
+
+=== 严禁 ===
+- 虚构原文没有的事实
+- 把计划当成实际发生
+- 使用模糊词（"似乎""可能""大概"）
 """
 
 
@@ -50,17 +57,19 @@ class NovelLedgerCurator:
         chapter_text: str,
         chapter_plan: Any,
         current_ledger_items: list,
+        previous_chapter_summaries: list[str] | None = None,
     ) -> dict:
-        """Analyze accepted chapter and propose ledger updates.
+        """Analyze accepted chapter and produce summary + ledger updates.
 
         Returns dict with:
-        - ledger_updates: list of new/modified ledger items
+        - chapter_summary: 3-5 sentence narrative summary
+        - ledger_updates: list of new/modified ledger items (dicts with section/entity/content/status)
         - ledger_resolves: list of item_ids to mark as resolved
-        - chapter_summary: one-line summary for next chapter
         - foreshadowing_changes: list of foreshadowing status changes
         """
-        system_prompt, user_prompt = self._build_prompt(chapter_text, chapter_plan, current_ledger_items)
-        # Call LLM and parse JSON response
+        system_prompt, user_prompt = self._build_prompt(
+            chapter_text, chapter_plan, current_ledger_items, previous_chapter_summaries
+        )
         from .novel_llm_factory import NovelLLMFactory
         import json
         factory = NovelLLMFactory.get_instance()
@@ -81,44 +90,58 @@ class NovelLedgerCurator:
         except Exception:
             text = ""
 
-        # Parse JSON response
         try:
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("```")[1]
                 if text.startswith("json"):
                     text = text[4:]
-            return json.loads(text)
-        except (json.JSONDecodeError, IndexError):
+            result = json.loads(text)
+            return result
+        except (json.JSONDecodeError, IndexError, KeyError):
             return {
+                "chapter_summary": text[:200] if text else "",
                 "ledger_updates": [],
                 "ledger_resolves": [],
-                "chapter_summary": text[:100] if text else "",
                 "foreshadowing_changes": [],
             }
 
-    def _build_prompt(self, chapter_text, chapter_plan, current_ledger_items) -> tuple[str, str]:
-        """Returns (system_prompt, user_prompt)."""
+    def _build_prompt(
+        self, chapter_text, chapter_plan, current_ledger_items,
+        previous_chapter_summaries: list[str] | None = None
+    ) -> tuple[str, str]:
         parts = []
 
-        if chapter_plan:
-            parts.append(f"\n=== CHAPTER PLAN ===\n{chapter_plan.to_dict() if hasattr(chapter_plan, 'to_dict') else chapter_plan}")
+        if previous_chapter_summaries:
+            parts.append("=== PREVIOUS CHAPTER SUMMARIES ===\n")
+            for s in previous_chapter_summaries:
+                parts.append(f"- {s}")
+            parts.append("")
 
-        parts.append(f"\n=== ACCEPTED CHAPTER TEXT ===\n{chapter_text[:3000]}")
+        if chapter_plan:
+            parts.append(f"=== CHAPTER PLAN ===\n{chapter_plan.to_dict() if hasattr(chapter_plan, 'to_dict') else chapter_plan}")
+
+        parts.append(f"\n=== CHAPTER TEXT ===\n{chapter_text[:6000]}")
 
         if current_ledger_items:
             items_text = "\n".join(
                 f"- [{i.status}] [{i.section}] {i.entity}: {i.content}"
-                for i in current_ledger_items[:20]
+                for i in current_ledger_items[:30]
             )
-            parts.append(f"\n=== CURRENT LEDGER ===\n{items_text}")
+            parts.append(f"\n=== CURRENT LEDGER (existing facts) ===\n{items_text}")
 
-        parts.append("\n=== OUTPUT FORMAT ===\n"
-                    "JSON: {\n"
-                    "  \"ledger_updates\": [...],\n"
-                    "  \"ledger_resolves\": [...],\n"
-                    "  \"chapter_summary\": \"...\",\n"
-                    "  \"foreshadowing_changes\": [...]\n"
-                    "}")
+        parts.append("\n=== OUTPUT (strict JSON, no markdown wrapping) ===\n"
+                     '{\n'
+                     '  "chapter_summary": "3-5句叙事级中文总结，见 contract",\n'
+                     '  "ledger_updates": [\n'
+                     '    {"section": "character_state", "entity": "角色名", "content": "具体事实", "status": "active", "field": "变化的字段"},\n'
+                     '    {"section": "relationship", "entity": "角色名A", "content": "与B的关系变化", "status": "active", "field": "relationship"},\n'
+                     '    {"section": "foreshadowing", "entity": "伏笔名称", "content": "描述", "status": "planted"},\n'
+                     '    {"section": "timeline", "entity": "事件名", "content": "时间线描述", "status": "active"},\n'
+                     '    {"section": "open_threads", "entity": "线索名", "content": "未解决的线索", "status": "active"}\n'
+                     '  ],\n'
+                     '  "ledger_resolves": ["item_id_1", "item_id_2"],\n'
+                     '  "foreshadowing_changes": [{"id": "item_id", "new_status": "advanced"}]\n'
+                     '}')
 
         return LEDGER_CURATOR_PROMPT, "\n".join(parts)
