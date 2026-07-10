@@ -558,7 +558,7 @@ class NovelEngine:
             "duration_ms": int((time.time() - t) * 1000),
             "character_anchor": director_guidance.character_anchor[:200] if director_guidance.character_anchor else "",
             "timeline_anchor": director_guidance.timeline_anchor[:200] if director_guidance.timeline_anchor else "",
-            "beat_details": [{"name": b.name, "goal": b.narrative_strategy[:80]} for b in (director_guidance.beat_details or [])],
+            "beat_details": [{"id": b.beat_id, "goal": b.narrative_strategy[:80] if hasattr(b, 'narrative_strategy') else b.content_outline[:80]} for b in (director_guidance.beat_details or [])],
         })
 
         packet = self._packet_builder.build(
