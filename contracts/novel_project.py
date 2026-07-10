@@ -5,7 +5,7 @@ schemaId: awp.novel.project.v1
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 SCHEMA_ID = "awp.novel.project.v1"
@@ -26,6 +26,7 @@ class NovelProject:
     core_emotion: str = ""       # 全书核心情绪
     one_sentence_pitch: str = ""
     status: str = "planning"     # planning / writing / paused / completed
+    config: dict[str, Any] = field(default_factory=dict)  # runtime config (e.g. writer_prompt)
     created_at: str = ""
     updated_at: str = ""
 
@@ -41,6 +42,7 @@ class NovelProject:
             "core_emotion": self.core_emotion,
             "one_sentence_pitch": self.one_sentence_pitch,
             "status": self.status,
+            "config": self.config,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -58,6 +60,7 @@ class NovelProject:
             core_emotion=data.get("core_emotion", ""),
             one_sentence_pitch=data.get("one_sentence_pitch", ""),
             status=data.get("status", "planning"),
+            config=data.get("config", {}),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
         )

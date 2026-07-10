@@ -404,6 +404,7 @@ def cmd_seed(args: argparse.Namespace) -> None:
         one_sentence_pitch=project.get("one_sentence_pitch", ""),
         target_reader=project.get("target_reader", ""),
         target_platform=project.get("target_platform", ""),
+        config=project.get("config", {}),
         status="writing",
     ))
     print(f"{GREEN}项目: {project['title']} ({pid}){RESET}")

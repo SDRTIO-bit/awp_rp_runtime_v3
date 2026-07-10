@@ -6,7 +6,10 @@
     "core_emotion": "轻松搞笑→温暖羁绊→好奇探究→感动释然",
     "one_sentence_pitch": "嘴碎逗比的高二男生陈默，原本只想嘻嘻哈哈混完高中，却在日常中先后与七个性格身份各异的女生交汇——青梅竹马的温柔、班长的严苛、体委的热血、转学生的冰冷、街头歌手的叛逆、外校会长的完美、学姐的沉静，每一段相遇都让他的日常变得更加离谱。",
     "target_reader": "16-25岁校园恋爱喜剧爱好者",
-    "target_platform": "番茄长篇"
+    "target_platform": "番茄长篇",
+    "config": {
+      "writer_prompt": "writer_campus"
+    }
   },
   "volume": {
     "index": 1,
