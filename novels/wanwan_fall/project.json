@@ -1,0 +1,140 @@
+{
+  "project": {
+    "id": "wanwan-fall",
+    "title": "晚晚的堕落",
+    "genre": "都市NTR·强制·心理操控",
+    "core_emotion": "甜→不安→恐惧→绝望→麻木",
+    "one_sentence_pitch": "心动APP有两份——一份在男友手里，一份在恶魔手里。而白晚晚的好感度，正在被强制归零。",
+    "target_reader": "18+ NTR/强制/催眠题材读者",
+    "target_platform": "私密存档",
+    "config": {
+      "writer_prompt": "writer_nsfw_backup"
+    }
+  },
+  "volume": {
+    "index": 1,
+    "title": "第一卷：催眠深渊",
+    "chapter_start": 1,
+    "chapter_end": 10,
+    "objective": "白晚晚从林舟的青梅甜恋中一步步被王浩的催眠APP强制沦陷，读者感受从甜蜜→不安→愤怒→绝望的情绪弧线",
+    "key_results": [
+      "建立林舟×白晚晚的纯爱基线",
+      "王浩催眠逐步升级：试探→轻度操控→初步侵犯→完全支配",
+      "白晚晚的APP状态从99+好感下降到0，状态栏从'喜欢你'变为'被控制中'",
+      "林舟从毫无察觉→隐约不安→发现真相→无力阻止"
+    ],
+    "core_conflict": "王浩用升级版催眠APP强制操控白晚晚的身体与精神，与林舟手中的初级APP形成不对等对抗",
+    "emotional_arc": "甜蜜（Ch1基线）→轻微异常（Ch2-3王浩初步接触）→恐惧蔓延（Ch4-6白晚晚被逐步侵犯）→林舟察觉（Ch7-8）→绝望对抗（Ch9-10）",
+    "major_payoffs": [
+      "白晚晚第一次在催眠下说出'王浩'而非'林舟'",
+      "林舟APP上白晚晚的好感度跌破50",
+      "林舟亲眼目睹白晚晚被王浩侵犯的场面",
+      "白晚晚在催眠解除的短暂清醒中求林舟'别看我'"
+    ]
+  },
+  "characters": [
+    {
+      "character_id": "linzhou",
+      "name": "林舟",
+      "aliases": ["舟舟", "林舟同学"],
+      "role": "protagonist",
+      "personality": "表面吊儿郎当吐槽役，实际心地柔软细腻。贫穷（生活费1500，谈恋爱5000），体质虚弱（跑步吐血），但对在意的人极其认真。从小有四个青梅，但对白晚晚有特殊感情——只是自己还没完全意识到。",
+      "voice_style": "内心吐槽多，对晚晚说话会放轻音调。'晚晚'二字咬得比别的名字软。",
+      "pov_eligible": true,
+      "core_motivation": "保护身边的青梅们，弄清楚APP的真相",
+      "weakness": "体质虚弱，过于相信自己的感知（不相信晚晚会出事直到太晚），经济窘迫限制行动能力",
+      "current_state": {"location": "家门口，准备与白晚晚约会", "emotion": "期待"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_id": "baiwanwan", "target_name": "白晚晚", "type": "青梅竹马+暗生情愫", "tension": "低"}
+      ]
+    },
+    {
+      "character_id": "baiwanwan",
+      "name": "白晚晚",
+      "aliases": ["晚晚"],
+      "role": "female_lead",
+      "personality": "外表清冷无表情，实则内心情感极度丰富但不擅长表达。白皙到病态，精致如洋娃娃。对他人的好感不会通过表情流露，但会通过细微行动——摆碗筷、绕发梢、默默等待——传达。对林舟的好感高达99+，从幼儿园就喜欢他，却被他的迟钝和多年的疏远压制在心。",
+      "voice_style": "话语极短（'嗯''讨厌''晚安'），但每句话都经过深思。林舟叫她'晚晚'时耳朵会红。",
+      "pov_eligible": true,
+      "core_motivation": "想靠近林舟但又害怕被推开，维持着清冷外壳下的炽热暗恋",
+      "weakness": "不擅长拒绝，不擅长表达反对。在被催眠操控时，身体会服从但意识会微弱地抵抗（APP状态栏会闪烁'喜欢林舟'的残留信号）。不擅长向他人求助。",
+      "current_state": {"location": "家门口，准备与林舟约会", "emotion": "开心（但表情看不出）"},
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {"target_id": "linzhou", "target_name": "林舟", "type": "青梅竹马+暗恋", "tension": "低"}
+      ]
+    },
+    {
+      "character_id": "wanghao",
+      "name": "王浩",
+      "aliases": ["王学长", "浩哥"],
+      "role": "antagonist",
+      "personality": "表面风度翩翩的富二代学长，篮球社团社长，人气极高。内心极度扭曲——享受支配和摧毁的快感，尤其沉迷于'夺走属于别人的东西'。他得到的APP版本与林舟不同：商城已解锁，催眠等级更高（lv3+），且包含林舟版本没有的'暗示植入'功能。他选中白晚晚不是因为喜欢她——而是因为他通过APP发现了她对林舟99+的好感度，这让'夺取'变得更具快感。",
+      "voice_style": "公开场合温和有礼（'白同学你好'），私下催眠指令时冰冷短促（'跪下''张嘴''说你是谁的人'）。享受在林舟面前保持正常神态的同时，APP上操控着白晚晚的每一步。",
+      "pov_eligible": true,
+      "core_motivation": "通过夺取和摧毁林舟拥有的东西来获得支配快感",
+      "weakness": "对白晚晚的执念逐渐超出了单纯的玩弄——他开始想要彻底地、不可逆地占有她，这种执念让他偶尔露出破绽",
+      "current_state": {"location": "暗中观察林舟和白晚晚", "emotion": "猎食者的兴奋"},
+      "arc_phase": "setup",
+      "first_appearance": 2,
+      "relationships": [
+        {"target_id": "linzhou", "target_name": "林舟", "type": "猎食对象", "tension": "高"},
+        {"target_id": "baiwanwan", "target_name": "白晚晚", "type": "强制支配目标", "tension": "极高"}
+      ]
+    },
+    {
+      "character_id": "yezhiyu",
+      "name": "叶知鱼",
+      "aliases": ["小鱼"],
+      "role": "supporting",
+      "personality": "波波头，慵懒嘴硬心软。嘴上说着'啧'和'破产了'，但对林舟有求必应。好感度25+但借钱的毫不犹豫暴露了真实感情。直觉敏锐，是最早察觉到白晚晚不对劲的人。",
+      "voice_style": "懒散拖长音，爱用'啧'开头。'是是，我知道了'是最常说的话。",
+      "pov_eligible": false,
+      "core_motivation": "维持现状的朋友关系，不想失去任何青梅",
+      "weakness": "懒于行动，察觉异常后的反应太慢",
+      "current_state": {"location": "自己家", "emotion": "无聊"},
+      "arc_phase": "setup",
+      "first_appearance": 4,
+      "relationships": [
+        {"target_id": "linzhou", "target_name": "林舟", "type": "青梅竹马+隐秘好感", "tension": "低"}
+      ]
+    },
+    {
+      "character_id": "luoxiaoke",
+      "name": "洛小可",
+      "aliases": ["小可"],
+      "role": "supporting",
+      "personality": "青梅2号，热情开朗，是四个青梅中唯一会主动跟林舟保持联系的。好感度89+。对林舟有极强的保护欲。",
+      "voice_style": "说话带感叹号，昵称泛滥（'舟舟''晚晚酱'），是唯一敢直接问白晚晚'你是不是喜欢林舟'的人。",
+      "pov_eligible": false,
+      "core_motivation": "让青梅团恢复小时候的亲密",
+      "weakness": "过于直白，容易打草惊蛇",
+      "current_state": {"location": "未出场", "emotion": "正常"},
+      "arc_phase": "setup",
+      "first_appearance": 5,
+      "relationships": [
+        {"target_id": "linzhou", "target_name": "林舟", "type": "青梅竹马+暗恋", "tension": "低"}
+      ]
+    },
+    {
+      "character_id": "guyuening",
+      "name": "顾雨宁",
+      "aliases": ["雨宁"],
+      "role": "supporting",
+      "personality": "青梅3号，学霸型文静美人。好感度80+。话最少，但观察力最强。是第二个察觉白晚晚异常的人——她注意到白晚晚走路姿势变了。",
+      "voice_style": "简洁精准，每句话都经过删减。'嗯。''不对。''她变了。'",
+      "pov_eligible": false,
+      "core_motivation": "保持现状不变",
+      "weakness": "不善行动，只观察不干预",
+      "current_state": {"location": "未出场", "emotion": "正常"},
+      "arc_phase": "setup",
+      "first_appearance": 6,
+      "relationships": [
+        {"target_id": "linzhou", "target_name": "林舟", "type": "青梅竹马+暗恋", "tension": "低"}
+      ]
+    }
+  ]
+}

@@ -594,7 +594,7 @@ class NovelStyleCleaner:
     @staticmethod
     def clean_plan(plan):
         """Clean drumbeat from a ChapterPlan. Returns a new ChapterPlan."""
-        from awp_rp_runtime_v3.contracts.novel_chapter import (
+        from ..contracts.novel_chapter import (
             ChapterPlan, ContentSummary, PlotArrangement,
             CharacterAppearance, BeatDetail, EndingDesign,
         )

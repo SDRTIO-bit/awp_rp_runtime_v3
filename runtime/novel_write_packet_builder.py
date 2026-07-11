@@ -43,6 +43,10 @@ class NovelWritePacketBuilder:
         foreshadowing_items = [
             i.to_dict() for i in relevant_items if i.section == "foreshadowing"
         ]
+        # Extract world constraints from ledger world_rules
+        world_constraints = [
+            i.content for i in ledger_items if i.section == "world_rules"
+        ]
 
         # Step 2: 模块召回
         ref_books = reference_books or []
@@ -67,6 +71,7 @@ class NovelWritePacketBuilder:
             active_memory_context=list(active_memory_context or []),
             memory_recall=list(memory_recall or []),
             foreshadowing_items=foreshadowing_items,
+            world_constraints=world_constraints,
             director_guidance=director_guidance,
             writing_intent=writing_intent,
             emotion_module=emotion_module,
@@ -90,6 +95,9 @@ class NovelWritePacketBuilder:
         foreshadowing_items = [
             i.to_dict() for i in relevant_items if i.section == "foreshadowing"
         ]
+        world_constraints = [
+            i.content for i in ledger_items if i.section == "world_rules"
+        ]
 
         return NovelWritePacket(
             packet_id=f"pkt-{chapter_plan.chapter_id}-{beat.beat_id}",
@@ -100,6 +108,7 @@ class NovelWritePacketBuilder:
             active_memory_context=list(active_memory_context or []),
             memory_recall=list(memory_recall or []),
             foreshadowing_items=foreshadowing_items,
+            world_constraints=world_constraints,
             director_guidance=director_guidance,
             current_scene_beat=beat,
             accumulated_text=accumulated_text,

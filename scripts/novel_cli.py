@@ -160,6 +160,18 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _load_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
+    """加载微调引导：guidance/chapter_NN.md + CLI --guidance 合并。"""
+    parts = []
+    guidance_file = novel_dir / "guidance" / f"chapter_{chapter:02d}.md"
+    file_content = _read_text(guidance_file)
+    if file_content:
+        parts.append(file_content.strip())
+    if cli_guidance:
+        parts.append(cli_guidance.strip())
+    return "\n\n".join(parts)
+
+
 def _parse_outline(md_text: str) -> list[dict]:
     """Parse outline.md into list of chapter briefs."""
     chapters = []
@@ -514,6 +526,7 @@ def cmd_plan(args: argparse.Namespace) -> None:
     outline = _read_text(novel_dir / "outline.md")
     chapters = _parse_outline(outline)
     task = getattr(args, "task", "") or ""
+    guidance = _load_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
 
     # Try to find task_description from outline
     outline_task = ""
@@ -529,8 +542,12 @@ def cmd_plan(args: argparse.Namespace) -> None:
     else:
         final_task = f"第{chapter}章"
 
+    # Append guidance as hard requirements
+    if guidance:
+        final_task = f"{final_task}\n\n【硬性要求 — 必须执行】\n{guidance}"
+
     print(f"{DIM}Architect 规划第{chapter}章... (thinking=HIGH){RESET}")
-    print(f"{DIM}  任务: {final_task}{RESET}")
+    print(f"{DIM}  任务: {final_task[:200]}...{RESET}" if len(final_task) > 200 else f"{DIM}  任务: {final_task}{RESET}")
 
     plan = engine.plan_chapter(
         project_id=pid,
@@ -555,6 +572,10 @@ def cmd_write(args: argparse.Namespace) -> None:
     pid = state["project_id"]
     chapter = int(args.chapter)
     use_stream = getattr(args, "stream", False)
+    guidance = _load_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
+
+    if guidance:
+        print(f"{DIM}微调引导: {guidance[:100]}...{RESET}" if len(guidance) > 100 else f"{DIM}微调引导: {guidance}{RESET}")
 
     if use_stream:
         callbacks = _create_stream_callbacks_basic()
@@ -562,6 +583,7 @@ def cmd_write(args: argparse.Namespace) -> None:
 
         draft = engine.write_chapter_stream(
             project_id=pid, chapter_index=chapter,
+            write_guidance=guidance,
         )
 
         print(f"\n{GREEN}=== 第{chapter}章: {draft.char_count}字 | {draft.status} ==={RESET}")
@@ -575,7 +597,7 @@ def cmd_write(args: argparse.Namespace) -> None:
         print(f"{DIM}Director + Writer 生成第{chapter}章...{RESET}")
         print(f"{DIM}  (thinking=HIGH + MEDIUM, 可能需要几分钟){RESET}")
 
-        draft = engine.write_chapter(project_id=pid, chapter_index=chapter)
+        draft = engine.write_chapter(project_id=pid, chapter_index=chapter, write_guidance=guidance)
 
         print(f"\n{GREEN}=== 第{chapter}章: {draft.char_count}字 | {draft.status} ==={RESET}\n")
         print(draft.text)
@@ -805,12 +827,14 @@ p_plan = sub.add_parser("plan", help="规划章节 (Architect)")
 p_plan.add_argument("dir")
 p_plan.add_argument("chapter", type=int)
 p_plan.add_argument("--task", default="", help="本章任务描述（可选，默认从outline.md读取）")
+p_plan.add_argument("--guidance", default="", help="微调引导（补充硬性要求，自动合并 guidance/chapter_NN.md）")
 
 # write
 p_write = sub.add_parser("write", help="生成章节 (Director + Writer + Quality)")
 p_write.add_argument("dir")
 p_write.add_argument("chapter", type=int)
 p_write.add_argument("--stream", action="store_true", help="流式输出，实时展示 Agent 执行过程")
+p_write.add_argument("--guidance", default="", help="微调引导（补充硬性要求，自动合并 guidance/chapter_NN.md）")
 
 # batch
 p_batch = sub.add_parser("batch", help="批量生成章节")

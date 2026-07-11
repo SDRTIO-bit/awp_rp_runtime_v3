@@ -22,28 +22,36 @@ def _get_writer_prompt(name: str = "writer") -> str:
 WRITER_SYSTEM_PROMPT = ""  # replaced at call time by _get_writer_prompt()
 
 
-_STYLE_BENCHMARK_CACHE: str | None = None
+_STYLE_BENCHMARK_CACHE: dict[str, str] = {}
 
-def _get_style_benchmark(project_root: str = "") -> str:
-    global _STYLE_BENCHMARK_CACHE
-    if _STYLE_BENCHMARK_CACHE is not None:
-        return _STYLE_BENCHMARK_CACHE
+def _get_style_benchmark(project_root: str = "", project_id: str = "") -> str:
+    cache_key = project_id or project_root or "__default__"
+    if cache_key in _STYLE_BENCHMARK_CACHE:
+        return _STYLE_BENCHMARK_CACHE[cache_key]
     import os
     paths = []
     if project_root:
         paths.append(os.path.join(project_root, "reference_benchmark.txt"))
+    if project_id:
+        paths.append(os.path.join(os.path.dirname(__file__), "..", "novels", project_id, "reference_benchmark.txt"))
     paths.append(os.path.join(os.path.dirname(__file__), "..", "novels", "steam_magic", "reference_benchmark.txt"))
     for p in paths:
         if os.path.exists(p):
             with open(p, "r", encoding="utf-8") as f:
                 text = f.read().strip()
-            _STYLE_BENCHMARK_CACHE = (
-                "=== STYLE BENCHMARK ===\n"
+            # Detect project_type from path to adjust the adaptation hint
+            is_romcom = "daily_high_school" in p
+            adapt_hint = (
+                "以下是你的写作风格参考（校园恋爱喜剧背景，严格模仿其对话节奏、吐槽时机、情绪表达方式和场景切换的流畅度）：\n\n"
+                if is_romcom else
                 "以下是你的写作风格参考（都市背景，蒸汽魔法项目需转换为西幻背景，\n"
                 "但要模仿其对话节奏、情绪表达方式、场景切换的流畅度）：\n\n"
-                + text
             )
-            return _STYLE_BENCHMARK_CACHE
+            _STYLE_BENCHMARK_CACHE[cache_key] = (
+                "=== STYLE BENCHMARK ===\n" + adapt_hint + text
+            )
+            return _STYLE_BENCHMARK_CACHE[cache_key]
+    _STYLE_BENCHMARK_CACHE[cache_key] = ""
     return ""
 
 
@@ -55,22 +63,22 @@ class NovelWriterAdapter:
         self._model = model
         self._writer_prompt_name = writer_prompt_name
 
-    def generate_chapter(self, packet: NovelWritePacket) -> str:
+    def generate_chapter(self, packet: NovelWritePacket, write_guidance: str = "") -> str:
         """Generate full chapter text from a write packet."""
-        system_prompt, user_prompt = self._build_prompt(packet)
+        system_prompt, user_prompt = self._build_prompt(packet, write_guidance=write_guidance)
         return self._call_llm(user_prompt, system_prompt)
 
-    def generate_beat(self, packet: NovelWritePacket) -> str:
+    def generate_beat(self, packet: NovelWritePacket, write_guidance: str = "") -> str:
         """Generate a single beat's text."""
-        system_prompt, user_prompt = self._build_beat_prompt(packet)
+        system_prompt, user_prompt = self._build_beat_prompt(packet, write_guidance=write_guidance)
         return self._call_llm(user_prompt, system_prompt)
 
-    def generate_beat_stream(self, packet: NovelWritePacket, on_chunk) -> str:
+    def generate_beat_stream(self, packet: NovelWritePacket, on_chunk, write_guidance: str = "") -> str:
         """Generate a single beat's text with streaming callback."""
-        system_prompt, user_prompt = self._build_beat_prompt(packet)
+        system_prompt, user_prompt = self._build_beat_prompt(packet, write_guidance=write_guidance)
         return self._call_llm_stream(user_prompt, system_prompt, on_chunk)
 
-    def _build_prompt(self, packet: NovelWritePacket) -> tuple[str, str]:
+    def _build_prompt(self, packet: NovelWritePacket, write_guidance: str = "") -> tuple[str, str]:
         """Build the full chapter generation prompt. Returns (system_prompt, user_prompt).
 
         Cache-optimized order (DeepSeek prefix caching):
@@ -94,7 +102,7 @@ class NovelWriterAdapter:
         ]
 
         # Style benchmark (stable, cache hit)
-        benchmark = _get_style_benchmark()
+        benchmark = _get_style_benchmark(project_id=packet.project_id)
         if benchmark:
             parts.append(benchmark)
 
@@ -124,6 +132,13 @@ class NovelWriterAdapter:
                     f"- [{i.get('status','active')}] {i.get('entity','')}: {i.get('content','')}"
                     for i in packet.foreshadowing_items[:5]
                 )
+            )
+
+        # World constraints (hard rules: setting, era, tone limits)
+        if packet.world_constraints:
+            parts.append(
+                "\n=== WORLD CONSTRAINTS ===\n"
+                + "\n".join(f"- {c}" for c in packet.world_constraints)
             )
 
         # ---- Tier 3: Chapter-specific (changes every call) ----
@@ -157,9 +172,12 @@ class NovelWriterAdapter:
         if packet.writing_intent:
             parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
 
+        if write_guidance:
+            parts.append(f"\n=== WRITER GUIDANCE ===\n{write_guidance}\n（以上引导是硬性要求，必须执行）")
+
         return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
 
-    def _build_beat_prompt(self, packet: NovelWritePacket) -> tuple[str, str]:
+    def _build_beat_prompt(self, packet: NovelWritePacket, write_guidance: str = "") -> tuple[str, str]:
         """Build prompt for a single beat. Returns (system_prompt, user_prompt).
         No accumulated_text — beats are independent to avoid drumbeat amplification."""
         beat = packet.current_scene_beat
@@ -178,7 +196,7 @@ class NovelWriterAdapter:
         ]
 
         # Style benchmark (stable, cache hit)
-        benchmark = _get_style_benchmark()
+        benchmark = _get_style_benchmark(project_id=packet.project_id)
         if benchmark:
             parts.append(benchmark)
 
@@ -223,6 +241,9 @@ class NovelWriterAdapter:
                 for i in packet.relevant_ledger_items[:5]
             )
             parts.append(f"\n=== CONTINUITY ===\n{items_text}")
+
+        if write_guidance:
+            parts.append(f"\n=== WRITER GUIDANCE ===\n{write_guidance}\n（以上引导是硬性要求，必须执行）")
 
         return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
 

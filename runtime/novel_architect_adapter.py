@@ -15,16 +15,17 @@ _THINKING_HIGH = {"thinking": {"type": "enabled", "reasoning_effort": "high"}}
 # Architect system prompt — loaded from prompts/architect.md
 from .prompt_loader import load_prompt
 
-def _get_architect_prompt() -> str:
-    return load_prompt("architect")
+def _get_architect_prompt(name: str = "architect") -> str:
+    return load_prompt(name)
 
 
 class NovelArchitectAdapter:
     """Architect LLM adapter for novel mode."""
 
-    def __init__(self, registry, model: str = "deepseek-v4-pro"):
+    def __init__(self, registry, model: str = "deepseek-v4-pro", architect_prompt_name: str = "architect"):
         self._registry = registry
         self._model = model
+        self._architect_prompt_name = architect_prompt_name
 
     def plan_chapter(
         self,
@@ -226,7 +227,7 @@ class NovelArchitectAdapter:
             parts.append(f"\n任务描述: {task_description}")
 
         if character_states:
-            parts.append(f"\n=== CHARACTERS ===\n{character_states}")
+            parts.append(f"\n=== CHARACTERS (only plan for those listed; others have NOT appeared yet and MUST NOT be included) ===\n{character_states}")
 
         if volume_plan:
             parts.append(f"\n卷计划:\n{volume_plan.to_dict() if hasattr(volume_plan, 'to_dict') else volume_plan}")
@@ -254,4 +255,4 @@ class NovelArchitectAdapter:
                 items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content[:150]}" for i in recent)
                 parts.append(f"\n=== CONTINUITY FACTS ===\n{items_text}")
 
-        return _get_architect_prompt(), "\n".join(parts)
+        return _get_architect_prompt(self._architect_prompt_name), "\n".join(parts)

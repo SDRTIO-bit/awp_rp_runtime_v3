@@ -102,8 +102,9 @@ class NovelEngine:
         # Load relevant ledger items
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
 
-        # Load character states
-        characters = self._registry.novel_character_store.list_by_project(project_id)
+        # Load character states — only characters that have appeared
+        all_characters = self._registry.novel_character_store.list_by_project(project_id)
+        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
         character_states = self._build_character_context(characters)
 
         # Call Architect (placeholder - would use LLM adapter)
@@ -128,6 +129,7 @@ class NovelEngine:
         project_id: str,
         chapter_index: int,
         revision: int = 1,
+        write_guidance: str = "",
     ) -> ChapterDraft:
         """Phase 2: Director 优化 + 分 beat 生成章节正文。
 
@@ -216,6 +218,7 @@ class NovelEngine:
             active_memory_context=active_memory_context,
             memory_recall=memory_recall,
             writer_prompt_name=writer_prompt_name,
+            write_guidance=write_guidance,
         )
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
@@ -271,11 +274,12 @@ class NovelEngine:
         memory_recall: list[dict[str, Any]] | None = None,
         *,
         writer_prompt_name: str = "writer",
+        write_guidance: str = "",
     ) -> str:
         """Generate chapter text beat by beat (sequential, 3 beats)."""
         if not plan.scene_beats:
             try:
-                return self._call_writer(packet, writer_prompt_name=writer_prompt_name)
+                return self._call_writer(packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
             except RuntimeError:
                 return ""
 
@@ -293,7 +297,7 @@ class NovelEngine:
                     memory_recall=memory_recall,
                 )
                 try:
-                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name)
+                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
                     if beat_text and beat_text.strip():
                         break
                 except RuntimeError:
@@ -476,24 +480,23 @@ class NovelEngine:
                 lines.append(f"- 第{ch}章《{p.title}》({p.target_emotion}) [plan]: {end_snip}")
         return "\n".join(lines)
 
-    def _call_writer(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer") -> str:
+    def _call_writer(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
         """Call Writer agent."""
         from .novel_writer_adapter import NovelWriterAdapter
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
-        return adapter.generate_chapter(packet)
+        return adapter.generate_chapter(packet, write_guidance=write_guidance)
 
-    def _call_writer_beat(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer") -> str:
+    def _call_writer_beat(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
         """Call Writer for a single beat."""
         from .novel_writer_adapter import NovelWriterAdapter
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
-        return adapter.generate_beat(packet)
+        return adapter.generate_beat(packet, write_guidance=write_guidance)
 
-    def _call_writer_beat_stream(self, packet: NovelWritePacket, on_chunk,
-                                  *, writer_prompt_name: str = "writer") -> str:
-        """Call Writer for a single beat with streaming."""
+    def _call_writer_beat_stream(self, packet: NovelWritePacket, on_chunk, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
+        """Call Writer for a single beat with streaming callback."""
         from .novel_writer_adapter import NovelWriterAdapter
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
-        return adapter.generate_beat_stream(packet, on_chunk)
+        return adapter.generate_beat_stream(packet, on_chunk, write_guidance=write_guidance)
 
     def _generate_with_beats_stream(
         self,
@@ -505,11 +508,12 @@ class NovelEngine:
         memory_recall: list[dict[str, Any]] | None = None,
         *,
         writer_prompt_name: str = "writer",
+        write_guidance: str = "",
     ) -> str:
         """Generate chapter text beat by beat with streaming callbacks."""
         if not plan.scene_beats:
             try:
-                text = self._call_writer(packet, writer_prompt_name=writer_prompt_name)
+                text = self._call_writer(packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
                 self._safe_on_chunk(text)
                 return text
             except RuntimeError:
@@ -542,6 +546,7 @@ class NovelEngine:
                     beat_text = self._call_writer_beat_stream(
                         beat_packet, self._safe_on_chunk,
                         writer_prompt_name=writer_prompt_name,
+                        write_guidance=write_guidance,
                     )
                     duration_ms = int((time.time() - t_start) * 1000)
                     if beat_text and beat_text.strip():
@@ -570,6 +575,7 @@ class NovelEngine:
         project_id: str,
         chapter_index: int,
         revision: int = 1,
+        write_guidance: str = "",
     ) -> ChapterDraft:
         """Streaming variant of write_chapter — emits phase/beat/chunk callbacks.
 
@@ -640,6 +646,7 @@ class NovelEngine:
             active_memory_context=active_memory_context,
             memory_recall=memory_recall,
             writer_prompt_name=writer_prompt_name,
+            write_guidance=write_guidance,
         )
         self._safe_on_phase("end", "writer", {
             "ch": chapter_index,

@@ -44,6 +44,7 @@ class NovelDirectorAdapter:
         result = self._call_llm_for_beats(
             chapter_plan, character_anchor, timeline_anchor,
             previous_chapter_ending, ledger_items,
+            completed_chapters_summary, foreshadowing_list, subplot_status,
         )
         beat_details = result.get("beat_details", [])
         foreshadowing_schedule = result.get("foreshadowing_schedule", [])
@@ -90,6 +91,9 @@ class NovelDirectorAdapter:
     def _call_llm_for_beats(
         self, chapter_plan, character_anchor, timeline_anchor,
         previous_chapter_ending, ledger_items,
+        completed_chapters_summary="",
+        foreshadowing_list=None,
+        subplot_status=None,
     ) -> dict[str, Any]:
         """调 LLM 生成 beat 细纲 + 全局优化。返回完整 JSON 解析结果。"""
         from .novel_llm_factory import NovelLLMFactory
@@ -105,12 +109,25 @@ class NovelDirectorAdapter:
         parts = [f"=== 角色锚点 ===\n{character_anchor}"]
         parts.append(f"=== 时间锚点 ===\n{timeline_anchor}")
 
+        if completed_chapters_summary:
+            parts.append(f"=== 已完成章节摘要 ===\n{completed_chapters_summary}")
+
         if previous_chapter_ending:
             parts.append(f"=== 前一章结尾 ===\n{previous_chapter_ending[-500:]}")
 
         if ledger_items:
             items_text = "\n".join(f"- [{i.section}] {i.entity}: {i.content}" for i in ledger_items[:15])
             parts.append(f"=== 连续性账本 ===\n{items_text}")
+
+        fl = foreshadowing_list or []
+        if fl:
+            fl_text = "\n".join(f"- {f.entity}: {f.content}" for f in fl[:10])
+            parts.append(f"=== 当前伏笔 ===\n{fl_text}")
+
+        ss = subplot_status or []
+        if ss:
+            ss_text = "\n".join(f"- {s.entity}: {s.content}" for s in ss[:10])
+            parts.append(f"=== 支线状态 ===\n{ss_text}")
 
         parts.append(f"=== 章节计划 ===\n{json.dumps(chapter_plan.to_dict(), ensure_ascii=False)}")
 
