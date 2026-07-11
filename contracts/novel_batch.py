@@ -23,7 +23,7 @@ class BatchProgress:
     chapter_start: int = 0
     chapter_end: int = 0
     chapter_index: int = 0       # 当前处理的章节
-    status: str = "pending"      # pending / in_progress / completed / failed
+    status: str = "pending"      # pending / in_progress / completed / completed_with_failures / failed
     retry_count: int = 0
     failed_chapters: tuple[int, ...] = ()
     error_message: str = ""

@@ -152,3 +152,22 @@ class TestNovelEngine:
         assert progress.status == "failed"
         assert progress.failed_chapters == (1, 2)
         assert drafts == []
+
+    def test_batch_write_limits_each_final_error_summary_to_200_characters(self, reg, engine, monkeypatch):
+        reg.novel_project_store.create(NovelProject(project_id="p1"))
+        reg.novel_chapter_plan_store.save(ChapterPlan(
+            chapter_id="ch1",
+            project_id="p1",
+            chapter_index=1,
+        ))
+
+        def write_chapter(*, project_id, chapter_index):
+            raise RuntimeError("x" * 250)
+
+        monkeypatch.setattr(engine, "write_chapter", write_chapter)
+
+        engine.batch_write(project_id="p1", chapter_start=1, chapter_end=1)
+
+        progress = reg.novel_batch_progress_store.list_by_project("p1")[0]
+        assert progress.error_message.startswith("chapter 1: ")
+        assert len(progress.error_message) == 200

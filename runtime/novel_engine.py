@@ -983,7 +983,7 @@ class NovelEngine:
             status=final_status,
             failed_chapters=tuple(index for index, _ in failures),
             error_message="; ".join(
-                f"chapter {index}: {error_message}"
+                f"chapter {index}: {error_message}"[:200]
                 for index, error_message in failures
             ),
         )
