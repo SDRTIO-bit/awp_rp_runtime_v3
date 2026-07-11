@@ -89,6 +89,10 @@ class NovelEngine:
         if not project:
             raise ValueError(f"Project not found: {project_id}")
 
+        # Load architect prompt override from project config
+        project_config = getattr(project, "config", {}) or {}
+        architect_prompt_name = project_config.get("architect_prompt", "architect")
+
         # Load volume plan (if exists)
         volumes = self._registry.novel_volume_store.list_by_project(project_id)
         volume_plan = volumes[0] if volumes else None
@@ -107,11 +111,11 @@ class NovelEngine:
         characters = [c for c in all_characters if c.first_appearance <= chapter_index]
         character_states = self._build_character_context(characters)
 
-        # Call Architect (placeholder - would use LLM adapter)
+        # Call Architect
         plan = self._call_architect(
             project_id, chapter_index, volume_plan,
             completed_chapters, ledger_items, character_states,
-            task_description,
+            task_description, architect_prompt_name=architect_prompt_name,
         )
 
         # Clean drumbeat patterns from plan text before storing
@@ -310,11 +314,11 @@ class NovelEngine:
     def _call_architect(
         self, project_id, chapter_index, volume_plan,
         completed_chapters, ledger_items, character_states,
-        task_description,
+        task_description, architect_prompt_name="architect",
     ) -> ChapterPlan:
         """Call Architect agent."""
         from .novel_architect_adapter import NovelArchitectAdapter
-        adapter = NovelArchitectAdapter(self._registry)
+        adapter = NovelArchitectAdapter(self._registry, architect_prompt_name=architect_prompt_name)
         return adapter.plan_chapter(
             project_id=project_id,
             chapter_index=chapter_index,

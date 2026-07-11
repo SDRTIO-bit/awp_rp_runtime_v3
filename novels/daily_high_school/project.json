@@ -8,7 +8,8 @@
     "target_reader": "16-25岁校园恋爱喜剧爱好者",
     "target_platform": "番茄长篇",
     "config": {
-      "writer_prompt": "writer_romcom"
+      "writer_prompt": "writer_romcom",
+      "architect_prompt": "architect_romcom"
     }
   },
   "volume": {
