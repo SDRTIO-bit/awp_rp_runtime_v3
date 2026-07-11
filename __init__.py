@@ -2,7 +2,15 @@
 
 __version__ = "0.1.0"
 
-from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+# Pytest may import this file directly when a checkout's directory name is not
+# the package name (for example, a Git worktree).  Relative imports are not
+# available in that standalone-module context; normal package imports retain
+# the public node mappings below.
+if __package__:
+    from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+else:  # pragma: no cover - exercised by pytest package discovery only
+    NODE_CLASS_MAPPINGS = {}
+    NODE_DISPLAY_NAME_MAPPINGS = {}
 
 # Register management API routes (only when ComfyUI server is available)
 try:
