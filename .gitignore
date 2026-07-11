@@ -55,6 +55,9 @@ Thumbs.db
 # Claude Code local state
 .claude/
 
+# Local isolated worktrees
+.worktrees/
+
 # Novel downloads (TomatoNovelDownloader output)
 downloads/
 
