@@ -12,37 +12,37 @@ from datetime import datetime, timezone
 
 import pytest
 
-from awp_rp_runtime_v2.testing.fakes import (
+from awp_rp_runtime_v3.testing.fakes import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore,
     FakeRagMemoryStore, FakeTraceStore, FakeLLMProvider,
     FakeRetentionDecisionStore,
 )
-from awp_rp_runtime_v2.contracts.card_state import CardState
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.active_memory import (
+from awp_rp_runtime_v3.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.active_memory import (
     ActiveMemoryRecord, ActiveMemoryStatus, ActiveMemoryKind,
 )
-from awp_rp_runtime_v2.contracts.rag_memory import (
+from awp_rp_runtime_v3.contracts.rag_memory import (
     RagMemoryRecord, RagMemoryStatus, RagMemoryScope,
 )
-from awp_rp_runtime_v2.contracts.memory_commit_plan import (
+from awp_rp_runtime_v3.contracts.memory_commit_plan import (
     MemoryCommitPlan, MemoryCommitRequest, MemoryCommitStatus,
 )
-from awp_rp_runtime_v2.contracts.memory_recall_request import MemoryRecallRequest
-from awp_rp_runtime_v2.contracts.accepted_turn_window import (
+from awp_rp_runtime_v3.contracts.memory_recall_request import MemoryRecallRequest
+from awp_rp_runtime_v3.contracts.accepted_turn_window import (
     AcceptedTurnWindow, select_accepted_window, DEFAULT_WINDOW_SIZE,
 )
-from awp_rp_runtime_v2.runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
-from awp_rp_runtime_v2.runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-from awp_rp_runtime_v2.runtime.memory_context_assembler import (
+from awp_rp_runtime_v3.runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
+from awp_rp_runtime_v3.runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.runtime.memory_context_assembler import (
     MemoryContextAssembler, ConflictSignal,
 )
-from awp_rp_runtime_v2.policies.memory_policy import MemoryPolicy
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.storage.sqlite.active_memory_store import SqliteActiveMemoryStore
-from awp_rp_runtime_v2.storage.sqlite.rag_memory_store import SqliteRagMemoryStore
+from awp_rp_runtime_v3.policies.memory_policy import MemoryPolicy
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.storage.sqlite.active_memory_store import SqliteActiveMemoryStore
+from awp_rp_runtime_v3.storage.sqlite.rag_memory_store import SqliteRagMemoryStore
 
 SUM = "主角向守卫许下黄昏前归还宝剑的承诺，然而日落将至仍未兑现，场面紧张且悬念未解"
 
@@ -349,7 +349,7 @@ class TestL3RagMemory:
 
     def test_16_rag_conflict_with_cardstate_ignored(self):
         # Deterministic conflict adjudication via MemoryContextAssembler.
-        from awp_rp_runtime_v2.contracts.memory_recall_result import MemoryRecallResult, RecallHit
+        from awp_rp_runtime_v3.contracts.memory_recall_result import MemoryRecallResult, RecallHit
         card_state = CardState(card_id="c1", session_id="s1", revision=5)
         rag_hit = RecallHit(
             memory_id="r1", layer="rag", score=0.9, status="active",
@@ -358,7 +358,7 @@ class TestL3RagMemory:
             importance=0.8, confidence=0.9,
         )
         rag_result = MemoryRecallResult(hits=[rag_hit])
-        from awp_rp_runtime_v2.contracts.memory_recall_result import MemoryRecallResult as RR
+        from awp_rp_runtime_v3.contracts.memory_recall_result import MemoryRecallResult as RR
         active_result = RR(hits=[])
         assembler = MemoryContextAssembler()
         ctx = assembler.assemble(
@@ -512,10 +512,10 @@ class TestSnapshotMemoryContext:
 
     def test_26_priority_l1_over_l2_over_l3(self):
         assembler = MemoryContextAssembler()
-        from awp_rp_runtime_v2.contracts.memory_recall_result import MemoryRecallResult, RecallHit
-        from awp_rp_runtime_v2.contracts.card_state import CardState
+        from awp_rp_runtime_v3.contracts.memory_recall_result import MemoryRecallResult, RecallHit
+        from awp_rp_runtime_v3.contracts.card_state import CardState
         card_state = CardState(card_id="c1", session_id="s1", revision=2)
-        from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
+        from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
         l1 = [TurnRecord(turn_id="t1", card_id="c1", session_id="s1", turn_index=1,
                          player_input="p", writer_output="w")]
         active = MemoryRecallResult(hits=[RecallHit(
@@ -528,7 +528,7 @@ class TestSnapshotMemoryContext:
         )])
         ctx = assembler.assemble(card_state, l1, active, rag, [{"wb": 1}])
         # Priority order fixed: CardState < L1 < Active < RAG-high < RAG < Worldbook
-        from awp_rp_runtime_v2.policies.memory_policy import (
+        from awp_rp_runtime_v3.policies.memory_policy import (
             PRIORITY_CARD_STATE, PRIORITY_L1_TURNS, PRIORITY_ACTIVE_MEMORY, PRIORITY_RAG,
             PRIORITY_WORLDBOOK,
         )
@@ -546,19 +546,19 @@ class TestSnapshotMemoryContext:
 class TestM1EndToEnd:
 
     def test_e2e_six_turns_then_snapshot_then_retry(self):
-        from awp_rp_runtime_v2.runtime.director_runtime import DirectorRuntime, FakeDirectorAdapter
-        from awp_rp_runtime_v2.runtime.delegation_planner import DelegationPlanner
-        from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
-        from awp_rp_runtime_v2.runtime.writer_runtime import WriterRuntime
-        from awp_rp_runtime_v2.runtime.critic_runtime import CriticRuntime
-        from awp_rp_runtime_v2.runtime.state_proposal_runtime import StateProposalRuntime
-        from awp_rp_runtime_v2.runtime.card_state_commit_runtime import CardStateCommitRuntime
-        from awp_rp_runtime_v2.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
-        from awp_rp_runtime_v2.runtime.turn_orchestrator import TurnOrchestrator
-        from awp_rp_runtime_v2.runtime.retry_runtime import RetryRuntime
-        from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry
-        from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-        from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+        from awp_rp_runtime_v3.runtime.director_runtime import DirectorRuntime, FakeDirectorAdapter
+        from awp_rp_runtime_v3.runtime.delegation_planner import DelegationPlanner
+        from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
+        from awp_rp_runtime_v3.runtime.writer_runtime import WriterRuntime
+        from awp_rp_runtime_v3.runtime.critic_runtime import CriticRuntime
+        from awp_rp_runtime_v3.runtime.state_proposal_runtime import StateProposalRuntime
+        from awp_rp_runtime_v3.runtime.card_state_commit_runtime import CardStateCommitRuntime
+        from awp_rp_runtime_v3.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
+        from awp_rp_runtime_v3.runtime.turn_orchestrator import TurnOrchestrator
+        from awp_rp_runtime_v3.runtime.retry_runtime import RetryRuntime
+        from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry
+        from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+        from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
 
         card_store = FakeCardStateStore()
         turn_store = FakeTurnRecordStore()
@@ -616,7 +616,7 @@ class TestM1EndToEnd:
         assert rag_result.ordered_by != ""
 
         # CardState hard facts override conflicting RAG.
-        from awp_rp_runtime_v2.contracts.memory_recall_result import MemoryRecallResult
+        from awp_rp_runtime_v3.contracts.memory_recall_result import MemoryRecallResult
         # Force a conflicting RAG hit and verify assembler ignores it.
         conflict_hit = type(rag_result.hits[0])(
             memory_id="conflict", layer="rag", score=1.0, status="active",
@@ -625,7 +625,7 @@ class TestM1EndToEnd:
             importance=0.9, confidence=0.9,
         )
         conflict_result = MemoryRecallResult(hits=[conflict_hit])
-        from awp_rp_runtime_v2.contracts.card_state import CardState as CS
+        from awp_rp_runtime_v3.contracts.card_state import CardState as CS
         ctx = MemoryContextAssembler().assemble(
             card_state=card_store.load("card1", "sess1"),
             l1_turns=snap.recent_turn_records,
@@ -644,7 +644,7 @@ class TestM1EndToEnd:
         # Simulate a retry that re-commits with a NEW memory_commit_id but same turn.
         # In the formal path, a retry that fails must not write; a retry that
         # succeeds writes exactly once with a new idempotency key.
-        from awp_rp_runtime_v2.contracts.memory_commit_plan import MemoryCommitPlan
+        from awp_rp_runtime_v3.contracts.memory_commit_plan import MemoryCommitPlan
         last_turn = turn_store.get_last_accepted("card1", "sess1")
         # Replay with same idempotency key => idempotent, no duplicate.
         qd = QualityDecision(trace_id=snap.trace_id, verdict=QualityVerdict.ACCEPTED)

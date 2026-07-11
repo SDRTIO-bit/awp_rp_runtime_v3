@@ -19,11 +19,11 @@ os.environ["NOVEL_LLM_PROVIDER"] = "opencode"
 
 sys.path.insert(0, r"F:\12\语英")
 
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_character import (
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_character import (
     NovelCharacter, CharacterRelationship,
 )
 

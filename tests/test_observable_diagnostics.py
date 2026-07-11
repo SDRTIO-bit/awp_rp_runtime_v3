@@ -8,8 +8,8 @@ AWPV2PersistentTurnObserver 的观察视图是空壳：
   * memory_curation_reason —— 记忆治理原因（memory 观察用）
 """
 
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.tests.test_long_session_v1 import (
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.tests.test_long_session_v1 import (
     _close_db,
     _make_db,
     _make_snapshot,
@@ -26,7 +26,7 @@ def _run_engine(tmp_path, writer_output: str = "A grounded scene with sensory de
     card_state = registry.card_state_store.load("c1", "s1")
     binding = registry.card_session_binding_store.load("s1")
 
-    from awp_rp_runtime_v2.runtime import persistent_turn_engine as engine_module
+    from awp_rp_runtime_v3.runtime import persistent_turn_engine as engine_module
 
     class _StubWriterAdapter:
         def __init__(self, text):
@@ -37,7 +37,7 @@ def _run_engine(tmp_path, writer_output: str = "A grounded scene with sensory de
             self.calls += 1
             return self._text
 
-    from awp_rp_runtime_v2.runtime.provider_adapter_factory import AdapterOutcome
+    from awp_rp_runtime_v3.runtime.provider_adapter_factory import AdapterOutcome
 
     engine_module.WriterAdapterFactory.build = staticmethod(
         lambda profile_id, preset_text="": (
@@ -89,8 +89,8 @@ def test_engine_records_agent_dispositions(tmp_path):
 
 def test_engine_records_agent_dispositions_when_triggered(monkeypatch, tmp_path):
     """当 sub-agent 真正触发时，agent_dispositions 必须是 role→summary 映射。"""
-    from awp_rp_runtime_v2.runtime import persistent_turn_engine as engine_module
-    from awp_rp_runtime_v2.contracts.agent_suggestion import (
+    from awp_rp_runtime_v3.runtime import persistent_turn_engine as engine_module
+    from awp_rp_runtime_v3.contracts.agent_suggestion import (
         AgentSuggestion, SuggestionKind,
     )
 

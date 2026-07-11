@@ -31,41 +31,41 @@ from pathlib import Path
 
 import pytest
 
-from awp_rp_runtime_v2.contracts.node_execution_record import (
+from awp_rp_runtime_v3.contracts.node_execution_record import (
     NodeExecutionRecord, ContractCheck,
     ExecutionStatus, BusinessDisposition, SemanticHealth,
 )
-from awp_rp_runtime_v2.contracts.workflow_run_record import (
+from awp_rp_runtime_v3.contracts.workflow_run_record import (
     WorkflowRunContext, WorkflowRunRecord,
 )
-from awp_rp_runtime_v2.contracts.node_contract_check import NodeContractCheck
-from awp_rp_runtime_v2.contracts.node_diagnostic_spec import NodeDiagnosticSpec
-from awp_rp_runtime_v2.contracts.trace_artifact_ref import TraceArtifactRef
-from awp_rp_runtime_v2.contracts.workflow_test_result import WorkflowTestResult
-from awp_rp_runtime_v2.contracts.workflow_test_failure import WorkflowTestFailure
-from awp_rp_runtime_v2.contracts.workflow_test_scenario import (
+from awp_rp_runtime_v3.contracts.node_contract_check import NodeContractCheck
+from awp_rp_runtime_v3.contracts.node_diagnostic_spec import NodeDiagnosticSpec
+from awp_rp_runtime_v3.contracts.trace_artifact_ref import TraceArtifactRef
+from awp_rp_runtime_v3.contracts.workflow_test_result import WorkflowTestResult
+from awp_rp_runtime_v3.contracts.workflow_test_failure import WorkflowTestFailure
+from awp_rp_runtime_v3.contracts.workflow_test_scenario import (
     WorkflowTestScenario, NodeExpectation, SideEffectExpectation,
 )
-from awp_rp_runtime_v2.runtime.awp_trace_wrapper import (
+from awp_rp_runtime_v3.runtime.awp_trace_wrapper import (
     DiagnosticCollector, awp_trace_node, mark_node_not_reached, mark_node_blocked,
 )
-from awp_rp_runtime_v2.runtime.node_diagnostic_specs import (
+from awp_rp_runtime_v3.runtime.node_diagnostic_specs import (
     NODE_DIAGNOSTIC_SPECS, get_diagnostic_spec, get_all_specs,
 )
-from awp_rp_runtime_v2.runtime.diagnostic_redactor import (
+from awp_rp_runtime_v3.runtime.diagnostic_redactor import (
     DiagnosticRedactor, DiagnosticSummaryBuilder, ArtifactRetentionPolicy,
     NEVER_EXPOSE_FIELDS,
 )
-from awp_rp_runtime_v2.testing.workflow_scenario_runner import (
+from awp_rp_runtime_v3.testing.workflow_scenario_runner import (
     WorkflowScenarioRunner, FakeScenarioExecutor,
 )
-from awp_rp_runtime_v2.testing.scenario_fixture_factory import ScenarioFixtureFactory
-from awp_rp_runtime_v2.testing.scenario_assertion_engine import ScenarioAssertionEngine
-from awp_rp_runtime_v2.testing.scenario_report_writer import ScenarioReportWriter
-from awp_rp_runtime_v2.testing.comfy_websocket_collector import ComfyWebSocketCollector
-from awp_rp_runtime_v2.testing.comfy_history_collector import ComfyHistoryCollector
-from awp_rp_runtime_v2.testing.api_workflow_fixture_patcher import APIWorkflowFixturePatcher
-from awp_rp_runtime_v2.runtime.diagnostic_api import DiagnosticAPI
+from awp_rp_runtime_v3.testing.scenario_fixture_factory import ScenarioFixtureFactory
+from awp_rp_runtime_v3.testing.scenario_assertion_engine import ScenarioAssertionEngine
+from awp_rp_runtime_v3.testing.scenario_report_writer import ScenarioReportWriter
+from awp_rp_runtime_v3.testing.comfy_websocket_collector import ComfyWebSocketCollector
+from awp_rp_runtime_v3.testing.comfy_history_collector import ComfyHistoryCollector
+from awp_rp_runtime_v3.testing.api_workflow_fixture_patcher import APIWorkflowFixturePatcher
+from awp_rp_runtime_v3.runtime.diagnostic_api import DiagnosticAPI
 
 
 # ===================================================================
@@ -608,7 +608,7 @@ class TestScenarioRunnerFake:
 class TestComfyUIAdapterEnvMissing:
 
     def test_comfy_api_executor_raises_on_missing_env(self):
-        from awp_rp_runtime_v2.testing.comfy_api_scenario_runner import ComfyApiScenarioExecutor
+        from awp_rp_runtime_v3.testing.comfy_api_scenario_runner import ComfyApiScenarioExecutor
         executor = ComfyApiScenarioExecutor(base_url="http://127.0.0.1:1")  # Invalid port
         with pytest.raises(EnvironmentError):
             executor.check_environment()
@@ -790,7 +790,7 @@ class TestExistingTestsRegression:
 
     def test_contracts_importable(self):
         """All new contracts are importable from the package."""
-        from awp_rp_runtime_v2.contracts import (
+        from awp_rp_runtime_v3.contracts import (
             WorkflowRunContext, WorkflowRunRecord,
             NodeExecutionRecord, ContractCheck,
             ExecutionStatus, BusinessDisposition, SemanticHealth,
@@ -803,17 +803,17 @@ class TestExistingTestsRegression:
 
     def test_runtime_importable(self):
         """All new runtime modules are importable."""
-        from awp_rp_runtime_v2.runtime.awp_trace_wrapper import (
+        from awp_rp_runtime_v3.runtime.awp_trace_wrapper import (
             DiagnosticCollector, awp_trace_node,
             AWPTraceableNodeMixin, mark_node_not_reached, mark_node_blocked,
         )
-        from awp_rp_runtime_v2.runtime.node_diagnostic_specs import (
+        from awp_rp_runtime_v3.runtime.node_diagnostic_specs import (
             NODE_DIAGNOSTIC_SPECS, get_diagnostic_spec,
         )
-        from awp_rp_runtime_v2.runtime.diagnostic_redactor import (
+        from awp_rp_runtime_v3.runtime.diagnostic_redactor import (
             DiagnosticRedactor, DiagnosticSummaryBuilder, ArtifactRetentionPolicy,
         )
-        from awp_rp_runtime_v2.runtime.diagnostic_api import DiagnosticAPI
+        from awp_rp_runtime_v3.runtime.diagnostic_api import DiagnosticAPI
         assert DiagnosticCollector is not None
         assert DiagnosticAPI is not None
 

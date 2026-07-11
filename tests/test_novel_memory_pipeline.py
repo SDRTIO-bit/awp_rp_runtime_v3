@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from awp_rp_runtime_v2.contracts.active_memory import ActiveMemoryRecord
-from awp_rp_runtime_v2.contracts.novel_chapter import ChapterPlan, ContentSummary
-from awp_rp_runtime_v2.contracts.novel_character import NovelCharacter
-from awp_rp_runtime_v2.contracts.novel_director_guidance import DirectorGuidance
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_write_packet import NovelWritePacket
-from awp_rp_runtime_v2.contracts.rag_memory import RagMemoryRecord
-from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
-from awp_rp_runtime_v2.runtime.novel_writer_adapter import NovelWriterAdapter
+from awp_rp_runtime_v3.contracts.active_memory import ActiveMemoryRecord
+from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan, ContentSummary
+from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter
+from awp_rp_runtime_v3.contracts.novel_director_guidance import DirectorGuidance
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_write_packet import NovelWritePacket
+from awp_rp_runtime_v3.contracts.rag_memory import RagMemoryRecord
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.runtime.novel_writer_adapter import NovelWriterAdapter
 
 
 def _registry(tmp_path):
-    from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-    from awp_rp_runtime_v2.storage.sqlite.database import Database
+    from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+    from awp_rp_runtime_v3.storage.sqlite.database import Database
 
     db = Database(str(tmp_path / "novel_memory.db"))
     db.initialize()
@@ -29,7 +29,7 @@ class CapturingNovelEngine(NovelEngine):
         self.captured_packet: NovelWritePacket | None = None
 
     def _call_director(self, *args, **kwargs):
-        from awp_rp_runtime_v2.contracts.novel_director_guidance import BeatGuidance
+        from awp_rp_runtime_v3.contracts.novel_director_guidance import BeatGuidance
         return DirectorGuidance(
             guidance_id="guid-test",
             character_anchor="主角: 30岁男, 测试角色",

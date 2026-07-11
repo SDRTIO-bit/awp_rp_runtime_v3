@@ -4,7 +4,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from awp_rp_runtime_v2.tests.test_management_api_new_endpoints import (
+from awp_rp_runtime_v3.tests.test_management_api_new_endpoints import (
     _Request,
     _data,
     _load_api,

@@ -9,20 +9,20 @@ Full chain:
 """
 
 import pytest
-from awp_rp_runtime_v2.contracts.card_state import CardState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
 
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-from awp_rp_runtime_v2.runtime.director_runtime import DirectorRuntime, FakeDirectorAdapter
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRunner
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
-from awp_rp_runtime_v2.runtime.writer_input_bundle_builder import WriterInputBundleBuilder
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.runtime.director_runtime import DirectorRuntime, FakeDirectorAdapter
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRunner
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.writer_input_bundle_builder import WriterInputBundleBuilder
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore, FakeRagMemoryStore,
 )
 
@@ -148,7 +148,7 @@ class TestP2EndToEnd:
 
     def test_empty_delegation_plan(self):
         """Test 5: empty plan completes normally."""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
 
         registry = AgentRuntimeRegistry()
         builder = TaskEnvelopeBuilder(registry)
@@ -171,6 +171,6 @@ class TestP2EndToEnd:
 
     def test_subagent_cannot_delegate(self):
         """Test 12: sub-agent cannot delegate."""
-        from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope
+        from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope
         envelope = AgentTaskEnvelope()
         assert "Cannot delegate to sub-agents" in envelope.prohibitions

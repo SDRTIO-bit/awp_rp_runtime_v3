@@ -5,7 +5,7 @@ import types
 from pathlib import Path
 
 project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root.parent))
 
 # ComfyUI runtime module `comfy_execution.validation` is only available inside a
 # running ComfyUI process. Several node/workflow tests exercise its
@@ -33,11 +33,11 @@ except ModuleNotFoundError:
     sys.modules["comfy_execution.validation"] = _stub_validation
 
 import pytest
-from awp_rp_runtime_v2.testing.fakes import (
+from awp_rp_runtime_v3.testing.fakes import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore,
     FakeRagMemoryStore, FakeTraceStore, FakeLLMProvider,
 )
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
 
 
 @pytest.fixture

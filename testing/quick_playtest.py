@@ -48,11 +48,11 @@ def turn(num, kind, cls, player='', **kw):
     return r
 
 # ══ Run ══
-from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
-from awp_rp_runtime_v2.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
-from awp_rp_runtime_v2.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
-from awp_rp_runtime_v2.nodes.continue_turn_execution_node import AWPV2ContinueTurn
-from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+from awp_rp_runtime_v3.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+from awp_rp_runtime_v3.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+from awp_rp_runtime_v3.nodes.continue_turn_execution_node import AWPV2ContinueTurn
+from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
 
 boot = node(AWPV2PersistentBootstrap, source_path=CARD_PATH, session_id=SESSION_ID,
             greeting_id='g1', request_id='req_'+SESSION_ID, run_id='run_'+SESSION_ID)

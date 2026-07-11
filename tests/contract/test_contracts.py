@@ -1,7 +1,7 @@
 """Tests for all contract serialization roundtrips."""
 
 import pytest
-from awp_rp_runtime_v2.contracts import (
+from awp_rp_runtime_v3.contracts import (
     TurnBrief, DelegationPlan, DelegationTask,
     AgentTaskEnvelope, AgentSuggestion, SuggestionKind,
     SuggestionMergeResult, MergeItem, MergeDecision,

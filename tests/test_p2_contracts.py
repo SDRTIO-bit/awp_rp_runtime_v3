@@ -1,7 +1,7 @@
 """P2 Tests: Contract schema validation for TurnBrief, DelegationPlan, etc."""
 
 import pytest
-from awp_rp_runtime_v2.contracts import (
+from awp_rp_runtime_v3.contracts import (
     TurnBrief, NarrativeGoal,
     DelegationPlan, DelegationTask,
     AgentTaskEnvelope, TaskBudget,

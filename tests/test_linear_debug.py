@@ -24,7 +24,7 @@ class TestLinearDebugImport:
     """脚本可 import。"""
 
     def test_01_import_succeeds(self):
-        from awp_rp_runtime_v2.testing import linear_persistent_rp_debug
+        from awp_rp_runtime_v3.testing import linear_persistent_rp_debug
         assert hasattr(linear_persistent_rp_debug, "main")
         assert hasattr(linear_persistent_rp_debug, "run_bootstrap")
         assert hasattr(linear_persistent_rp_debug, "run_first_turn")
@@ -33,20 +33,20 @@ class TestLinearDebugImport:
         assert hasattr(linear_persistent_rp_debug, "run_turn_result_probe")
 
     def test_02_safe_printer(self):
-        from awp_rp_runtime_v2.testing.linear_persistent_rp_debug import SafePrinter
+        from awp_rp_runtime_v3.testing.linear_persistent_rp_debug import SafePrinter
         p = SafePrinter(verbose=False)
         p.kv("test_key", "test_value")
         p.safe_text("label", "some text here")
 
     def test_03_call_node_returns_tuple(self):
-        from awp_rp_runtime_v2.testing.linear_persistent_rp_debug import call_node, output_at
-        from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+        from awp_rp_runtime_v3.testing.linear_persistent_rp_debug import call_node, output_at
+        from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
 
         tmpdir = tempfile.mkdtemp()
         os.environ["AWP_RUNTIME_PROFILE"] = "test"
         os.environ["AWP_TEST_STORE_ROOT"] = tmpdir
         os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "smoke_import"
-        from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+        from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
         clear_registry_cache()
         try:
             result = call_node(AWPV2PersistentBootstrap, {
@@ -71,7 +71,7 @@ class TestLinearDebugFullPipeline:
     """Fake profile 完整跑 bootstrap → first turn → continuation。"""
 
     def test_04_full_pipeline_fake_profile(self):
-        from awp_rp_runtime_v2.testing.linear_persistent_rp_debug import (
+        from awp_rp_runtime_v3.testing.linear_persistent_rp_debug import (
             SafePrinter, StageRunner, call_node, output_at,
         )
 
@@ -79,7 +79,7 @@ class TestLinearDebugFullPipeline:
         os.environ["AWP_RUNTIME_PROFILE"] = "test"
         os.environ["AWP_TEST_STORE_ROOT"] = tmpdir
         os.environ["AWP_TEST_RUNTIME_NAMESPACE"] = "smoke_full"
-        from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+        from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
         clear_registry_cache()
         try:
             p = SafePrinter(verbose=False)
@@ -88,7 +88,7 @@ class TestLinearDebugFullPipeline:
             session_id = "smoke-full-001"
 
             # Bootstrap
-            from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+            from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
             bootstrap = runner.run("bootstrap", AWPV2PersistentBootstrap, {
                 "source_path": card,
                 "session_id": session_id,
@@ -101,7 +101,7 @@ class TestLinearDebugFullPipeline:
             assert binding.get("session_id") == session_id
 
             # First Turn
-            from awp_rp_runtime_v2.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+            from awp_rp_runtime_v3.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
             first = runner.run("first_turn", AWPV2PersistentFirstTurn, {
                 "session_id": session_id,
                 "player_input": "你好",
@@ -115,7 +115,7 @@ class TestLinearDebugFullPipeline:
             assert len(turn_record1.get("writer_output", "")) > 0
 
             # AcceptedTextOutput
-            from awp_rp_runtime_v2.nodes.accepted_text_output_node import AWPV2AcceptedTextOutput
+            from awp_rp_runtime_v3.nodes.accepted_text_output_node import AWPV2AcceptedTextOutput
             ato = runner.run("accepted_text", AWPV2AcceptedTextOutput, {
                 "turn_record": turn_record1,
             })
@@ -127,7 +127,7 @@ class TestLinearDebugFullPipeline:
             assert len(texts[0]) > 0
 
             # TurnResultProbe
-            from awp_rp_runtime_v2.nodes.turn_result_probe_node import AWPV2TurnResultProbe
+            from awp_rp_runtime_v3.nodes.turn_result_probe_node import AWPV2TurnResultProbe
             diag1 = output_at(first, 2)
             probe = runner.run("probe", AWPV2TurnResultProbe, {
                 "receipt": receipt1,
@@ -144,7 +144,7 @@ class TestLinearDebugFullPipeline:
             assert proj.get("quality_status") == "accept"
 
             # Continuation
-            from awp_rp_runtime_v2.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+            from awp_rp_runtime_v3.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
             cont = runner.run("continuation", AWPV2PersistentContinuationTurn, {
                 "session_id": session_id,
                 "player_input": "继续",

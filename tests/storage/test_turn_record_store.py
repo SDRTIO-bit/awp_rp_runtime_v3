@@ -1,9 +1,9 @@
 """Tests for TurnRecord store."""
 
 import pytest
-from awp_rp_runtime_v2.testing.fakes.fake_stores import FakeTurnRecordStore
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.storage.interfaces import DuplicateTurnError
+from awp_rp_runtime_v3.testing.fakes.fake_stores import FakeTurnRecordStore
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.storage.interfaces import DuplicateTurnError
 
 
 class TestTurnRecordStore:

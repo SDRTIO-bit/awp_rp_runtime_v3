@@ -1,7 +1,7 @@
 """Playable E2E Test -- runs full RP session via ComfyUI API.
 
 Usage:
-  python -m awp_rp_runtime_v2.testing.playable_e2e_test --turns 8
+  python -m awp_rp_runtime_v3.testing.playable_e2e_test --turns 8
 
 Requires:
   - ComfyUI running at http://127.0.0.1:8188

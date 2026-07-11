@@ -47,7 +47,7 @@ Write-Host "Running comfy-api-e2e suite..." -ForegroundColor Yellow
 
 $env:PYTHONPATH = (Get-Location).Path
 
-python -m awp_rp_runtime_v2.testing.run_workflow_scenarios `
+python -m awp_rp_runtime_v3.testing.run_workflow_scenarios `
     --suite comfy-api-e2e `
     --comfy-url $ComfyUrl `
     --timeout $Timeout `

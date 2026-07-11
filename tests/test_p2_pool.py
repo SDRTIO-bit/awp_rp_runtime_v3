@@ -1,17 +1,17 @@
 """P2 Tests: DynamicSubAgentPool, TaskEnvelopeBuilder, ToolPermission."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import (
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import (
     AgentRuntimeRegistry, AgentRunner,
 )
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.tool_permission_runtime import ToolPermissionRuntime
-from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.card_state import CardState
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.tool_permission_runtime import ToolPermissionRuntime
+from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.card_state import CardState
 
 
 def _make_snapshot() -> RoundSnapshot:

@@ -1,7 +1,7 @@
 """Tests for CardState contract."""
 
 import pytest
-from awp_rp_runtime_v2.contracts.card_state import (
+from awp_rp_runtime_v3.contracts.card_state import (
     CardState, VariableEntry, EventFlag, SceneState,
     SCHEMA_ID, SCHEMA_VERSION,
 )

@@ -1,15 +1,21 @@
 """Tests for NovelEngine."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_chapter import ChapterPlan
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan
+
+
+def test_v3_package_is_importable():
+    from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+
+    assert NovelEngine.__name__ == "NovelEngine"
 
 
 @pytest.fixture
 def reg(tmp_path):
-    from awp_rp_runtime_v2.storage.sqlite.database import Database
-    from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+    from awp_rp_runtime_v3.storage.sqlite.database import Database
+    from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
     db = Database(str(tmp_path / "test.db"))
     db.initialize()
     return SessionRuntimeStoreRegistry(db)

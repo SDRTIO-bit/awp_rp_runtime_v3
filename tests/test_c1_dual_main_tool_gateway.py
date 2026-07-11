@@ -7,43 +7,43 @@ All tests use Fake adapters — no real LLM calls.
 import pytest
 import uuid
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.tool_plan import ToolPlan, PlannedToolRequest
-from awp_rp_runtime_v2.contracts.tool_request import ToolRequest
-from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
-from awp_rp_runtime_v2.contracts.tool_result_bundle import ToolResultBundle
-from awp_rp_runtime_v2.contracts.tool_permission import ToolPermission
-from awp_rp_runtime_v2.contracts.enrichment_bundle import EnrichmentBundle, EnrichmentItem
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
-from awp_rp_runtime_v2.contracts.writer_draft import WriterDraft
-from awp_rp_runtime_v2.contracts.writer_input_bundle import WriterInputBundle
-from awp_rp_runtime_v2.contracts.quality_issue import QualityIssue, IssueSeverity
-from awp_rp_runtime_v2.contracts.quality_gate_result import QualityGateResult
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.revision_request import RevisionRequest
-from awp_rp_runtime_v2.contracts.revision_result import RevisionResult
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.tool_plan import ToolPlan, PlannedToolRequest
+from awp_rp_runtime_v3.contracts.tool_request import ToolRequest
+from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
+from awp_rp_runtime_v3.contracts.tool_result_bundle import ToolResultBundle
+from awp_rp_runtime_v3.contracts.tool_permission import ToolPermission
+from awp_rp_runtime_v3.contracts.enrichment_bundle import EnrichmentBundle, EnrichmentItem
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.writer_draft import WriterDraft
+from awp_rp_runtime_v3.contracts.writer_input_bundle import WriterInputBundle
+from awp_rp_runtime_v3.contracts.quality_issue import QualityIssue, IssueSeverity
+from awp_rp_runtime_v3.contracts.quality_gate_result import QualityGateResult
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.revision_request import RevisionRequest
+from awp_rp_runtime_v3.contracts.revision_result import RevisionResult
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan
 
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry, ToolRegistration, V1_ALLOWED_TOOLS
-from awp_rp_runtime_v2.runtime.tool_permission_policy import ToolPermissionPolicy
-from awp_rp_runtime_v2.runtime.tool_budget_runtime import ToolBudgetRuntime
-from awp_rp_runtime_v2.runtime.tool_result_validator import ToolResultValidator
-from awp_rp_runtime_v2.runtime.tool_gateway import ToolGateway, FakeToolRunner
-from awp_rp_runtime_v2.runtime.enrichment_merger import EnrichmentMerger
-from awp_rp_runtime_v2.runtime.final_turn_brief_runtime import FinalTurnBriefRuntime
-from awp_rp_runtime_v2.runtime.director_v2_runtime import DirectorV2Runtime, FakeDirectorV2Adapter
-from awp_rp_runtime_v2.runtime.writer_v2_runtime import WriterV2Runtime, FakeWriterV2Adapter
-from awp_rp_runtime_v2.runtime.reviser_runtime import ReviserRuntime
-from awp_rp_runtime_v2.runtime.quality_pipeline_runtime import (
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry, ToolRegistration, V1_ALLOWED_TOOLS
+from awp_rp_runtime_v3.runtime.tool_permission_policy import ToolPermissionPolicy
+from awp_rp_runtime_v3.runtime.tool_budget_runtime import ToolBudgetRuntime
+from awp_rp_runtime_v3.runtime.tool_result_validator import ToolResultValidator
+from awp_rp_runtime_v3.runtime.tool_gateway import ToolGateway, FakeToolRunner
+from awp_rp_runtime_v3.runtime.enrichment_merger import EnrichmentMerger
+from awp_rp_runtime_v3.runtime.final_turn_brief_runtime import FinalTurnBriefRuntime
+from awp_rp_runtime_v3.runtime.director_v2_runtime import DirectorV2Runtime, FakeDirectorV2Adapter
+from awp_rp_runtime_v3.runtime.writer_v2_runtime import WriterV2Runtime, FakeWriterV2Adapter
+from awp_rp_runtime_v3.runtime.reviser_runtime import ReviserRuntime
+from awp_rp_runtime_v3.runtime.quality_pipeline_runtime import (
     QualityPipelineRuntime, IdentityGate, SceneGate, LengthGate, FormatGate,
 )
-from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
 
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore, FakeRagMemoryStore,
 )
 
@@ -687,7 +687,7 @@ class TestC1Test22:
 # ============================================================
 class TestC1Test23:
     def test_accept_allows_commit(self):
-        from awp_rp_runtime_v2.contracts.quality_decision import assert_side_effects_allowed
+        from awp_rp_runtime_v3.contracts.quality_decision import assert_side_effects_allowed
 
         decision = QualityDecision(verdict=QualityVerdict.ACCEPTED)
         assert_side_effects_allowed(decision)  # Should not raise
@@ -698,14 +698,14 @@ class TestC1Test23:
 # ============================================================
 class TestC1Test24:
     def test_reject_blocks_writes(self):
-        from awp_rp_runtime_v2.contracts.quality_decision import assert_side_effects_allowed, SideEffectBlockedError
+        from awp_rp_runtime_v3.contracts.quality_decision import assert_side_effects_allowed, SideEffectBlockedError
 
         decision = QualityDecision(verdict=QualityVerdict.REJECTED)
         with pytest.raises(SideEffectBlockedError):
             assert_side_effects_allowed(decision)
 
     def test_revise_blocks_writes(self):
-        from awp_rp_runtime_v2.contracts.quality_decision import assert_side_effects_allowed, SideEffectBlockedError
+        from awp_rp_runtime_v3.contracts.quality_decision import assert_side_effects_allowed, SideEffectBlockedError
 
         decision = QualityDecision(verdict=QualityVerdict.REVISE)
         with pytest.raises(SideEffectBlockedError):
@@ -718,7 +718,7 @@ class TestC1Test24:
 class TestC1Test25:
     def test_contracts_importable(self):
         """Verify all new contracts are importable."""
-        from awp_rp_runtime_v2.contracts import (
+        from awp_rp_runtime_v3.contracts import (
             DirectorPlan, ToolPlan, PlannedToolRequest, ToolRequest,
             ToolResult, ToolResultBundle, ToolPermission, ToolExecutionReceipt,
             EnrichmentBundle, EnrichmentItem, FinalTurnBrief, WriterDraft,
@@ -729,7 +729,7 @@ class TestC1Test25:
 
     def test_runtime_importable(self):
         """Verify all new runtime modules are importable."""
-        from awp_rp_runtime_v2.runtime import (
+        from awp_rp_runtime_v3.runtime import (
             ToolRegistry, ToolPermissionPolicy, ToolBudgetRuntime,
             ToolResultValidator, ToolGateway, EnrichmentMerger,
             FinalTurnBriefRuntime, DirectorV2Runtime, WriterV2Runtime,
@@ -745,7 +745,7 @@ class TestC1Test25:
 class TestC1Test26:
     def test_node_registration(self):
         """Verify all C1 nodes are registered."""
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
         c1_nodes = [
             "AWPV2DirectorPlan", "AWPV2ToolPlan", "AWPV2ToolGateway",

@@ -1,7 +1,7 @@
 """Tests for DelegationPolicy — updated for P2 contract changes."""
 
 import pytest
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
 
 
 class TestDelegationPolicy:
@@ -37,7 +37,7 @@ class TestDelegationPolicy:
             "emotion-relationship-analyst", "memory-curator",
             "state-updater", "rp-critic",
         }
-        from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry
+        from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry
         registry = AgentRuntimeRegistry()
         for role in valid_roles:
             assert registry.is_registered(role)

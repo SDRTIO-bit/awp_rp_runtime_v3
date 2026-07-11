@@ -1,7 +1,7 @@
 """Tests for RetryPolicy."""
 
 import pytest
-from awp_rp_runtime_v2.policies.retry_policy import RetryPolicy
+from awp_rp_runtime_v3.policies.retry_policy import RetryPolicy
 
 
 class TestRetryPolicy:

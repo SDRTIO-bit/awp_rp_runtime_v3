@@ -1,18 +1,18 @@
 """P1 Tests: CardState commit, isolation, idempotency, validation."""
 
 import pytest
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry
-from awp_rp_runtime_v2.contracts.card_state_patch import (
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry
+from awp_rp_runtime_v3.contracts.card_state_patch import (
     CardStatePatch, CardStatePatchOperation, PatchOpType,
     validate_patch_operations,
 )
-from awp_rp_runtime_v2.contracts.card_state_commit import (
+from awp_rp_runtime_v3.contracts.card_state_commit import (
     CardStateCommitRequest, CardStateCommitResult, CardStateCommitStatus,
 )
-from awp_rp_runtime_v2.contracts.quality_decision import (
+from awp_rp_runtime_v3.contracts.quality_decision import (
     QualityDecision, QualityVerdict, assert_side_effects_allowed, SideEffectBlockedError,
 )
-from awp_rp_runtime_v2.testing.fakes.fake_stores import FakeCardStateStore
+from awp_rp_runtime_v3.testing.fakes.fake_stores import FakeCardStateStore
 
 
 class TestCardStateIsolation:
@@ -150,7 +150,7 @@ class TestGateBlocking:
             assert_side_effects_allowed(None)
 
     def test_trace_id_mismatch_blocks(self):
-        from awp_rp_runtime_v2.runtime.card_state_commit_runtime import CardStateCommitRuntime
+        from awp_rp_runtime_v3.runtime.card_state_commit_runtime import CardStateCommitRuntime
         store = FakeCardStateStore()
         store.initialize("c1", "s1")
         runtime = CardStateCommitRuntime(store)

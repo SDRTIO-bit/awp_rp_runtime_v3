@@ -2,7 +2,7 @@
 import json, sys, os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
 
 
 def build_graph(nodes_spec):

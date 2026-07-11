@@ -3,10 +3,10 @@ import os
 import time
 
 def test_writer_follows_variable_rules():
-    from awp_rp_runtime_v2.adapters.llm.deepseek_adapter import DeepSeekAdapter
-    from awp_rp_runtime_v2.adapters.llm.real_writer_adapter import RealWriterV2Adapter
-    from awp_rp_runtime_v2.adapters.llm.model_profile_registry import ModelProfileRegistry
-    from awp_rp_runtime_v2.contracts.writer_input_bundle import WriterInputBundle
+    from awp_rp_runtime_v3.adapters.llm.deepseek_adapter import DeepSeekAdapter
+    from awp_rp_runtime_v3.adapters.llm.real_writer_adapter import RealWriterV2Adapter
+    from awp_rp_runtime_v3.adapters.llm.model_profile_registry import ModelProfileRegistry
+    from awp_rp_runtime_v3.contracts.writer_input_bundle import WriterInputBundle
 
     assert os.environ.get("DEEPSEEK_API_KEY"), "需要 DEEPSEEK_API_KEY"
     profile = ModelProfileRegistry.resolve("deepseek-v4-pro-writer")

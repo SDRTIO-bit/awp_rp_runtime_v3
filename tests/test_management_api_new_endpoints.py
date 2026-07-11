@@ -7,12 +7,12 @@ import sys
 import threading
 from types import SimpleNamespace
 
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.contracts.active_memory import ActiveMemoryRecord
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace, TraceEvent
-from awp_rp_runtime_v2.contracts.rag_memory import RagMemoryRecord
-from awp_rp_runtime_v2.tests.factories import (
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.contracts.active_memory import ActiveMemoryRecord
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace, TraceEvent
+from awp_rp_runtime_v3.contracts.rag_memory import RagMemoryRecord
+from awp_rp_runtime_v3.tests.factories import (
     make_binding,
     make_card_definition,
     make_opening_record,
@@ -57,7 +57,7 @@ def _load_api(monkeypatch):
         PromptServer=SimpleNamespace(instance=SimpleNamespace(routes=routes))
     )
     monkeypatch.setitem(sys.modules, "server", fake_server)
-    module_name = "awp_rp_runtime_v2.runtime.management_api"
+    module_name = "awp_rp_runtime_v3.runtime.management_api"
     if module_name in sys.modules:
         module = importlib.reload(sys.modules[module_name])
     else:
@@ -79,7 +79,7 @@ def test_post_turn_endpoint_dispatches_player_input(tmp_path, monkeypatch):
     _module, routes = _load_api(monkeypatch)
     calls = {}
 
-    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+    from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
     def fake_execute_turn(self, session_id, player_input, mode="", workflow=""):
         calls.update(
@@ -119,7 +119,7 @@ def test_post_turn_dispatcher_runs_off_event_loop_thread(tmp_path, monkeypatch):
     _module, routes = _load_api(monkeypatch)
     calls = {}
 
-    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+    from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
     def fake_execute_turn(self, session_id, player_input, mode="", workflow=""):
         calls["dispatcher_thread_id"] = threading.get_ident()
@@ -173,7 +173,7 @@ def test_post_turn_stream_endpoint_writes_sse_events(monkeypatch):
 
     monkeypatch.setattr(module.web, "StreamResponse", FakeStreamResponse)
 
-    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+    from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
     def fake_execute_turn_streaming(
         self,
@@ -403,7 +403,7 @@ def test_continue_endpoint_dispatches_mode_and_workflow(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
 
     calls = {}
-    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+    from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
     def fake_execute_continue(self, session_id, mode="", workflow=""):
         calls["session_id"] = session_id
@@ -541,7 +541,7 @@ def test_console_command_send_dispatches_python_turn(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
 
     calls = {}
-    from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+    from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
     def fake_execute_turn(self, session_id, player_input, mode="", workflow=""):
         calls.update({

@@ -8,52 +8,52 @@ import pytest
 import uuid
 from datetime import datetime, timezone
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
 
 # D2 contracts
-from awp_rp_runtime_v2.contracts.opportunity_request import OpportunityRequest
-from awp_rp_runtime_v2.contracts.opportunity_candidate import (
+from awp_rp_runtime_v3.contracts.opportunity_request import OpportunityRequest
+from awp_rp_runtime_v3.contracts.opportunity_candidate import (
     OpportunityCandidate, OpportunityKind, NarrativeFunction,
 )
-from awp_rp_runtime_v2.contracts.opportunity_evidence import OpportunityEvidence
-from awp_rp_runtime_v2.contracts.opportunity_result import (
+from awp_rp_runtime_v3.contracts.opportunity_evidence import OpportunityEvidence
+from awp_rp_runtime_v3.contracts.opportunity_result import (
     OpportunityResult, OpportunityStatus, RejectedCandidate,
 )
-from awp_rp_runtime_v2.contracts.opportunity_risk import OpportunityRisk, OpportunityRiskLevel
-from awp_rp_runtime_v2.contracts.opportunity_suggestion import (
+from awp_rp_runtime_v3.contracts.opportunity_risk import OpportunityRisk, OpportunityRiskLevel
+from awp_rp_runtime_v3.contracts.opportunity_suggestion import (
     OpportunitySuggestion, OpportunitySuggestionKind,
 )
-from awp_rp_runtime_v2.contracts.opportunity_trigger_diagnostics import OpportunityTriggerDiagnostics
+from awp_rp_runtime_v3.contracts.opportunity_trigger_diagnostics import OpportunityTriggerDiagnostics
 
 # D2 runtime
-from awp_rp_runtime_v2.runtime.opportunity_trigger_policy import OpportunityTriggerPolicy, OpportunityTriggerResult
-from awp_rp_runtime_v2.runtime.opportunity_runtime import OpportunityRuntime
-from awp_rp_runtime_v2.runtime.opportunity_query_planner import OpportunityQueryPlanner
-from awp_rp_runtime_v2.runtime.opportunity_candidate_generator import OpportunityCandidateGenerator
-from awp_rp_runtime_v2.runtime.opportunity_validator import OpportunityValidator
-from awp_rp_runtime_v2.runtime.opportunity_ranker import OpportunityRanker, MAX_ACCEPTED
-from awp_rp_runtime_v2.runtime.opportunity_adapter import OpportunityAdapter
-from awp_rp_runtime_v2.runtime.opportunity_tool_profile import (
+from awp_rp_runtime_v3.runtime.opportunity_trigger_policy import OpportunityTriggerPolicy, OpportunityTriggerResult
+from awp_rp_runtime_v3.runtime.opportunity_runtime import OpportunityRuntime
+from awp_rp_runtime_v3.runtime.opportunity_query_planner import OpportunityQueryPlanner
+from awp_rp_runtime_v3.runtime.opportunity_candidate_generator import OpportunityCandidateGenerator
+from awp_rp_runtime_v3.runtime.opportunity_validator import OpportunityValidator
+from awp_rp_runtime_v3.runtime.opportunity_ranker import OpportunityRanker, MAX_ACCEPTED
+from awp_rp_runtime_v3.runtime.opportunity_adapter import OpportunityAdapter
+from awp_rp_runtime_v3.runtime.opportunity_tool_profile import (
     OPPORTUNITY_TOOLS, OPPORTUNITY_ROLE_SPEC,
 )
 
 # Existing runtime
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry
-from awp_rp_runtime_v2.runtime.tool_permission_policy import ToolPermissionPolicy
-from awp_rp_runtime_v2.runtime.tool_gateway import ToolGateway, FakeToolRunner
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry
+from awp_rp_runtime_v3.runtime.tool_permission_policy import ToolPermissionPolicy
+from awp_rp_runtime_v3.runtime.tool_gateway import ToolGateway, FakeToolRunner
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
 
 
 # ─────────────────────────────────────────────
@@ -478,7 +478,7 @@ class TestSuggestionMergeOpportunity:
 
     def test_23_opportunity_as_soft_guidance(self):
         """SuggestionMerge 将 Opportunity 视为软 Guidance。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         merger = SuggestionMerger()
         snapshot = _make_snapshot("test")
         brief = TurnBrief(brief_id="b1", must_not_do=[], must_preserve_facts=[])
@@ -523,7 +523,7 @@ class TestSuggestionMergeOpportunity:
 
     def test_25_writer_cannot_read_raw_opportunity_result(self):
         """Writer 不可读取原始 OpportunityResult。"""
-        from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+        from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
         builder = WriterInputBundleV2Builder()
         snapshot = _make_snapshot()
         final_brief = FinalTurnBrief(
@@ -545,7 +545,7 @@ class TestNoOpPath:
 
     def test_26_noop_path_completes(self):
         """shouldTrigger=false → 空 OpportunitySuggestion → SuggestionMerge 正常完成。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         snapshot = _make_snapshot("你好")
         plan = _make_director_plan(snapshot)
         policy = OpportunityTriggerPolicy()
@@ -580,7 +580,7 @@ class TestToolFailureBehavior:
 
     def test_27_tool_timeout_returns_degraded(self):
         """optional Tool timeout 返回 degraded，不阻断主链。"""
-        from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
+        from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
         tr = ToolResult(
             result_id="tr1", request_id="req1", trace_id="t1",
             tool_id="rag_memory_lookup",
@@ -606,7 +606,7 @@ class TestD2NodeRegistration:
     """D2: Opportunity node registration tests."""
 
     def test_d2_nodes_present(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
         d2 = {
             "AWPV2OpportunityTrigger", "AWPV2OpportunityRequest",
             "AWPV2OpportunityAgent", "AWPV2OpportunityValidator",
@@ -617,7 +617,7 @@ class TestD2NodeRegistration:
             assert name in NODE_CLASS_MAPPINGS, f"Missing: {name}"
 
     def test_d2_display_names_chinese(self):
-        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_DISPLAY_NAME_MAPPINGS
         d2_displays = [
             "AWP V2 戏剧机会触发", "AWP V2 戏剧机会请求",
             "AWP V2 戏剧机会Agent", "AWP V2 戏剧机会验证",
@@ -745,7 +745,7 @@ class TestD2E2ENormalPath:
 
     def test_e2e_normal_opportunity_adoption(self):
         """正常机会采纳路径: 6回合历史 → 触发 → 候选 → 验证 → 排序 → 合并 → Writer。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
 
         # 1. Build history (6 turns)
         turns = []
@@ -868,7 +868,7 @@ class TestD2E2EViolationDegradation:
 
     def test_e2e_violation_and_degradation(self):
         """违规候选与降级路径: 无证据/既成事件/代理权侵犯/冲突 → 全部拒绝 → degraded。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
 
         # 1. Setup snapshot with minimal data
         snapshot = _make_snapshot("和NPC说话")

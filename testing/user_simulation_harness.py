@@ -9,7 +9,7 @@ Usage (real model):
   $env:AWP_REAL_LLM_E2E = "1"
   $env:DEEPSEEK_API_KEY = "..."
   $env:AWP_ALLOW_EXTERNAL_CARD_CONTENT = "1"
-  python -m awp_rp_runtime_v2.testing.user_simulation_harness \
+  python -m awp_rp_runtime_v3.testing.user_simulation_harness \
       --card-path "<card.json>" --turns 10 \
       --director-profile-id "deepseek-v4-pro-director" \
       --writer-profile-id "deepseek-v4-flash-writer" \

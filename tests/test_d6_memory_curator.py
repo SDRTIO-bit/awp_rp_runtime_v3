@@ -15,33 +15,33 @@ from __future__ import annotations
 import uuid
 import pytest
 
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.card_state_commit import (
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.card_state_commit import (
     CardStateCommitResult, CardStateCommitStatus,
 )
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.card_state import CardState, SceneState
-from awp_rp_runtime_v2.contracts.active_memory import ActiveMemoryRecord, ActiveMemoryKind, ActiveMemoryStatus
-from awp_rp_runtime_v2.contracts.rag_memory import RagMemoryRecord, RagMemoryStatus
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.memory_curation_trigger_diagnostics import MemoryCurationTriggerDiagnostics
-from awp_rp_runtime_v2.contracts.memory_curation_request import MemoryCurationRequest
-from awp_rp_runtime_v2.contracts.memory_curation_candidate import (
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.card_state import CardState, SceneState
+from awp_rp_runtime_v3.contracts.active_memory import ActiveMemoryRecord, ActiveMemoryKind, ActiveMemoryStatus
+from awp_rp_runtime_v3.contracts.rag_memory import RagMemoryRecord, RagMemoryStatus
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.memory_curation_trigger_diagnostics import MemoryCurationTriggerDiagnostics
+from awp_rp_runtime_v3.contracts.memory_curation_request import MemoryCurationRequest
+from awp_rp_runtime_v3.contracts.memory_curation_candidate import (
     MemoryCurationCandidate, CurationTargetLayer, CurationOperation,
 )
-from awp_rp_runtime_v2.contracts.memory_curation_evidence import MemoryCurationEvidence
-from awp_rp_runtime_v2.contracts.memory_curation_result import MemoryCurationResult
-from awp_rp_runtime_v2.contracts.memory_commit_plan import MemoryCommitPlan
+from awp_rp_runtime_v3.contracts.memory_curation_evidence import MemoryCurationEvidence
+from awp_rp_runtime_v3.contracts.memory_curation_result import MemoryCurationResult
+from awp_rp_runtime_v3.contracts.memory_commit_plan import MemoryCommitPlan
 
-from awp_rp_runtime_v2.runtime.memory_curation_trigger_policy import MemoryCurationTriggerPolicy
-from awp_rp_runtime_v2.runtime.memory_curation_runtime import MemoryCurationRuntime
-from awp_rp_runtime_v2.runtime.memory_curation_query_planner import MemoryCurationQueryPlanner
-from awp_rp_runtime_v2.runtime.memory_candidate_generator import FakeMemoryCandidateGenerator
-from awp_rp_runtime_v2.runtime.memory_curation_validator import MemoryCurationValidator
-from awp_rp_runtime_v2.runtime.memory_curation_ranker import MemoryCurationRanker
-from awp_rp_runtime_v2.runtime.memory_plan_compiler import MemoryPlanCompiler
-from awp_rp_runtime_v2.runtime.memory_curator_adapter import FakeMemoryCuratorAdapter
+from awp_rp_runtime_v3.runtime.memory_curation_trigger_policy import MemoryCurationTriggerPolicy
+from awp_rp_runtime_v3.runtime.memory_curation_runtime import MemoryCurationRuntime
+from awp_rp_runtime_v3.runtime.memory_curation_query_planner import MemoryCurationQueryPlanner
+from awp_rp_runtime_v3.runtime.memory_candidate_generator import FakeMemoryCandidateGenerator
+from awp_rp_runtime_v3.runtime.memory_curation_validator import MemoryCurationValidator
+from awp_rp_runtime_v3.runtime.memory_curation_ranker import MemoryCurationRanker
+from awp_rp_runtime_v3.runtime.memory_plan_compiler import MemoryPlanCompiler
+from awp_rp_runtime_v3.runtime.memory_curator_adapter import FakeMemoryCuratorAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -666,7 +666,7 @@ class TestCuratorIsolation:
 class TestCuratorToolProfile:
 
     def test_tool_profile_exists(self):
-        from awp_rp_runtime_v2.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
         assert MEMORY_CURATOR_ROLE_SPEC.role_id == "memory-curator"
         assert MEMORY_CURATOR_ROLE_SPEC.can_delegate is False
         assert MEMORY_CURATOR_ROLE_SPEC.can_write_state is False
@@ -674,7 +674,7 @@ class TestCuratorToolProfile:
         assert MEMORY_CURATOR_ROLE_SPEC.can_generate_final_text is False
 
     def test_allowed_tools_whitelist(self):
-        from awp_rp_runtime_v2.runtime.memory_curator_tool_profile import MEMORY_CURATOR_TOOLS
+        from awp_rp_runtime_v3.runtime.memory_curator_tool_profile import MEMORY_CURATOR_TOOLS
         allowed = set(MEMORY_CURATOR_TOOLS.keys())
         expected = {
             "accepted_turn_lookup", "active_memory_lookup", "rag_memory_lookup",
@@ -690,7 +690,7 @@ class TestCuratorToolProfile:
 class TestCuratorNoDelegation:
 
     def test_can_delegate_false(self):
-        from awp_rp_runtime_v2.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
         assert MEMORY_CURATOR_ROLE_SPEC.can_delegate is False
 
 
@@ -701,7 +701,7 @@ class TestCuratorNoDelegation:
 class TestCuratorNoStateProposal:
 
     def test_can_write_state_false(self):
-        from awp_rp_runtime_v2.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
         assert MEMORY_CURATOR_ROLE_SPEC.can_write_state is False
 
 
@@ -712,7 +712,7 @@ class TestCuratorNoStateProposal:
 class TestCuratorNoMemoryWrite:
 
     def test_can_write_memory_false(self):
-        from awp_rp_runtime_v2.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
         assert MEMORY_CURATOR_ROLE_SPEC.can_write_memory is False
 
 
@@ -723,7 +723,7 @@ class TestCuratorNoMemoryWrite:
 class TestCuratorNoFinalText:
 
     def test_can_generate_final_text_false(self):
-        from awp_rp_runtime_v2.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.memory_curator_tool_profile import MEMORY_CURATOR_ROLE_SPEC
         assert MEMORY_CURATOR_ROLE_SPEC.can_generate_final_text is False
 
 

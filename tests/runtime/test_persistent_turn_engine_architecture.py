@@ -1,13 +1,13 @@
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.card_definition import CardDefinition
-from awp_rp_runtime_v2.contracts.card_profile import CardProfile
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.runtime.persistent_turn_engine import (
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.card_definition import CardDefinition
+from awp_rp_runtime_v3.contracts.card_profile import CardProfile
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.runtime.persistent_turn_engine import (
     PersistentTurnEngine,
     _delegation_agent_name,
 )
-from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
 
 
 def test_delegation_role_names_normalize_to_runtime_agent_names():

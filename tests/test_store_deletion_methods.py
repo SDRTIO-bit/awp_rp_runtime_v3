@@ -1,6 +1,6 @@
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.tests.factories import (
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.tests.factories import (
     make_binding,
     make_bootstrap_receipt,
     make_card_definition,

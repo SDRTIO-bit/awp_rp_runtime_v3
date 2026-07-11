@@ -26,10 +26,10 @@ jobs:
         run: python -m pytest tests/ -q --tb=short
 
       - name: Run smoke scenario suite
-        run: python -m awp_rp_runtime_v2.testing.run_workflow_scenarios --suite smoke --verbose
+        run: python -m awp_rp_runtime_v3.testing.run_workflow_scenarios --suite smoke --verbose
 
       - name: Run integration scenario suite
-        run: python -m awp_rp_runtime_v2.testing.run_workflow_scenarios --suite integration --verbose
+        run: python -m awp_rp_runtime_v3.testing.run_workflow_scenarios --suite integration --verbose
 
       - name: Upload test artifacts
         if: always()

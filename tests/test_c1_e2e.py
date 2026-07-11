@@ -7,43 +7,43 @@ Test 2: Failure path — revise then reject with zero side effects
 import pytest
 import uuid
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.tool_plan import ToolPlan, PlannedToolRequest
-from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
-from awp_rp_runtime_v2.contracts.tool_result_bundle import ToolResultBundle
-from awp_rp_runtime_v2.contracts.enrichment_bundle import EnrichmentBundle
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
-from awp_rp_runtime_v2.contracts.writer_draft import WriterDraft
-from awp_rp_runtime_v2.contracts.writer_input_bundle import WriterInputBundle
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.tool_plan import ToolPlan, PlannedToolRequest
+from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
+from awp_rp_runtime_v3.contracts.tool_result_bundle import ToolResultBundle
+from awp_rp_runtime_v3.contracts.enrichment_bundle import EnrichmentBundle
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.writer_draft import WriterDraft
+from awp_rp_runtime_v3.contracts.writer_input_bundle import WriterInputBundle
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan
 
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry
-from awp_rp_runtime_v2.runtime.tool_permission_policy import ToolPermissionPolicy
-from awp_rp_runtime_v2.runtime.tool_budget_runtime import ToolBudgetRuntime
-from awp_rp_runtime_v2.runtime.tool_gateway import ToolGateway, FakeToolRunner
-from awp_rp_runtime_v2.runtime.enrichment_merger import EnrichmentMerger
-from awp_rp_runtime_v2.runtime.final_turn_brief_runtime import FinalTurnBriefRuntime
-from awp_rp_runtime_v2.runtime.director_v2_runtime import DirectorV2Runtime, FakeDirectorV2Adapter
-from awp_rp_runtime_v2.runtime.writer_v2_runtime import WriterV2Runtime, FakeWriterV2Adapter
-from awp_rp_runtime_v2.runtime.reviser_runtime import ReviserRuntime
-from awp_rp_runtime_v2.runtime.quality_pipeline_runtime import QualityPipelineRuntime
-from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-from awp_rp_runtime_v2.runtime.state_proposal_runtime import StateProposalRuntime
-from awp_rp_runtime_v2.runtime.card_state_commit_runtime import CardStateCommitRuntime
-from awp_rp_runtime_v2.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
-from awp_rp_runtime_v2.runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
-from awp_rp_runtime_v2.runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry
+from awp_rp_runtime_v3.runtime.tool_permission_policy import ToolPermissionPolicy
+from awp_rp_runtime_v3.runtime.tool_budget_runtime import ToolBudgetRuntime
+from awp_rp_runtime_v3.runtime.tool_gateway import ToolGateway, FakeToolRunner
+from awp_rp_runtime_v3.runtime.enrichment_merger import EnrichmentMerger
+from awp_rp_runtime_v3.runtime.final_turn_brief_runtime import FinalTurnBriefRuntime
+from awp_rp_runtime_v3.runtime.director_v2_runtime import DirectorV2Runtime, FakeDirectorV2Adapter
+from awp_rp_runtime_v3.runtime.writer_v2_runtime import WriterV2Runtime, FakeWriterV2Adapter
+from awp_rp_runtime_v3.runtime.reviser_runtime import ReviserRuntime
+from awp_rp_runtime_v3.runtime.quality_pipeline_runtime import QualityPipelineRuntime
+from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.runtime.state_proposal_runtime import StateProposalRuntime
+from awp_rp_runtime_v3.runtime.card_state_commit_runtime import CardStateCommitRuntime
+from awp_rp_runtime_v3.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
+from awp_rp_runtime_v3.runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
+from awp_rp_runtime_v3.runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
 
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore, FakeRagMemoryStore,
     FakeTraceStore,
 )
-from awp_rp_runtime_v2.testing.fakes.fake_llm import FakeLLMProvider
+from awp_rp_runtime_v3.testing.fakes.fake_llm import FakeLLMProvider
 
 
 class TestC1E2EHappyPath:
@@ -191,9 +191,9 @@ class TestC1E2EHappyPath:
         assert turn_record.writer_output == draft.text
 
         # 14. Memory Commit (ActiveMemory + RAG)
-        from awp_rp_runtime_v2.contracts.memory_commit_plan import MemoryCommitPlan, MemoryCommitRequest
-        from awp_rp_runtime_v2.contracts.rag_memory import RagMemoryRecord
-        from awp_rp_runtime_v2.contracts.active_memory import ActiveMemoryRecord
+        from awp_rp_runtime_v3.contracts.memory_commit_plan import MemoryCommitPlan, MemoryCommitRequest
+        from awp_rp_runtime_v3.contracts.rag_memory import RagMemoryRecord
+        from awp_rp_runtime_v3.contracts.active_memory import ActiveMemoryRecord
 
         rag_entry = RagMemoryRecord(
             memory_id=f"rag_{turn_record.turn_id}",
@@ -321,8 +321,8 @@ class TestC1E2EFailurePath:
         if decision1.verdict == QualityVerdict.REVISE:
             reviser = ReviserRuntime(writer_adapter, max_revisions=1)
 
-            from awp_rp_runtime_v2.contracts.revision_request import RevisionRequest
-            from awp_rp_runtime_v2.contracts.quality_issue import QualityIssue
+            from awp_rp_runtime_v3.contracts.revision_request import RevisionRequest
+            from awp_rp_runtime_v3.contracts.quality_issue import QualityIssue
 
             request = RevisionRequest(
                 request_id="rr1", trace_id=snapshot.trace_id,

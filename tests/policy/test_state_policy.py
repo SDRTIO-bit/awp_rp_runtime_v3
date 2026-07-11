@@ -1,9 +1,9 @@
 """Tests for StatePolicy."""
 
 import pytest
-from awp_rp_runtime_v2.policies.state_policy import StatePolicy
-from awp_rp_runtime_v2.contracts.card_state import CardState
-from awp_rp_runtime_v2.contracts.state_update_proposal import (
+from awp_rp_runtime_v3.policies.state_policy import StatePolicy
+from awp_rp_runtime_v3.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.state_update_proposal import (
     StateUpdateProposal, PatchOp, PatchOpEntry,
 )
 

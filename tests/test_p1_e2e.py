@@ -7,20 +7,20 @@ Full chain:
 """
 
 import pytest
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry
-from awp_rp_runtime_v2.contracts.card_state_patch import (
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry
+from awp_rp_runtime_v3.contracts.card_state_patch import (
     CardStatePatch, CardStatePatchOperation, PatchOpType,
 )
-from awp_rp_runtime_v2.contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore, FakeRagMemoryStore,
 )
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-from awp_rp_runtime_v2.runtime.card_state_commit_runtime import CardStateCommitRuntime
-from awp_rp_runtime_v2.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.runtime.card_state_commit_runtime import CardStateCommitRuntime
+from awp_rp_runtime_v3.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
 
 
 class TestEndToEnd:

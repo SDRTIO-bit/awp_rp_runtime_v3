@@ -1,7 +1,7 @@
 """Real ComfyUI Persistence Acceptance — verifies SQLite persistence across restarts.
 
 Usage:
-  python -m awp_rp_runtime_v2.testing.real_comfy_persistence_acceptance --managed-comfy --restart-after-turn --turns 2
+  python -m awp_rp_runtime_v3.testing.real_comfy_persistence_acceptance --managed-comfy --restart-after-turn --turns 2
 
 Core scenario:
   1. Bootstrap session to SQLite via _seed_session (bootstrap unit-tested separately)

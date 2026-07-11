@@ -160,7 +160,7 @@ class StageRunner:
 def run_bootstrap(args, p: SafePrinter, runner: StageRunner) -> dict[str, Any] | None:
     p.header("1. BOOTSTRAP (AWPV2PersistentBootstrap)")
 
-    from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+    from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
 
     inputs = {
         "source_path": args.card,
@@ -206,7 +206,7 @@ def run_bootstrap(args, p: SafePrinter, runner: StageRunner) -> dict[str, Any] |
 def run_first_turn(args, p: SafePrinter, runner: StageRunner) -> dict[str, Any] | None:
     p.header("2. FIRST TURN (AWPV2PersistentFirstTurn)")
 
-    from awp_rp_runtime_v2.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+    from awp_rp_runtime_v3.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
 
     inputs = {
         "session_id": args.session_id,
@@ -247,7 +247,7 @@ def run_accepted_text(p: SafePrinter, runner: StageRunner,
                       turn_record: dict, label: str = "first") -> dict | None:
     p.header(f"3. ACCEPTED TEXT OUTPUT ({label})")
 
-    from awp_rp_runtime_v2.nodes.accepted_text_output_node import AWPV2AcceptedTextOutput
+    from awp_rp_runtime_v3.nodes.accepted_text_output_node import AWPV2AcceptedTextOutput
 
     result = runner.run(f"accepted_text_{label}", AWPV2AcceptedTextOutput,
                         {"turn_record": turn_record})
@@ -274,7 +274,7 @@ def run_turn_result_probe(p: SafePrinter, runner: StageRunner,
                           turn_kind: str = "first") -> dict | None:
     p.header(f"4. TURN RESULT PROBE ({turn_kind})")
 
-    from awp_rp_runtime_v2.nodes.turn_result_probe_node import AWPV2TurnResultProbe
+    from awp_rp_runtime_v3.nodes.turn_result_probe_node import AWPV2TurnResultProbe
 
     inputs = {
         "receipt": receipt,
@@ -317,7 +317,7 @@ def run_turn_result_probe(p: SafePrinter, runner: StageRunner,
 def run_continuation_turn(args, p: SafePrinter, runner: StageRunner) -> dict[str, Any] | None:
     p.header("5. CONTINUATION TURN (AWPV2PersistentContinuationTurn)")
 
-    from awp_rp_runtime_v2.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+    from awp_rp_runtime_v3.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
 
     inputs = {
         "session_id": args.session_id,
@@ -397,7 +397,7 @@ def run_replay_verification(args, p: SafePrinter, runner: StageRunner,
     断言结果是 replayed。"""
     p.header("REPLAY VERIFICATION")
 
-    from awp_rp_runtime_v2.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+    from awp_rp_runtime_v3.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
 
     # 复用第一次的 turn_id / request_id
     original_receipt = first_turn_result.get("receipt", {})
@@ -436,11 +436,11 @@ def run_restart_verification(args, p: SafePrinter, runner: StageRunner) -> bool:
     """清除 RuntimeStoreFactory 缓存，重新实例化，再执行 continuation。"""
     p.header("RESTART + CONTINUATION VERIFICATION")
 
-    from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+    from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
     clear_registry_cache()
     p.step("restart", "Registry cache cleared")
 
-    from awp_rp_runtime_v2.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+    from awp_rp_runtime_v3.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
 
     inputs = {
         "session_id": args.session_id,
@@ -635,7 +635,7 @@ def main():
 
     # 清理
     if not args.keep_db:
-        from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+        from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
         clear_registry_cache()
         import shutil
         try:

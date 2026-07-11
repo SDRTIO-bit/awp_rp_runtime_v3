@@ -338,29 +338,29 @@ python -m pytest tests/ -q
 # 981 collected
 
 # 快速试玩（绕过 ComfyUI，直接调用 persistent 节点）
-python -m awp_rp_runtime_v2.testing.quick_playtest --card "<角色卡路径>.json" --turns 8
+python -m awp_rp_runtime_v3.testing.quick_playtest --card "<角色卡路径>.json" --turns 8
 
 # 20 回合压力测试
-python -m awp_rp_runtime_v2.testing.twenty_turn_test --card "<角色卡路径>.json"
+python -m awp_rp_runtime_v3.testing.twenty_turn_test --card "<角色卡路径>.json"
 
 # 线性调试工具
-python -m awp_rp_runtime_v2.testing.linear_persistent_rp_debug \
+python -m awp_rp_runtime_v3.testing.linear_persistent_rp_debug \
     --card "<角色卡路径>.json" --greeting-id g1 --verbose
 
 # 实机 E2E (需要 ComfyUI 运行)
-python -m awp_rp_runtime_v2.testing.playable_e2e_test --turns 8
+python -m awp_rp_runtime_v3.testing.playable_e2e_test --turns 8
 
 # 持久化验收
-python -m awp_rp_runtime_v2.testing.real_comfy_persistence_acceptance --restart-after-turn --turns 3
+python -m awp_rp_runtime_v3.testing.real_comfy_persistence_acceptance --restart-after-turn --turns 3
 
 # 真实 DeepSeek (需要 DEEPSEEK_API_KEY)
 $env:AWP_REAL_LLM_E2E = "1"
 $env:AWP_ALLOW_EXTERNAL_CARD_CONTENT = "1"
 $env:AWP_REAL_CARD_PATH = "<path>"
-python -m awp_rp_runtime_v2.testing.real_provider_multiturn_acceptance --card-path $env:AWP_REAL_CARD_PATH --turns 8
+python -m awp_rp_runtime_v3.testing.real_provider_multiturn_acceptance --card-path $env:AWP_REAL_CARD_PATH --turns 8
 
 # 离线长会话测试（fake，无需 API Key）
-python -m awp_rp_runtime_v2.testing.user_simulation_harness \
+python -m awp_rp_runtime_v3.testing.user_simulation_harness \
     --turns 10 --restart-after-turn 5 --save-artifacts
 ```
 
@@ -369,7 +369,7 @@ python -m awp_rp_runtime_v2.testing.user_simulation_harness \
 ## 14. 项目结构
 
 ```
-awp_rp_runtime_v2/
+awp_rp_runtime_v3/
 ├─ contracts/          # 数据合同 (schema_id + schema_version)
 │   ├─ novel_*.py      # 小说模式合同 (project/chapter/draft/ledger 等)
 │   └─ ...             # RP 模式合同
@@ -446,7 +446,7 @@ pip install -e ".[dev]"
 
 ```bash
 cd /path/to/ComfyUI/custom_nodes/
-ln -s /path/to/comfyui_awp_rp-v2 awp_rp_runtime_v2
+ln -s /path/to/comfyui_awp_rp-v2 awp_rp_runtime_v3
 ```
 
 管理面板前端构建（可选）：
@@ -729,11 +729,11 @@ NovelEngine
 ### Python 直调
 
 ```python
-from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_character import NovelCharacter, CharacterRelationship
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter, CharacterRelationship
 
 # 1. 初始化存储
 db = Database("my_novel.db")

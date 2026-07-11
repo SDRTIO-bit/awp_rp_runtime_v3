@@ -1,9 +1,9 @@
-from awp_rp_runtime_v2.contracts.card_state import CardState, SceneState
-from awp_rp_runtime_v2.contracts.quality_decision import QualityVerdict
-from awp_rp_runtime_v2.contracts.quality_issue import IssueSeverity
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.writer_draft import WriterDraft
-from awp_rp_runtime_v2.runtime.quality_pipeline_runtime import QualityPipelineRuntime, SceneGate
+from awp_rp_runtime_v3.contracts.card_state import CardState, SceneState
+from awp_rp_runtime_v3.contracts.quality_decision import QualityVerdict
+from awp_rp_runtime_v3.contracts.quality_issue import IssueSeverity
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.writer_draft import WriterDraft
+from awp_rp_runtime_v3.runtime.quality_pipeline_runtime import QualityPipelineRuntime, SceneGate
 
 
 def _snapshot() -> RoundSnapshot:

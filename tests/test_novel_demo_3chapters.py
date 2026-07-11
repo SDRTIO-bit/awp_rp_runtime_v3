@@ -1,15 +1,15 @@
 """Demo: Write first 3 chapters of a novel (~6000 words total)."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_character import NovelCharacter, CharacterRelationship
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter, CharacterRelationship
 
 
 @pytest.fixture
 def reg(tmp_path):
-    from awp_rp_runtime_v2.storage.sqlite.database import Database
-    from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+    from awp_rp_runtime_v3.storage.sqlite.database import Database
+    from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
     db = Database(str(tmp_path / "novel_demo.db"))
     db.initialize()
     return SessionRuntimeStoreRegistry(db)

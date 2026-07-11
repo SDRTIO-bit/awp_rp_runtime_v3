@@ -6,20 +6,20 @@ import os
 import json
 from pathlib import Path
 
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.storage.sqlite.card_state_store import SqliteCardStateStore
-from awp_rp_runtime_v2.storage.sqlite.turn_record_store import SqliteTurnRecordStore
-from awp_rp_runtime_v2.storage.sqlite.round_snapshot_store import SqliteRoundSnapshotStore
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry
-from awp_rp_runtime_v2.contracts.card_state_patch import (
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.storage.sqlite.card_state_store import SqliteCardStateStore
+from awp_rp_runtime_v3.storage.sqlite.turn_record_store import SqliteTurnRecordStore
+from awp_rp_runtime_v3.storage.sqlite.round_snapshot_store import SqliteRoundSnapshotStore
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry
+from awp_rp_runtime_v3.contracts.card_state_patch import (
     CardStatePatch, CardStatePatchOperation, PatchOpType,
 )
-from awp_rp_runtime_v2.contracts.card_state_commit import (
+from awp_rp_runtime_v3.contracts.card_state_commit import (
     CardStateCommitRequest, CardStateCommitStatus,
 )
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
 
 
 @pytest.fixture

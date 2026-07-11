@@ -5,7 +5,7 @@ alternating turn-by-turn, collecting per-turn artifacts, and verifying
 cross-session isolation.
 
 Usage (offline):
-  python -m awp_rp_runtime_v2.testing.comfy_multisession_longrun_harness `
+  python -m awp_rp_runtime_v3.testing.comfy_multisession_longrun_harness `
     --comfy-url "http://127.0.0.1:8188" `
     --card-path "<test_card>" `
     --sessions 2 --turns 20 `
@@ -16,7 +16,7 @@ Usage (offline):
 
 Usage (real-acceptance):
   AWP_REAL_LLM_E2E=1 AWP_ALLOW_EXTERNAL_CARD_CONTENT=1 `
-  python -m awp_rp_runtime_v2.testing.comfy_multisession_longrun_harness `
+  python -m awp_rp_runtime_v3.testing.comfy_multisession_longrun_harness `
     --card-path "<your-card-path>.json" `
     --sessions 2 --turns 20 `
     --director-profile-id "deepseek-v4-pro-director" `
@@ -996,7 +996,7 @@ class MultiSessionLongRunHarness:
             try:
                 from ..runtime.runtime_store_factory import clear_registry_cache
             except ImportError:
-                from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+                from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
             clear_registry_cache()
             print("  Registry cache cleared. New factory will be created next access.")
         except ImportError:

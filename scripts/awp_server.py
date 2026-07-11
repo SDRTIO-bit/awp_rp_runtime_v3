@@ -30,8 +30,8 @@ if _PROJECT_ROOT not in sys.path:
 
 from aiohttp import web
 
-from awp_rp_runtime_v2.runtime.runtime_store_factory import RuntimeStoreFactory
-from awp_rp_runtime_v2.runtime.management_api import (
+from awp_rp_runtime_v3.runtime.runtime_store_factory import RuntimeStoreFactory
+from awp_rp_runtime_v3.runtime.management_api import (
     _resolve_static_asset_path,
     _mime_type,
     _MANAGEMENT_DIR,
@@ -90,7 +90,7 @@ def _run_console_command(command: str, session_id: str = "") -> dict[str, Any]:
     if name == "echo":
         return _console_result(command, " ".join(args), {"text": " ".join(args)})
     if name == "workflows":
-        from awp_rp_runtime_v2.testing.api_workflow_loader import APIWorkflowLoader
+        from awp_rp_runtime_v3.testing.api_workflow_loader import APIWorkflowLoader
         loader = APIWorkflowLoader()
         workflows = []
         for wn in loader.list_workflows():
@@ -99,7 +99,7 @@ def _run_console_command(command: str, session_id: str = "") -> dict[str, Any]:
             workflows.append({"name": wn, "node_count": len(wf), "class_types": ct})
         return _console_result(command, f"{len(workflows)} workflows.", {"workflows": workflows})
     if name == "presets":
-        from awp_rp_runtime_v2.presets.writer_preset_loader import WriterPresetLoader
+        from awp_rp_runtime_v3.presets.writer_preset_loader import WriterPresetLoader
         return _console_result(command, f"{len(WriterPresetLoader().list_presets())} writer presets.", {"presets": WriterPresetLoader().list_presets()})
     if name == "cards":
         factory = _factory()
@@ -131,8 +131,8 @@ def _run_console_command(command: str, session_id: str = "") -> dict[str, Any]:
         if not card:
             return _console_result(command, f"Card not found: {card_id}", ok=False)
         try:
-            from awp_rp_runtime_v2.contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
-            from awp_rp_runtime_v2.runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
+            from awp_rp_runtime_v3.contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
+            from awp_rp_runtime_v3.runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
             new_session_id = f"sess-{uuid.uuid4().hex[:12]}"
             request_id = f"req-{uuid.uuid4().hex[:12]}"
             bootstrap_request = CardSessionBootstrapRequest(
@@ -185,12 +185,12 @@ def _run_console_command(command: str, session_id: str = "") -> dict[str, Any]:
         player_input = " ".join(args).strip()
         if not player_input:
             return _console_result(command, "Usage: send <player text>", ok=False)
-        from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+        from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
         result = ExecutionDispatcher().execute_turn(session_id, player_input, mode="python")
         return _console_result(command, "Turn executed." if result.get("success") else "Turn failed.",
                                {"result": result}, ok=bool(result.get("success")))
     if name == "continue":
-        from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+        from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
         result = ExecutionDispatcher().execute_continue(session_id, mode="python")
         return _console_result(command, "Continuation executed." if result.get("success") else "Continuation failed.",
                                {"result": result}, ok=bool(result.get("success")))
@@ -421,7 +421,7 @@ async def continue_session(request):
     if not binding:
         return _json({"error": "Session not found"}, 404)
     try:
-        from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+        from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
         result = await _run_blocking(ExecutionDispatcher().execute_continue, session_id, mode=mode, workflow=workflow)
         return _json(result)
     except Exception as e:
@@ -437,7 +437,7 @@ async def post_turn(request):
     if not player_input:
         return _json({"error": "player_input required"}, 400)
     try:
-        from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+        from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
         result = await _run_blocking(ExecutionDispatcher().execute_turn, session_id, player_input, mode=mode, workflow=workflow)
         return _json(result)
     except Exception as e:
@@ -461,7 +461,7 @@ async def post_turn_stream(request):
 
     def _run_streaming_turn() -> None:
         try:
-            from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+            from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
             ExecutionDispatcher().execute_turn_streaming(
                 session_id, player_input, mode=mode, workflow=workflow,
                 on_started=lambda tid, steps: _enqueue("started", {"turn_id": tid, "steps": steps}),
@@ -512,7 +512,7 @@ async def post_first_turn(request):
     mode = request.query.get("mode", "")
     workflow = request.query.get("workflow", "")
     try:
-        from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+        from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
         result = await _run_blocking(ExecutionDispatcher().execute_first_turn, session_id, player_input, mode=mode, workflow=workflow)
         return _json(result)
     except Exception as e:
@@ -533,8 +533,8 @@ async def create_session(request):
     if not card:
         return _json({"error": "Card not found"}, 404)
     try:
-        from awp_rp_runtime_v2.contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
-        from awp_rp_runtime_v2.runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
+        from awp_rp_runtime_v3.contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
+        from awp_rp_runtime_v3.runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
         session_id = body.get("session_id") or f"sess-{uuid.uuid4().hex[:12]}"
         request_id = body.get("request_id") or f"req-{uuid.uuid4().hex[:12]}"
         bootstrap_request = CardSessionBootstrapRequest(
@@ -563,7 +563,7 @@ async def create_session(request):
 async def delete_session(request):
     session_id = request.match_info["session_id"]
     try:
-        from awp_rp_runtime_v2.runtime.session_deletion_service import SessionDeletionService
+        from awp_rp_runtime_v3.runtime.session_deletion_service import SessionDeletionService
         factory = _factory()
         SessionDeletionService(factory.registry).delete_session(session_id)
         return _json({"success": True})
@@ -616,7 +616,7 @@ async def import_card(request):
     if not source_path:
         return _json({"error": "source_path required"}, 400)
     try:
-        from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+        from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
         session_id = body.get("session_id") or f"imp-{uuid.uuid4().hex[:12]}"
         binding, _opening, _worldbook, _receipt, diagnostics = AWPV2PersistentBootstrap().execute(
             source_path=source_path, session_id=session_id,
@@ -652,7 +652,7 @@ async def upload_card(request):
     tmp_path.write_bytes(data)
 
     try:
-        from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+        from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
         greeting_id = request.query.get("greeting_id", "g0")
         session_id = f"imp-{uuid.uuid4().hex[:12]}"
         binding, _opening, _worldbook, _receipt, diagnostics = AWPV2PersistentBootstrap().execute(
@@ -679,7 +679,7 @@ async def upload_card(request):
 async def delete_card(request):
     card_id = request.match_info["card_id"]
     try:
-        from awp_rp_runtime_v2.runtime.session_deletion_service import SessionDeletionService
+        from awp_rp_runtime_v3.runtime.session_deletion_service import SessionDeletionService
         factory = _factory()
         SessionDeletionService(factory.registry).delete_card(card_id)
         return _json({"success": True})
@@ -688,7 +688,7 @@ async def delete_card(request):
 
 
 async def list_workflows(request):
-    from awp_rp_runtime_v2.testing.api_workflow_loader import APIWorkflowLoader
+    from awp_rp_runtime_v3.testing.api_workflow_loader import APIWorkflowLoader
     loader = APIWorkflowLoader()
     result = []
     for name in loader.list_workflows():
@@ -699,12 +699,12 @@ async def list_workflows(request):
 
 
 async def list_writer_presets(request):
-    from awp_rp_runtime_v2.presets.writer_preset_loader import WriterPresetLoader
+    from awp_rp_runtime_v3.presets.writer_preset_loader import WriterPresetLoader
     return _json(WriterPresetLoader().list_presets())
 
 
 async def get_writer_preset(request):
-    from awp_rp_runtime_v2.presets.writer_preset_loader import WriterPresetLoader
+    from awp_rp_runtime_v3.presets.writer_preset_loader import WriterPresetLoader
     name = request.match_info["name"]
     loader = WriterPresetLoader()
     content = loader.load(name)

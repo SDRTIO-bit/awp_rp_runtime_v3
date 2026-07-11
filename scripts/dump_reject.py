@@ -1,5 +1,5 @@
 import sqlite3, json, sys
-db = r"F:\12\语英\awp_rp_runtime_v2\qingmei_out\empty_rooms\empty_rooms.db"
+db = r"F:\12\语英\awp_rp_runtime_v3\qingmei_out\empty_rooms\empty_rooms.db"
 con = sqlite3.connect(db)
 con.row_factory = sqlite3.Row
 

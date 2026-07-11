@@ -1,4 +1,4 @@
-"""awp_rp_runtime_v2 — ComfyUI RP Runtime V2."""
+"""awp_rp_runtime_v3 — ComfyUI RP Runtime V3."""
 
 __version__ = "0.1.0"
 

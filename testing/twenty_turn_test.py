@@ -27,10 +27,10 @@ def node(cls, **kw):
     fn = getattr(cls, 'FUNCTION', 'execute')
     return getattr(cls(), fn)(**kw)
 
-from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
-from awp_rp_runtime_v2.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
-from awp_rp_runtime_v2.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
-from awp_rp_runtime_v2.nodes.continue_turn_execution_node import AWPV2ContinueTurn
+from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+from awp_rp_runtime_v3.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+from awp_rp_runtime_v3.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+from awp_rp_runtime_v3.nodes.continue_turn_execution_node import AWPV2ContinueTurn
 
 # ═══ 20 回合玩家输入（推进剧情） ═══
 player_inputs = [
@@ -244,7 +244,7 @@ else:
     print(f'    ❌ 平均分 {avg:.1f}/100 — 需要修复核心问题')
 
 # 清理
-from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
 clear_registry_cache()
 try: shutil.rmtree(_tmpdir)
 except: pass

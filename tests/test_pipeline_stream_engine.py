@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.tests.test_long_session_v1 import (
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.tests.test_long_session_v1 import (
     _close_db,
     _make_db,
     _make_snapshot,
@@ -19,7 +19,7 @@ def test_engine_stream_callbacks_emit_nine_steps_and_writer_text(tmp_path):
     card_state = registry.card_state_store.load("c1", "s1")
     binding = registry.card_session_binding_store.load("s1")
 
-    from awp_rp_runtime_v2.runtime.persistent_turn_engine import PersistentTurnEngine
+    from awp_rp_runtime_v3.runtime.persistent_turn_engine import PersistentTurnEngine
 
     steps: list[tuple[str, dict]] = []
     writer_text: list[str] = []
@@ -84,7 +84,7 @@ def test_engine_stream_callback_exception_does_not_abort_turn(tmp_path):
     card_state = registry.card_state_store.load("c1", "s1")
     binding = registry.card_session_binding_store.load("s1")
 
-    from awp_rp_runtime_v2.runtime.persistent_turn_engine import PersistentTurnEngine
+    from awp_rp_runtime_v3.runtime.persistent_turn_engine import PersistentTurnEngine
 
     def failing_callback(_name: str, _payload: dict) -> None:
         raise RuntimeError("observer failed")

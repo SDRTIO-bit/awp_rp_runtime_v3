@@ -1,4 +1,4 @@
-from awp_rp_runtime_v2.nodes.continue_turn_execution_node import _continue_seed
+from awp_rp_runtime_v3.nodes.continue_turn_execution_node import _continue_seed
 
 
 def test_continue_seed_is_stable_when_request_identity_is_provided():

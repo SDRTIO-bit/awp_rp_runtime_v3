@@ -8,52 +8,52 @@ import pytest
 import uuid
 from datetime import datetime, timezone
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
 
 # D3 contracts
-from awp_rp_runtime_v2.contracts.world_life_request import WorldLifeRequest
-from awp_rp_runtime_v2.contracts.world_life_candidate import (
+from awp_rp_runtime_v3.contracts.world_life_request import WorldLifeRequest
+from awp_rp_runtime_v3.contracts.world_life_candidate import (
     WorldLifeCandidate, WorldLifeKind, WorldLayer, VisibilityMode,
 )
-from awp_rp_runtime_v2.contracts.world_life_evidence import WorldLifeEvidence
-from awp_rp_runtime_v2.contracts.world_life_result import (
+from awp_rp_runtime_v3.contracts.world_life_evidence import WorldLifeEvidence
+from awp_rp_runtime_v3.contracts.world_life_result import (
     WorldLifeResult, WorldLifeStatus, RejectedWorldLifeCandidate,
 )
-from awp_rp_runtime_v2.contracts.world_life_risk import WorldLifeRisk, WorldLifeRiskLevel
-from awp_rp_runtime_v2.contracts.world_life_suggestion import (
+from awp_rp_runtime_v3.contracts.world_life_risk import WorldLifeRisk, WorldLifeRiskLevel
+from awp_rp_runtime_v3.contracts.world_life_suggestion import (
     WorldLifeSuggestion, WorldLifeSuggestionKind,
 )
-from awp_rp_runtime_v2.contracts.world_life_trigger_diagnostics import WorldLifeTriggerDiagnostics
+from awp_rp_runtime_v3.contracts.world_life_trigger_diagnostics import WorldLifeTriggerDiagnostics
 
 # D3 runtime
-from awp_rp_runtime_v2.runtime.world_life_trigger_policy import WorldLifeTriggerPolicy, WorldLifeTriggerResult
-from awp_rp_runtime_v2.runtime.world_life_runtime import WorldLifeRuntime
-from awp_rp_runtime_v2.runtime.world_life_query_planner import WorldLifeQueryPlanner
-from awp_rp_runtime_v2.runtime.world_life_candidate_generator import WorldLifeCandidateGenerator
-from awp_rp_runtime_v2.runtime.world_life_validator import WorldLifeValidator
-from awp_rp_runtime_v2.runtime.world_life_ranker import WorldLifeRanker, MAX_ACCEPTED
-from awp_rp_runtime_v2.runtime.world_life_adapter import WorldLifeAdapter
-from awp_rp_runtime_v2.runtime.world_life_tool_profile import (
+from awp_rp_runtime_v3.runtime.world_life_trigger_policy import WorldLifeTriggerPolicy, WorldLifeTriggerResult
+from awp_rp_runtime_v3.runtime.world_life_runtime import WorldLifeRuntime
+from awp_rp_runtime_v3.runtime.world_life_query_planner import WorldLifeQueryPlanner
+from awp_rp_runtime_v3.runtime.world_life_candidate_generator import WorldLifeCandidateGenerator
+from awp_rp_runtime_v3.runtime.world_life_validator import WorldLifeValidator
+from awp_rp_runtime_v3.runtime.world_life_ranker import WorldLifeRanker, MAX_ACCEPTED
+from awp_rp_runtime_v3.runtime.world_life_adapter import WorldLifeAdapter
+from awp_rp_runtime_v3.runtime.world_life_tool_profile import (
     WORLD_LIFE_TOOLS, WORLD_LIFE_ROLE_SPEC,
 )
 
 # Existing runtime
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry
-from awp_rp_runtime_v2.runtime.tool_permission_policy import ToolPermissionPolicy
-from awp_rp_runtime_v2.runtime.tool_gateway import ToolGateway, FakeToolRunner
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry
+from awp_rp_runtime_v3.runtime.tool_permission_policy import ToolPermissionPolicy
+from awp_rp_runtime_v3.runtime.tool_gateway import ToolGateway, FakeToolRunner
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
 
 
 # ─────────────────────────────────────────────
@@ -464,7 +464,7 @@ class TestSuggestionMergeWorldLife:
 
     def test_24_world_life_as_soft_guidance(self):
         """SuggestionMerge 将 World-Life 视为软 Guidance。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         merger = SuggestionMerger()
         snapshot = _make_snapshot("test")
         brief = TurnBrief(brief_id="b1", must_not_do=[], must_preserve_facts=[])
@@ -509,7 +509,7 @@ class TestSuggestionMergeWorldLife:
 
     def test_26_writer_cannot_read_raw_world_life_result(self):
         """Writer 不可读取原始 WorldLifeResult。"""
-        from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+        from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
         builder = WriterInputBundleV2Builder()
         snapshot = _make_snapshot()
         final_brief = FinalTurnBrief(
@@ -531,7 +531,7 @@ class TestNoOpPath:
 
     def test_27_noop_path_completes(self):
         """shouldTrigger=false → 空 WorldLifeSuggestion → SuggestionMerge 正常完成。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         snapshot = _make_snapshot("你好", location="普通房间")
         plan = _make_director_plan(snapshot)
         policy = WorldLifeTriggerPolicy()
@@ -566,7 +566,7 @@ class TestToolFailureBehavior:
 
     def test_28_tool_timeout_returns_degraded(self):
         """optional Tool timeout 返回 degraded，不阻断主链。"""
-        from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
+        from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
         tr = ToolResult(
             result_id="tr1", request_id="req1", trace_id="t1",
             tool_id="scene_context_lookup",
@@ -592,7 +592,7 @@ class TestD3NodeRegistration:
     """D3: World-Life node registration tests."""
 
     def test_d3_nodes_present(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
         d3 = {
             "AWPV2WorldLifeTrigger", "AWPV2WorldLifeRequest",
             "AWPV2WorldLifeAgent", "AWPV2WorldLifeValidator",
@@ -603,7 +603,7 @@ class TestD3NodeRegistration:
             assert name in NODE_CLASS_MAPPINGS, f"Missing: {name}"
 
     def test_d3_display_names_chinese(self):
-        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_DISPLAY_NAME_MAPPINGS
         d3_displays = [
             "AWP V2 世界活性触发", "AWP V2 世界活性请求",
             "AWP V2 世界活性Agent", "AWP V2 世界活性验证",
@@ -736,7 +736,7 @@ class TestD3E2ENormalPath:
 
     def test_e2e_normal_world_life_adoption(self):
         """正常世界活性路径: 6回合历史 → 触发 → 候选 → 验证 → 排序 → 合并 → Writer。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
 
         # 1. Build history (6 turns)
         turns = []
@@ -843,7 +843,7 @@ class TestD3E2EViolationDegradation:
 
     def test_e2e_violation_and_degradation(self):
         """违规候选与降级路径: 无证据/既成事件/代理权侵犯/冲突 → 全部拒绝 → degraded。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
 
         # 1. Setup snapshot with minimal data
         snapshot = _make_snapshot("和NPC说话")

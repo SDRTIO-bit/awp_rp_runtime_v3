@@ -1,8 +1,8 @@
 """Tests for MemoryPolicy."""
 
 import pytest
-from awp_rp_runtime_v2.policies.memory_policy import MemoryPolicy
-from awp_rp_runtime_v2.contracts.memory_commit_plan import (
+from awp_rp_runtime_v3.policies.memory_policy import MemoryPolicy
+from awp_rp_runtime_v3.contracts.memory_commit_plan import (
     MemoryCommitPlan, ActiveMemoryEntry,
 )
 

@@ -1,15 +1,15 @@
-from awp_rp_runtime_v2.contracts.card_state import CardState, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.runtime.continuity_runtime import ContinuityRuntime
-from awp_rp_runtime_v2.runtime.continuity_trigger_policy import ContinuityTriggerResult
-from awp_rp_runtime_v2.runtime.emotion_relationship_runtime import EmotionRelationshipRuntime
-from awp_rp_runtime_v2.runtime.emotion_relationship_trigger_policy import (
+from awp_rp_runtime_v3.contracts.card_state import CardState, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.runtime.continuity_runtime import ContinuityRuntime
+from awp_rp_runtime_v3.runtime.continuity_trigger_policy import ContinuityTriggerResult
+from awp_rp_runtime_v3.runtime.emotion_relationship_runtime import EmotionRelationshipRuntime
+from awp_rp_runtime_v3.runtime.emotion_relationship_trigger_policy import (
     EmotionRelationshipTriggerResult,
 )
-from awp_rp_runtime_v2.runtime.history_recall_runtime import HistoryRecallRuntime
-from awp_rp_runtime_v2.runtime.history_recall_trigger_policy import TriggerResult
-from awp_rp_runtime_v2.runtime.world_life_runtime import WorldLifeRuntime
-from awp_rp_runtime_v2.runtime.world_life_trigger_policy import WorldLifeTriggerResult
+from awp_rp_runtime_v3.runtime.history_recall_runtime import HistoryRecallRuntime
+from awp_rp_runtime_v3.runtime.history_recall_trigger_policy import TriggerResult
+from awp_rp_runtime_v3.runtime.world_life_runtime import WorldLifeRuntime
+from awp_rp_runtime_v3.runtime.world_life_trigger_policy import WorldLifeTriggerResult
 
 
 def _snapshot_with_worldbook() -> RoundSnapshot:

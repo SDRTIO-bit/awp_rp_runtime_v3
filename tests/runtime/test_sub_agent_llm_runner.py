@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.runtime.sub_agent_llm_runner import _execute_tool, run_sub_agent_llm
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.runtime.sub_agent_llm_runner import _execute_tool, run_sub_agent_llm
 
 
 def test_character_profile_lookup_returns_profile():
@@ -370,7 +370,7 @@ def test_sub_agent_returns_raw_tool_results_not_llm_summary():
     adapter = MockAdapter()
 
     # Mock _execute_tool to return known content
-    from awp_rp_runtime_v2.runtime import sub_agent_llm_runner as runner_module
+    from awp_rp_runtime_v3.runtime import sub_agent_llm_runner as runner_module
     original_execute_tool = runner_module._execute_tool
     runner_module._execute_tool = lambda name, args, snap: TOOL_RESULT_TEXT
 

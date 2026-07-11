@@ -9,7 +9,7 @@ class TestNodeRegistration:
     """Test 19: all nodes registered."""
 
     def test_all_nodes_registered(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
         p1_expected = {
             "AWPV2CardStateInit", "AWPV2RoundSnapshot", "AWPV2QualityGate",
@@ -110,7 +110,7 @@ class TestNodeRegistration:
         assert set(NODE_DISPLAY_NAME_MAPPINGS.keys()) == all_expected
 
     def test_nodes_have_required_attributes(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
 
         for name, cls in NODE_CLASS_MAPPINGS.items():
             assert hasattr(cls, 'INPUT_TYPES'), f"{name} missing INPUT_TYPES"
@@ -120,13 +120,13 @@ class TestNodeRegistration:
             assert hasattr(cls, 'CATEGORY'), f"{name} missing CATEGORY"
 
     def test_node_display_names_chinese(self):
-        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_DISPLAY_NAME_MAPPINGS
         for name, display in NODE_DISPLAY_NAME_MAPPINGS.items():
             assert "AWP V2" in display, f"{name} display name should contain 'AWP V2'"
 
     def test_trace_display_declares_comfy_union_input_type(self):
         from comfy_execution.validation import validate_node_input
-        from awp_rp_runtime_v2.nodes.trace_display_node import AWPV2TraceDisplay
+        from awp_rp_runtime_v3.nodes.trace_display_node import AWPV2TraceDisplay
 
         data_type = AWPV2TraceDisplay.INPUT_TYPES()["required"]["data"][0]
 
@@ -139,7 +139,7 @@ class TestNodeExecution:
     """Test nodes execute without errors."""
 
     def test_card_state_init(self):
-        from awp_rp_runtime_v2.nodes.card_state_init_node import AWPV2CardStateInit
+        from awp_rp_runtime_v3.nodes.card_state_init_node import AWPV2CardStateInit
         node = AWPV2CardStateInit()
         (result,) = node.execute("card1", "sess1")
         assert result["card_id"] == "card1"
@@ -147,7 +147,7 @@ class TestNodeExecution:
         assert result["revision"] == 0
 
     def test_round_snapshot(self):
-        from awp_rp_runtime_v2.nodes.round_snapshot_node import AWPV2RoundSnapshot
+        from awp_rp_runtime_v3.nodes.round_snapshot_node import AWPV2RoundSnapshot
         node = AWPV2RoundSnapshot()
         state = {"card_id": "c1", "session_id": "s1", "revision": 0,
                  "schema_id": "awp.rp.card-state.v1", "schema_version": 1,
@@ -159,7 +159,7 @@ class TestNodeExecution:
         assert "snapshot_id" in result
 
     def test_quality_gate_accept(self):
-        from awp_rp_runtime_v2.nodes.quality_gate_node import AWPV2QualityGate
+        from awp_rp_runtime_v3.nodes.quality_gate_node import AWPV2QualityGate
         node = AWPV2QualityGate()
         snap = {"card_id": "c1", "session_id": "s1", "trace_id": "t1",
                 "snapshot_id": "s1", "schema_id": "awp.rp.round-snapshot.v1",
@@ -170,7 +170,7 @@ class TestNodeExecution:
         assert result["verdict"] == "accept"
 
     def test_quality_gate_revise(self):
-        from awp_rp_runtime_v2.nodes.quality_gate_node import AWPV2QualityGate
+        from awp_rp_runtime_v3.nodes.quality_gate_node import AWPV2QualityGate
         node = AWPV2QualityGate()
         snap = {"card_id": "c1", "session_id": "s1", "trace_id": "t1",
                 "snapshot_id": "s1", "schema_id": "awp.rp.round-snapshot.v1",
@@ -182,7 +182,7 @@ class TestNodeExecution:
         assert len(result["blocking_reasons"]) > 0
 
     def test_retry_turn(self):
-        from awp_rp_runtime_v2.nodes.retry_turn_node import AWPV2RetryTurn
+        from awp_rp_runtime_v3.nodes.retry_turn_node import AWPV2RetryTurn
         node = AWPV2RetryTurn()
         decision = {"verdict": "revise", "blocking_reasons": ["too short"],
                     "retry_count": 0, "max_retries": 3, "retry_allowed": True}
@@ -192,7 +192,7 @@ class TestNodeExecution:
         assert "too short" in ctx
 
     def test_retry_turn_rejected_final(self):
-        from awp_rp_runtime_v2.nodes.retry_turn_node import AWPV2RetryTurn
+        from awp_rp_runtime_v3.nodes.retry_turn_node import AWPV2RetryTurn
         node = AWPV2RetryTurn()
         decision = {"verdict": "reject", "blocking_reasons": ["fatal"],
                     "retry_count": 3, "max_retries": 3, "retry_allowed": False}
@@ -204,7 +204,7 @@ class TestD1NodeRegistration:
     """D1: History/Recall node registration tests."""
 
     def test_d1_nodes_present(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
         d1 = {
             "AWPV2HistoryRecallTrigger", "AWPV2HistoryRecallRequest",
             "AWPV2HistoryRecallAgent", "AWPV2RecallEvidenceRanker",
@@ -214,7 +214,7 @@ class TestD1NodeRegistration:
             assert name in NODE_CLASS_MAPPINGS, f"Missing: {name}"
 
     def test_d1_display_names_chinese(self):
-        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_DISPLAY_NAME_MAPPINGS
         d1_displays = [
             "AWP V2 历史回查触发", "AWP V2 历史回查请求",
             "AWP V2 历史回查Agent", "AWP V2 回查证据排序",

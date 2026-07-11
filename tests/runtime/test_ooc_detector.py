@@ -1,6 +1,6 @@
 """Tests for deterministic Writer semantic issue detection."""
 
-from awp_rp_runtime_v2.runtime.ooc_detector import OOCDetector
+from awp_rp_runtime_v3.runtime.ooc_detector import OOCDetector
 
 
 class TestOOCDetector:

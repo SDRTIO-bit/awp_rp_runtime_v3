@@ -8,44 +8,44 @@ import pytest
 import uuid
 from datetime import datetime, timezone
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
 
 # D5 contracts
-from awp_rp_runtime_v2.contracts.continuity_request import ContinuityRequest
-from awp_rp_runtime_v2.contracts.continuity_evidence import (
+from awp_rp_runtime_v3.contracts.continuity_request import ContinuityRequest
+from awp_rp_runtime_v3.contracts.continuity_evidence import (
     ContinuityEvidence, EvidenceSourceType, ConflictStatus, EVIDENCE_PRIORITY,
 )
-from awp_rp_runtime_v2.contracts.continuity_issue import (
+from awp_rp_runtime_v3.contracts.continuity_issue import (
     ContinuityIssue, ContinuityIssueKind, ContinuitySeverity,
 )
-from awp_rp_runtime_v2.contracts.continuity_conflict import ContinuityConflict, ConflictResolution
-from awp_rp_runtime_v2.contracts.continuity_result import ContinuityResult, ContinuityStatus
-from awp_rp_runtime_v2.contracts.continuity_suggestion import ContinuitySuggestion, ContinuitySuggestionKind
-from awp_rp_runtime_v2.contracts.continuity_trigger_diagnostics import ContinuityTriggerDiagnostics
+from awp_rp_runtime_v3.contracts.continuity_conflict import ContinuityConflict, ConflictResolution
+from awp_rp_runtime_v3.contracts.continuity_result import ContinuityResult, ContinuityStatus
+from awp_rp_runtime_v3.contracts.continuity_suggestion import ContinuitySuggestion, ContinuitySuggestionKind
+from awp_rp_runtime_v3.contracts.continuity_trigger_diagnostics import ContinuityTriggerDiagnostics
 
 # D5 runtime
-from awp_rp_runtime_v2.runtime.continuity_trigger_policy import ContinuityTriggerPolicy, ContinuityTriggerResult
-from awp_rp_runtime_v2.runtime.continuity_runtime import ContinuityRuntime
-from awp_rp_runtime_v2.runtime.continuity_query_planner import ContinuityQueryPlanner
-from awp_rp_runtime_v2.runtime.continuity_evidence_ranker import ContinuityEvidenceRanker
-from awp_rp_runtime_v2.runtime.continuity_issue_detector import ContinuityIssueDetector
-from awp_rp_runtime_v2.runtime.continuity_validator import ContinuityValidator
-from awp_rp_runtime_v2.runtime.continuity_ranker import ContinuityRanker, MAX_BLOCKING, MAX_WARNING
-from awp_rp_runtime_v2.runtime.continuity_adapter import ContinuityAdapter
-from awp_rp_runtime_v2.runtime.continuity_tool_profile import CONTINUITY_TOOLS, CONTINUITY_ROLE_SPEC
+from awp_rp_runtime_v3.runtime.continuity_trigger_policy import ContinuityTriggerPolicy, ContinuityTriggerResult
+from awp_rp_runtime_v3.runtime.continuity_runtime import ContinuityRuntime
+from awp_rp_runtime_v3.runtime.continuity_query_planner import ContinuityQueryPlanner
+from awp_rp_runtime_v3.runtime.continuity_evidence_ranker import ContinuityEvidenceRanker
+from awp_rp_runtime_v3.runtime.continuity_issue_detector import ContinuityIssueDetector
+from awp_rp_runtime_v3.runtime.continuity_validator import ContinuityValidator
+from awp_rp_runtime_v3.runtime.continuity_ranker import ContinuityRanker, MAX_BLOCKING, MAX_WARNING
+from awp_rp_runtime_v3.runtime.continuity_adapter import ContinuityAdapter
+from awp_rp_runtime_v3.runtime.continuity_tool_profile import CONTINUITY_TOOLS, CONTINUITY_ROLE_SPEC
 
 # Existing runtime
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry
 
 
 # ─────────────────────────────────────────────
@@ -441,8 +441,8 @@ class TestSuggestionMergeContinuity:
 
     def test_23_warning_as_soft_guidance(self):
         """warning 只作为软 Guidance。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
-        merger = __import__('awp_rp_runtime_v2.runtime.suggestion_merger', fromlist=['SuggestionMerger']).SuggestionMerger()
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
+        merger = __import__('awp_rp_runtime_v3.runtime.suggestion_merger', fromlist=['SuggestionMerger']).SuggestionMerger()
         snapshot = _make_snapshot("test")
         brief = TurnBrief(brief_id="b1", must_not_do=[], must_preserve_facts=[])
         plan = DelegationPlan(plan_id="p1", trace_id="t1", snapshot_id="s1", brief_id="b1")
@@ -466,7 +466,7 @@ class TestSuggestionMergeContinuity:
 
     def test_24_writer_cannot_read_raw_continuity_result(self):
         """Writer 不可读取原始 ContinuityResult。"""
-        from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+        from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
         builder = WriterInputBundleV2Builder()
         snapshot = _make_snapshot()
         final_brief = FinalTurnBrief(
@@ -487,7 +487,7 @@ class TestNoOpPath:
 
     def test_25_noop_path_completes(self):
         """shouldTrigger=false → 空 ContinuityResult → SuggestionMerge 正常完成。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         snapshot = _make_snapshot("你好", location="普通房间")
         plan = _make_director_plan(snapshot)
         policy = ContinuityTriggerPolicy()
@@ -505,7 +505,7 @@ class TestNoOpPath:
         assert len(result.issues) == 0
 
         # Merge completes normally with no suggestions
-        from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
+        from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
         merger = SuggestionMerger()
         brief = TurnBrief(brief_id="b1", must_not_do=[], must_preserve_facts=[])
         del_plan = DelegationPlan(plan_id="p1", trace_id="t1", snapshot_id="s1", brief_id="b1")
@@ -523,7 +523,7 @@ class TestToolFailureBehavior:
 
     def test_26_tool_timeout_returns_degraded(self):
         """optional Tool timeout 返回 degraded，不阻断主链。"""
-        from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
+        from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
         tr = ToolResult(
             result_id="tr1", request_id="req1", trace_id="t1",
             tool_id="accepted_turn_lookup",
@@ -549,7 +549,7 @@ class TestD5NodeRegistration:
     """D5: Continuity node registration tests."""
 
     def test_d5_nodes_present(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
         d5 = {
             "AWPV2ContinuityTrigger", "AWPV2ContinuityRequest",
             "AWPV2ContinuityAgent", "AWPV2ContinuityValidator",
@@ -560,7 +560,7 @@ class TestD5NodeRegistration:
             assert name in NODE_CLASS_MAPPINGS, f"Missing: {name}"
 
     def test_d5_display_names_chinese(self):
-        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_DISPLAY_NAME_MAPPINGS
         d5_displays = [
             "AWP V2 连续性触发", "AWP V2 连续性请求",
             "AWP V2 连续性Agent", "AWP V2 连续性验证",
@@ -736,8 +736,8 @@ class TestD5E2ENormalPath:
 
     def test_e2e_normal_continuity_constraint(self):
         """正常连续性约束路径: 6回合历史 → 触发 → 证据 → issue → 验证 → 排序 → 合并。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
-        from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
 
         # 1. Build history (6 turns)
         turns = []
@@ -824,8 +824,8 @@ class TestD5E2EViolationDegradation:
 
     def test_e2e_violation_and_degradation(self):
         """违规issue与降级路径: 无证据blocking/RAG覆盖CardState/自动推进 → 全部拒绝 → degraded。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
-        from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
 
         # 1. Setup snapshot with minimal data
         snapshot = _make_snapshot("和NPC说话")

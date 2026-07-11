@@ -1,9 +1,9 @@
 """Entry point for running workflow scenarios.
 
 Usage:
-    python -m awp_rp_runtime_v2.testing.run_workflow_scenarios --suite smoke
-    python -m awp_rp_runtime_v2.testing.run_workflow_scenarios --suite integration
-    python -m awp_rp_runtime_v2.testing.run_workflow_scenarios --suite comfy-api-e2e
+    python -m awp_rp_runtime_v3.testing.run_workflow_scenarios --suite smoke
+    python -m awp_rp_runtime_v3.testing.run_workflow_scenarios --suite integration
+    python -m awp_rp_runtime_v3.testing.run_workflow_scenarios --suite comfy-api-e2e
 
 Exit codes:
     0 = all scenarios passed

@@ -8,46 +8,46 @@ import pytest
 import uuid
 from datetime import datetime, timezone
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
 
 # D1 contracts
-from awp_rp_runtime_v2.contracts.recall_focus import RecallFocus, RecallKind
-from awp_rp_runtime_v2.contracts.recall_evidence import RecallEvidence, EvidenceSourceType
-from awp_rp_runtime_v2.contracts.continuity_risk import ContinuityRisk, RiskLevel
-from awp_rp_runtime_v2.contracts.history_recall_request import HistoryRecallRequest
-from awp_rp_runtime_v2.contracts.history_recall_result import HistoryRecallResult, HistoryRecallStatus
-from awp_rp_runtime_v2.contracts.history_recall_suggestion import HistoryRecallSuggestion, HistorySuggestionKind
-from awp_rp_runtime_v2.contracts.history_recall_diagnostics import HistoryRecallDiagnostics
+from awp_rp_runtime_v3.contracts.recall_focus import RecallFocus, RecallKind
+from awp_rp_runtime_v3.contracts.recall_evidence import RecallEvidence, EvidenceSourceType
+from awp_rp_runtime_v3.contracts.continuity_risk import ContinuityRisk, RiskLevel
+from awp_rp_runtime_v3.contracts.history_recall_request import HistoryRecallRequest
+from awp_rp_runtime_v3.contracts.history_recall_result import HistoryRecallResult, HistoryRecallStatus
+from awp_rp_runtime_v3.contracts.history_recall_suggestion import HistoryRecallSuggestion, HistorySuggestionKind
+from awp_rp_runtime_v3.contracts.history_recall_diagnostics import HistoryRecallDiagnostics
 
 # D1 runtime
-from awp_rp_runtime_v2.runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy, TriggerResult
-from awp_rp_runtime_v2.runtime.history_recall_runtime import HistoryRecallRuntime
-from awp_rp_runtime_v2.runtime.history_recall_query_planner import HistoryRecallQueryPlanner
-from awp_rp_runtime_v2.runtime.recall_evidence_ranker import RecallEvidenceRanker
-from awp_rp_runtime_v2.runtime.history_recall_validator import HistoryRecallValidator
-from awp_rp_runtime_v2.runtime.history_recall_adapter import HistoryRecallAdapter
-from awp_rp_runtime_v2.runtime.history_recall_tool_profile import (
+from awp_rp_runtime_v3.runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy, TriggerResult
+from awp_rp_runtime_v3.runtime.history_recall_runtime import HistoryRecallRuntime
+from awp_rp_runtime_v3.runtime.history_recall_query_planner import HistoryRecallQueryPlanner
+from awp_rp_runtime_v3.runtime.recall_evidence_ranker import RecallEvidenceRanker
+from awp_rp_runtime_v3.runtime.history_recall_validator import HistoryRecallValidator
+from awp_rp_runtime_v3.runtime.history_recall_adapter import HistoryRecallAdapter
+from awp_rp_runtime_v3.runtime.history_recall_tool_profile import (
     HISTORY_RECALL_TOOLS, create_history_recall_tool_registry,
 )
 
 # Existing runtime
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry
-from awp_rp_runtime_v2.runtime.tool_permission_policy import ToolPermissionPolicy
-from awp_rp_runtime_v2.runtime.tool_budget_runtime import ToolBudgetRuntime
-from awp_rp_runtime_v2.runtime.tool_gateway import ToolGateway, FakeToolRunner
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
-from awp_rp_runtime_v2.runtime.final_turn_brief_runtime import FinalTurnBriefRuntime
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry
+from awp_rp_runtime_v3.runtime.tool_permission_policy import ToolPermissionPolicy
+from awp_rp_runtime_v3.runtime.tool_budget_runtime import ToolBudgetRuntime
+from awp_rp_runtime_v3.runtime.tool_gateway import ToolGateway, FakeToolRunner
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.final_turn_brief_runtime import FinalTurnBriefRuntime
 
 
 # ─────────────────────────────────────────────
@@ -300,7 +300,7 @@ class TestHistoryRecallPermissions:
             input_field_allowlist=["player_input", "recent_turn_records"],
         )
         registry = AgentRuntimeRegistry()
-        from awp_rp_runtime_v2.runtime.agent_runtime_registry import BUILTIN_ROLES
+        from awp_rp_runtime_v3.runtime.agent_runtime_registry import BUILTIN_ROLES
         if "history-recall" not in {s.role_id for s in registry._specs.values()}:
             registry.register_spec(AgentRoleSpec(
                 role_id="history-recall",
@@ -347,17 +347,17 @@ class TestHistoryRecallPermissions:
 
     def test_13_cannot_delegate(self):
         """Agent 无法递归委派。"""
-        from awp_rp_runtime_v2.runtime.history_recall_tool_profile import HISTORY_RECALL_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.history_recall_tool_profile import HISTORY_RECALL_ROLE_SPEC
         assert HISTORY_RECALL_ROLE_SPEC.can_delegate is False
 
     def test_14_cannot_generate_cardstate_patch(self):
         """Agent 无法直接生成 CardState patch。"""
-        from awp_rp_runtime_v2.runtime.history_recall_tool_profile import HISTORY_RECALL_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.history_recall_tool_profile import HISTORY_RECALL_ROLE_SPEC
         assert HISTORY_RECALL_ROLE_SPEC.can_write_state is False
 
     def test_15_cannot_generate_memory_commit(self):
         """Agent 无法直接生成 MemoryCommitPlan。"""
-        from awp_rp_runtime_v2.runtime.history_recall_tool_profile import HISTORY_RECALL_ROLE_SPEC
+        from awp_rp_runtime_v3.runtime.history_recall_tool_profile import HISTORY_RECALL_ROLE_SPEC
         assert HISTORY_RECALL_ROLE_SPEC.can_write_memory is False
 
 
@@ -371,7 +371,7 @@ class TestToolFailureBehavior:
     def test_17_tool_timeout_returns_degraded(self):
         """Tool timeout 返回 degraded，不阻断主链。"""
         # Create a tool result with timeout status
-        from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
+        from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
         tr = ToolResult(
             result_id="tr1", request_id="req1", trace_id="t1",
             tool_id="rag_memory_lookup",
@@ -445,7 +445,7 @@ class TestSuggestionMergeHistory:
 
     def test_21_conflict_with_cardstate_rejected(self):
         """SuggestionMerge 会拒绝与 CardState 冲突的历史建议。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         merger = SuggestionMerger()
         snapshot = _make_snapshot("test")
         brief = TurnBrief(brief_id="b1", must_not_do=[], must_preserve_facts=[])
@@ -469,7 +469,7 @@ class TestSuggestionMergeHistory:
 
     def test_22_final_brief_includes_history(self):
         """FinalTurnBrief 包含历史发现。"""
-        from awp_rp_runtime_v2.contracts.enrichment_bundle import EnrichmentBundle
+        from awp_rp_runtime_v3.contracts.enrichment_bundle import EnrichmentBundle
         snapshot = _make_snapshot()
         director_plan = DirectorPlan(
             plan_id="dp1", trace_id="t1", snapshot_id="s1",
@@ -488,8 +488,8 @@ class TestSuggestionMergeHistory:
 
     def test_23_writer_cannot_read_raw_result(self):
         """Writer 无法读取原始 HistoryRecallResult。"""
-        from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
-        from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
+        from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+        from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
         builder = WriterInputBundleV2Builder()
         snapshot = _make_snapshot()
         final_brief = FinalTurnBrief(
@@ -513,7 +513,7 @@ class TestNoOpPath:
 
     def test_24_noop_path_completes(self):
         """shouldTrigger=false → 空 suggestion → SuggestionMerge 正常完成。"""
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
         snapshot = _make_snapshot("你好")
         plan = _make_director_plan(snapshot)
         policy = HistoryRecallTriggerPolicy()

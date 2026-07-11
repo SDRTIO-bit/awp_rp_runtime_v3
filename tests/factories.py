@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from awp_rp_runtime_v2.contracts.card_definition import (
+from awp_rp_runtime_v3.contracts.card_definition import (
     CardDefinition,
     CardDefinitionStatus,
 )
-from awp_rp_runtime_v2.contracts.card_session_binding import (
+from awp_rp_runtime_v3.contracts.card_session_binding import (
     CardSessionBinding,
     CardSessionBindingStatus,
 )
-from awp_rp_runtime_v2.contracts.card_session_bootstrap_receipt import (
+from awp_rp_runtime_v3.contracts.card_session_bootstrap_receipt import (
     CardSessionBootstrapReceipt,
 )
-from awp_rp_runtime_v2.contracts.opening_record import OpeningRecord
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
-from awp_rp_runtime_v2.contracts.worldbook_binding import WorldbookBinding
+from awp_rp_runtime_v3.contracts.opening_record import OpeningRecord
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.worldbook_binding import WorldbookBinding
 
 
 def make_card_definition(logical_card_id: str = "card-1") -> CardDefinition:

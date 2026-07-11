@@ -1,4 +1,4 @@
-from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
 
 def test_streaming_dispatcher_respects_non_python_mode(monkeypatch):

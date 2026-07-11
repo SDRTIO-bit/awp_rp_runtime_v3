@@ -1,6 +1,6 @@
-from awp_rp_runtime_v2.runtime.provider_adapter_factory import AdapterOutcome
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.tests.test_long_session_v1 import (
+from awp_rp_runtime_v3.runtime.provider_adapter_factory import AdapterOutcome
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.tests.test_long_session_v1 import (
     _close_db,
     _make_db,
     _make_snapshot,
@@ -36,7 +36,7 @@ def test_engine_revises_when_quality_fails_then_passes(monkeypatch, tmp_path):
     ) * 3
     adapter = _SequentialWriterAdapter([bad_text, revised_text])
 
-    from awp_rp_runtime_v2.runtime import persistent_turn_engine as engine_module
+    from awp_rp_runtime_v3.runtime import persistent_turn_engine as engine_module
 
     monkeypatch.setattr(
         engine_module.WriterAdapterFactory,

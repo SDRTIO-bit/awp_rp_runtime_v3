@@ -1,11 +1,11 @@
 """Tests for RoundSnapshotBuilder."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore, FakeRagMemoryStore,
 )
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
 
 
 class TestRoundSnapshotBuilder:

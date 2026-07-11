@@ -16,50 +16,50 @@ from datetime import datetime, timezone
 import pytest
 
 # ── Contracts ──
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.card_state import CardState, SceneState
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.suggestion_merge_result import (
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.card_state import CardState, SceneState
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.suggestion_merge_result import (
     SuggestionMergeResult, MergeItem, MergeDecision,
 )
-from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.suggestion_conflict import (
+from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.suggestion_conflict import (
     SuggestionConflict, ConflictKind, ConflictResolution,
 )
-from awp_rp_runtime_v2.contracts.agent_execution_report import (
+from awp_rp_runtime_v3.contracts.agent_execution_report import (
     AgentExecutionReport, AgentExecutionOutcome,
 )
-from awp_rp_runtime_v2.contracts.turn_agent_budget_report import TurnAgentBudgetReport
-from awp_rp_runtime_v2.contracts.integrated_turn_trace import IntegratedTurnTrace
+from awp_rp_runtime_v3.contracts.turn_agent_budget_report import TurnAgentBudgetReport
+from awp_rp_runtime_v3.contracts.integrated_turn_trace import IntegratedTurnTrace
 
 # ── Runtime ──
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
-from awp_rp_runtime_v2.runtime.delegation_planner import DelegationPlanner
-from awp_rp_runtime_v2.runtime.turn_agent_budget_policy import (
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.delegation_planner import DelegationPlanner
+from awp_rp_runtime_v3.runtime.turn_agent_budget_policy import (
     TurnAgentBudgetPolicy, SIMPLE_TURN_POLICY, NORMAL_TURN_POLICY, COMPLEX_TURN_POLICY,
 )
-from awp_rp_runtime_v2.runtime.dynamic_agent_scheduler import (
+from awp_rp_runtime_v3.runtime.dynamic_agent_scheduler import (
     DynamicAgentScheduler, WAVE_A_ROLES, WAVE_B_ROLES, ROLE_PRIORITY,
 )
-from awp_rp_runtime_v2.runtime.dynamic_agent_wave_executor import DynamicAgentWaveExecutor
-from awp_rp_runtime_v2.runtime.continuity_barrier_runtime import (
+from awp_rp_runtime_v3.runtime.dynamic_agent_wave_executor import DynamicAgentWaveExecutor
+from awp_rp_runtime_v3.runtime.continuity_barrier_runtime import (
     ContinuityBarrierRuntime, EVIDENCE_SOURCE_PRIORITY, MIN_BLOCKING_EVIDENCE_PRIORITY,
 )
-from awp_rp_runtime_v2.runtime.suggestion_conflict_governor import SuggestionConflictGovernor
-from awp_rp_runtime_v2.runtime.director_suggestion_resolution_runtime import (
+from awp_rp_runtime_v3.runtime.suggestion_conflict_governor import SuggestionConflictGovernor
+from awp_rp_runtime_v3.runtime.director_suggestion_resolution_runtime import (
     DirectorSuggestionResolutionRuntime, DirectorResolution,
 )
-from awp_rp_runtime_v2.runtime.agent_integration_trace import AgentIntegrationTrace
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.runtime.agent_integration_trace import AgentIntegrationTrace
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeCardStateStore, FakeTurnRecordStore,
     FakeActiveMemoryStore, FakeRagMemoryStore,
 )
@@ -369,7 +369,7 @@ class TestDIntegration06Parallelism:
         executor = DynamicAgentWaveExecutor(pool, policy)
         snapshot = _make_snapshot()
 
-        from awp_rp_runtime_v2.runtime.dynamic_agent_scheduler import ScheduledWave
+        from awp_rp_runtime_v3.runtime.dynamic_agent_scheduler import ScheduledWave
         scheduled = ScheduledWave()
         scheduled.wave_a_tasks = [
             _make_delegation_task("history-recall", "d1"),
@@ -499,19 +499,19 @@ class TestDIntegration12FactLeakPrevention:
 
     def test_opportunity_cannot_become_event(self):
         """Opportunity kind is non-fact."""
-        from awp_rp_runtime_v2.runtime.suggestion_conflict_governor import NON_FACT_SUGGESTION_KINDS
+        from awp_rp_runtime_v3.runtime.suggestion_conflict_governor import NON_FACT_SUGGESTION_KINDS
         assert SuggestionKind.PROMISE_PRESSURE in NON_FACT_SUGGESTION_KINDS
         assert SuggestionKind.SCENE_PRESSURE in NON_FACT_SUGGESTION_KINDS
 
     def test_world_life_cannot_auto_advance(self):
         """World-Life kinds are non-fact."""
-        from awp_rp_runtime_v2.runtime.suggestion_conflict_governor import NON_FACT_SUGGESTION_KINDS
+        from awp_rp_runtime_v3.runtime.suggestion_conflict_governor import NON_FACT_SUGGESTION_KINDS
         assert SuggestionKind.ENVIRONMENTAL_PRESSURE in NON_FACT_SUGGESTION_KINDS
         assert SuggestionKind.NPC_SIDE_TENSION in NON_FACT_SUGGESTION_KINDS
 
     def test_emotion_cannot_change_relationship(self):
         """Emotion kinds are non-fact."""
-        from awp_rp_runtime_v2.runtime.suggestion_conflict_governor import NON_FACT_SUGGESTION_KINDS
+        from awp_rp_runtime_v3.runtime.suggestion_conflict_governor import NON_FACT_SUGGESTION_KINDS
         assert SuggestionKind.ER_TRUST_TENSION in NON_FACT_SUGGESTION_KINDS
         assert SuggestionKind.ER_RELATIONSHIP_BOUNDARY in NON_FACT_SUGGESTION_KINDS
 
@@ -811,12 +811,12 @@ class TestDIntegration25NoRegression:
 
     def test_imports_still_work(self):
         """All D1-D6 imports still resolve."""
-        from awp_rp_runtime_v2.runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy
-        from awp_rp_runtime_v2.runtime.opportunity_trigger_policy import OpportunityTriggerPolicy
-        from awp_rp_runtime_v2.runtime.world_life_trigger_policy import WorldLifeTriggerPolicy
-        from awp_rp_runtime_v2.runtime.emotion_relationship_trigger_policy import EmotionRelationshipTriggerPolicy
-        from awp_rp_runtime_v2.runtime.continuity_trigger_policy import ContinuityTriggerPolicy
-        from awp_rp_runtime_v2.runtime.memory_curation_trigger_policy import MemoryCurationTriggerPolicy
+        from awp_rp_runtime_v3.runtime.history_recall_trigger_policy import HistoryRecallTriggerPolicy
+        from awp_rp_runtime_v3.runtime.opportunity_trigger_policy import OpportunityTriggerPolicy
+        from awp_rp_runtime_v3.runtime.world_life_trigger_policy import WorldLifeTriggerPolicy
+        from awp_rp_runtime_v3.runtime.emotion_relationship_trigger_policy import EmotionRelationshipTriggerPolicy
+        from awp_rp_runtime_v3.runtime.continuity_trigger_policy import ContinuityTriggerPolicy
+        from awp_rp_runtime_v3.runtime.memory_curation_trigger_policy import MemoryCurationTriggerPolicy
         assert True
 
 
@@ -930,7 +930,7 @@ class TestE2EMultiAgentComplexTurn:
         executor = DynamicAgentWaveExecutor(pool, COMPLEX_TURN_POLICY)
         snapshot = _make_snapshot()
 
-        from awp_rp_runtime_v2.runtime.dynamic_agent_scheduler import ScheduledWave
+        from awp_rp_runtime_v3.runtime.dynamic_agent_scheduler import ScheduledWave
         scheduled = ScheduledWave()
         scheduled.wave_a_tasks = [
             _make_delegation_task("history-recall", "d1", 0.9),
@@ -1281,7 +1281,7 @@ class TestWaveExecutorComprehensive:
         executor = DynamicAgentWaveExecutor(pool, COMPLEX_TURN_POLICY)
         snapshot = _make_snapshot()
 
-        from awp_rp_runtime_v2.runtime.dynamic_agent_scheduler import ScheduledWave
+        from awp_rp_runtime_v3.runtime.dynamic_agent_scheduler import ScheduledWave
         scheduled = ScheduledWave()
         scheduled.wave_a_tasks = []  # No Wave A
         scheduled.wave_b_tasks = [_make_delegation_task("continuity", "d5")]
@@ -1302,7 +1302,7 @@ class TestWaveExecutorComprehensive:
         executor = DynamicAgentWaveExecutor(pool, COMPLEX_TURN_POLICY)
         snapshot = _make_snapshot()
 
-        from awp_rp_runtime_v2.runtime.dynamic_agent_scheduler import ScheduledWave
+        from awp_rp_runtime_v3.runtime.dynamic_agent_scheduler import ScheduledWave
         scheduled = ScheduledWave()
         scheduled.wave_a_tasks = [_make_delegation_task("history-recall", "d1")]
 

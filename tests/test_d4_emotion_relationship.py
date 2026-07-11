@@ -8,55 +8,55 @@ import pytest
 import uuid
 from datetime import datetime, timezone
 
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.execution_trace import ExecutionTrace
-from awp_rp_runtime_v2.contracts.final_turn_brief import FinalTurnBrief
-from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope, TaskBudget
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.execution_trace import ExecutionTrace
+from awp_rp_runtime_v3.contracts.final_turn_brief import FinalTurnBrief
+from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
 
 # D4 contracts
-from awp_rp_runtime_v2.contracts.emotion_relationship_request import EmotionRelationshipRequest
-from awp_rp_runtime_v2.contracts.emotion_relationship_candidate import (
+from awp_rp_runtime_v3.contracts.emotion_relationship_request import EmotionRelationshipRequest
+from awp_rp_runtime_v3.contracts.emotion_relationship_candidate import (
     EmotionRelationshipCandidate, RelationshipKind,
 )
-from awp_rp_runtime_v2.contracts.relationship_evidence import RelationshipEvidence
-from awp_rp_runtime_v2.contracts.emotion_relationship_result import (
+from awp_rp_runtime_v3.contracts.relationship_evidence import RelationshipEvidence
+from awp_rp_runtime_v3.contracts.emotion_relationship_result import (
     EmotionRelationshipResult, EmotionRelationshipStatus, RejectedEmotionCandidate,
 )
-from awp_rp_runtime_v2.contracts.relationship_risk import RelationshipRisk, RelationshipRiskLevel
-from awp_rp_runtime_v2.contracts.emotion_relationship_suggestion import (
+from awp_rp_runtime_v3.contracts.relationship_risk import RelationshipRisk, RelationshipRiskLevel
+from awp_rp_runtime_v3.contracts.emotion_relationship_suggestion import (
     EmotionRelationshipSuggestion, EmotionRelationshipSuggestionKind,
 )
-from awp_rp_runtime_v2.contracts.emotion_relationship_trigger_diagnostics import EmotionRelationshipTriggerDiagnostics
+from awp_rp_runtime_v3.contracts.emotion_relationship_trigger_diagnostics import EmotionRelationshipTriggerDiagnostics
 
 # D4 runtime
-from awp_rp_runtime_v2.runtime.emotion_relationship_trigger_policy import (
+from awp_rp_runtime_v3.runtime.emotion_relationship_trigger_policy import (
     EmotionRelationshipTriggerPolicy, EmotionRelationshipTriggerResult,
 )
-from awp_rp_runtime_v2.runtime.emotion_relationship_runtime import EmotionRelationshipRuntime
-from awp_rp_runtime_v2.runtime.emotion_relationship_query_planner import EmotionRelationshipQueryPlanner
-from awp_rp_runtime_v2.runtime.emotion_relationship_candidate_generator import EmotionRelationshipCandidateGenerator
-from awp_rp_runtime_v2.runtime.emotion_relationship_validator import EmotionRelationshipValidator
-from awp_rp_runtime_v2.runtime.emotion_relationship_ranker import EmotionRelationshipRanker, MAX_ACCEPTED
-from awp_rp_runtime_v2.runtime.emotion_relationship_adapter import EmotionRelationshipAdapter
-from awp_rp_runtime_v2.runtime.emotion_relationship_tool_profile import (
+from awp_rp_runtime_v3.runtime.emotion_relationship_runtime import EmotionRelationshipRuntime
+from awp_rp_runtime_v3.runtime.emotion_relationship_query_planner import EmotionRelationshipQueryPlanner
+from awp_rp_runtime_v3.runtime.emotion_relationship_candidate_generator import EmotionRelationshipCandidateGenerator
+from awp_rp_runtime_v3.runtime.emotion_relationship_validator import EmotionRelationshipValidator
+from awp_rp_runtime_v3.runtime.emotion_relationship_ranker import EmotionRelationshipRanker, MAX_ACCEPTED
+from awp_rp_runtime_v3.runtime.emotion_relationship_adapter import EmotionRelationshipAdapter
+from awp_rp_runtime_v3.runtime.emotion_relationship_tool_profile import (
     EMOTION_RELATIONSHIP_TOOLS, EMOTION_RELATIONSHIP_ROLE_SPEC,
 )
 
 # Existing runtime
-from awp_rp_runtime_v2.runtime.tool_registry import ToolRegistry
-from awp_rp_runtime_v2.runtime.tool_permission_policy import ToolPermissionPolicy
-from awp_rp_runtime_v2.runtime.tool_gateway import ToolGateway, FakeToolRunner
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.tool_registry import ToolRegistry
+from awp_rp_runtime_v3.runtime.tool_permission_policy import ToolPermissionPolicy
+from awp_rp_runtime_v3.runtime.tool_gateway import ToolGateway, FakeToolRunner
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry, AgentRoleSpec
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
 
 
 # ─────────────────────────────────────────────
@@ -501,7 +501,7 @@ class TestSuggestionMergeEmotionRelationship:
 
     def test_27_writer_cannot_read_raw_er_result(self):
         """Writer 不可读取原始 EmotionRelationshipResult。"""
-        from awp_rp_runtime_v2.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
+        from awp_rp_runtime_v3.runtime.writer_input_bundle_v2_builder import WriterInputBundleV2Builder
         builder = WriterInputBundleV2Builder()
         snapshot = _make_snapshot()
         final_brief = FinalTurnBrief(
@@ -554,7 +554,7 @@ class TestToolFailureBehavior:
 
     def test_29_tool_timeout_returns_degraded(self):
         """Tool timeout 返回 degraded，不阻断主链。"""
-        from awp_rp_runtime_v2.contracts.tool_result import ToolResult, ToolResultStatus
+        from awp_rp_runtime_v3.contracts.tool_result import ToolResult, ToolResultStatus
         tr = ToolResult(
             result_id="tr1", request_id="req1", trace_id="t1",
             tool_id="rag_memory_lookup",
@@ -579,7 +579,7 @@ class TestD4NodeRegistration:
     """D4: Emotion/Relationship node registration tests."""
 
     def test_d4_nodes_present(self):
-        from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
         d4 = {
             "AWPV2EmotionRelationshipTrigger", "AWPV2EmotionRelationshipRequest",
             "AWPV2EmotionRelationshipAgent", "AWPV2EmotionRelationshipValidator",
@@ -590,7 +590,7 @@ class TestD4NodeRegistration:
             assert name in NODE_CLASS_MAPPINGS, f"Missing: {name}"
 
     def test_d4_display_names_chinese(self):
-        from awp_rp_runtime_v2.nodes import NODE_DISPLAY_NAME_MAPPINGS
+        from awp_rp_runtime_v3.nodes import NODE_DISPLAY_NAME_MAPPINGS
         d4_displays = [
             "AWP V2 情绪关系触发", "AWP V2 情绪关系请求",
             "AWP V2 情绪关系Agent", "AWP V2 情绪关系验证",

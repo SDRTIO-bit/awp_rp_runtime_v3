@@ -31,7 +31,7 @@ jobs:
         run: python -m pytest tests/ -q --tb=short
 
       - name: Run workflow scenario smoke suite
-        run: python -m awp_rp_runtime_v2.testing.run_workflow_scenarios --suite smoke --verbose
+        run: python -m awp_rp_runtime_v3.testing.run_workflow_scenarios --suite smoke --verbose
 
   contract-tests:
     runs-on: ubuntu-latest

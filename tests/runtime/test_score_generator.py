@@ -1,13 +1,13 @@
 """Tests for Writer score generation."""
 
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.director_plan import DirectorPlan
-from awp_rp_runtime_v2.contracts.suggestion_merge_result import (
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.director_plan import DirectorPlan
+from awp_rp_runtime_v3.contracts.suggestion_merge_result import (
     MergeDecision,
     MergeItem,
     SuggestionMergeResult,
 )
-from awp_rp_runtime_v2.runtime.score_generator import ScoreGenerator
+from awp_rp_runtime_v3.runtime.score_generator import ScoreGenerator
 
 
 class TestScoreGenerator:

@@ -1,16 +1,16 @@
 """P1 Tests: TurnRecord, Retry, Continue, Snapshot."""
 
 import pytest
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord, TurnMode
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.card_state import CardState
-from awp_rp_runtime_v2.contracts.quality_decision import (
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord, TurnMode
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.quality_decision import (
     QualityDecision, QualityVerdict, SideEffectBlockedError,
 )
-from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+from awp_rp_runtime_v3.testing.fakes.fake_stores import (
     FakeTurnRecordStore, FakeCardStateStore,
 )
-from awp_rp_runtime_v2.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
+from awp_rp_runtime_v3.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
 
 
 class TestTurnRecordRevisionBinding:
@@ -146,8 +146,8 @@ class TestSnapshotImmutability:
 
     def test_snapshot_includes_at_most_5_turns(self):
         """Test 15: snapshot has max 5 recent turns."""
-        from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-        from awp_rp_runtime_v2.testing.fakes.fake_stores import (
+        from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+        from awp_rp_runtime_v3.testing.fakes.fake_stores import (
             FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore, FakeRagMemoryStore,
         )
 

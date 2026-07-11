@@ -1,4 +1,4 @@
-﻿"""注入世界观+细纲后让 NovelEngine 写第1章。
+"""注入世界观+细纲后让 NovelEngine 写第1章。
 
 策略：
 - 跳过 plan_chapter（细纲已手写，不需 LLM 规划）
@@ -17,18 +17,18 @@ os.environ["MIMO_API_KEY"] = "tp-crnpv8v46s2gchl6tdg0826m978ru63eo42uygeyssk7m3d
 
 sys.path.insert(0, r"F:\12\语英")
 
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.runtime.novel_engine import NovelEngine
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_character import (
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_character import (
     NovelCharacter, CharacterRelationship,
 )
-from awp_rp_runtime_v2.contracts.novel_chapter import (
+from awp_rp_runtime_v3.contracts.novel_chapter import (
     ChapterPlan, BeatDetail, ContentSummary, PlotArrangement,
     CharacterAppearance, EndingDesign,
 )
-from awp_rp_runtime_v2.contracts.novel_ledger import LedgerItem
+from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
 
 
 # === 世界观核心条款（精简版，留给 director/writer 在 prompt 里看到）===

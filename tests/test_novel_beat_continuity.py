@@ -1,6 +1,6 @@
 """Tests for beat 间衔接修复：前文尾段注入 + BeatGuidance 注入 + scene_repeat 检测。
 
-注意：本仓库既有的 tests/test_novel_agents.py 使用 awp_rp_runtime_v2 包名，
+注意：本仓库既有的 tests/test_novel_agents.py 使用 awp_rp_runtime_v3 包名，
 但该包不存在（仓库实际为 v3）。这里直接用 v3 import（与 novel_cli.py 一致），
 避免依赖断裂的 v2 测试基础设施。
 """

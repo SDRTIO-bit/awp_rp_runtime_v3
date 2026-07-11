@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from awp_rp_runtime_v2.nodes import NODE_CLASS_MAPPINGS
+from awp_rp_runtime_v3.nodes import NODE_CLASS_MAPPINGS
 
 
 def _input_type(node_cls, input_name: str):

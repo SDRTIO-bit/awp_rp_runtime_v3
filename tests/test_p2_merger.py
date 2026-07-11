@@ -1,14 +1,14 @@
 """P2 Tests: SuggestionMerger."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
-from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan, DelegationTask
-from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.card_state import CardState
-from awp_rp_runtime_v2.contracts.suggestion_merge_result import MergeDecision
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan, DelegationTask
+from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.suggestion_merge_result import MergeDecision
 
 
 def _make_snapshot() -> RoundSnapshot:

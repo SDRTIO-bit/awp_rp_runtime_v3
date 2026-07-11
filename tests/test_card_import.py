@@ -11,31 +11,31 @@ from pathlib import Path
 
 import pytest
 
-from awp_rp_runtime_v2.contracts.card_source_snapshot import CardSourceSnapshot
-from awp_rp_runtime_v2.contracts.card_import_request import CardImportRequest
-from awp_rp_runtime_v2.contracts.card_import_report import CardImportReport
-from awp_rp_runtime_v2.contracts.card_import_issue import CardImportIssue, IssueSeverity
-from awp_rp_runtime_v2.contracts.card_definition import CardDefinition, CardDefinitionStatus
-from awp_rp_runtime_v2.contracts.card_profile import CardProfile
-from awp_rp_runtime_v2.contracts.card_greeting import CardGreeting
-from awp_rp_runtime_v2.contracts.card_worldbook_entry import CardWorldbookEntry
-from awp_rp_runtime_v2.contracts.card_worldbook_chunk import CardWorldbookChunk
-from awp_rp_runtime_v2.contracts.card_structure_hints import CardStructureHints
-from awp_rp_runtime_v2.contracts.card_quarantine_record import (
+from awp_rp_runtime_v3.contracts.card_source_snapshot import CardSourceSnapshot
+from awp_rp_runtime_v3.contracts.card_import_request import CardImportRequest
+from awp_rp_runtime_v3.contracts.card_import_report import CardImportReport
+from awp_rp_runtime_v3.contracts.card_import_issue import CardImportIssue, IssueSeverity
+from awp_rp_runtime_v3.contracts.card_definition import CardDefinition, CardDefinitionStatus
+from awp_rp_runtime_v3.contracts.card_profile import CardProfile
+from awp_rp_runtime_v3.contracts.card_greeting import CardGreeting
+from awp_rp_runtime_v3.contracts.card_worldbook_entry import CardWorldbookEntry
+from awp_rp_runtime_v3.contracts.card_worldbook_chunk import CardWorldbookChunk
+from awp_rp_runtime_v3.contracts.card_structure_hints import CardStructureHints
+from awp_rp_runtime_v3.contracts.card_quarantine_record import (
     CardQuarantineRecord, QuarantineKind, QuarantineAction,
 )
-from awp_rp_runtime_v2.contracts.card_import_approval import CardImportApproval, ApprovalDecision
-from awp_rp_runtime_v2.contracts.card_import_result import CardImportResult, ImportResultStatus
+from awp_rp_runtime_v3.contracts.card_import_approval import CardImportApproval, ApprovalDecision
+from awp_rp_runtime_v3.contracts.card_import_result import CardImportResult, ImportResultStatus
 
-from awp_rp_runtime_v2.runtime.card_source_loader import load_card_source, CardSourceLoadError
-from awp_rp_runtime_v2.runtime.card_payload_parser import CardPayloadParser
-from awp_rp_runtime_v2.runtime.card_format_validator import validate_card_format
-from awp_rp_runtime_v2.runtime.card_security_scanner import CardSecurityScanner
-from awp_rp_runtime_v2.runtime.card_greeting_sanitizer import sanitize_greeting_content
-from awp_rp_runtime_v2.runtime.card_worldbook_chunk_builder import build_all_chunks, build_chunks_for_entry
-from awp_rp_runtime_v2.runtime.card_import_pipeline import CardImportPipeline
+from awp_rp_runtime_v3.runtime.card_source_loader import load_card_source, CardSourceLoadError
+from awp_rp_runtime_v3.runtime.card_payload_parser import CardPayloadParser
+from awp_rp_runtime_v3.runtime.card_format_validator import validate_card_format
+from awp_rp_runtime_v3.runtime.card_security_scanner import CardSecurityScanner
+from awp_rp_runtime_v3.runtime.card_greeting_sanitizer import sanitize_greeting_content
+from awp_rp_runtime_v3.runtime.card_worldbook_chunk_builder import build_all_chunks, build_chunks_for_entry
+from awp_rp_runtime_v3.runtime.card_import_pipeline import CardImportPipeline
 
-from awp_rp_runtime_v2.testing.fakes.fake_card_import_stores import (
+from awp_rp_runtime_v3.testing.fakes.fake_card_import_stores import (
     FakeCardDefinitionStore, FakeCardSourceStore, FakeCardImportReportStore,
 )
 
@@ -426,8 +426,8 @@ def test_30_workflow_json():
 # ── 31. Existing tests unbroken ─────────────────────────────────────────────
 
 def test_31_existing_contracts():
-    from awp_rp_runtime_v2.contracts.card_state import CardState
-    from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
+    from awp_rp_runtime_v3.contracts.card_state import CardState
+    from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
     cs = CardState(card_id="c", session_id="s")
     assert cs.validate() == []
 

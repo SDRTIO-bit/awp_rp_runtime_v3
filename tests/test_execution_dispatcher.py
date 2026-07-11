@@ -2,8 +2,8 @@ import json
 import sys
 from pathlib import Path
 
-from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
-from awp_rp_runtime_v2.testing.api_workflow_loader import APIWorkflowLoader
+from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
+from awp_rp_runtime_v3.testing.api_workflow_loader import APIWorkflowLoader
 
 
 def _node_result(writer_output: str = "accepted text") -> tuple:
@@ -28,7 +28,7 @@ def test_python_mode_calls_node_directly(monkeypatch):
             calls["writer_profile_id"] = kwargs.get("writer_profile_id")
             return _node_result("direct python output")
 
-    from awp_rp_runtime_v2.nodes import persistent_continuation_turn_node
+    from awp_rp_runtime_v3.nodes import persistent_continuation_turn_node
 
     monkeypatch.setattr(
         persistent_continuation_turn_node,
@@ -64,7 +64,7 @@ def test_python_mode_profile_env_overrides(monkeypatch):
             calls["writer_profile_id"] = kwargs.get("writer_profile_id")
             return _node_result("direct python output")
 
-    from awp_rp_runtime_v2.nodes import persistent_first_turn_node
+    from awp_rp_runtime_v3.nodes import persistent_first_turn_node
 
     monkeypatch.setattr(
         persistent_first_turn_node,
@@ -99,7 +99,7 @@ def test_python_continue_uses_real_profiles_by_default(monkeypatch):
             calls["writer_profile_id"] = kwargs.get("writer_profile_id")
             return _node_result("direct python output")
 
-    from awp_rp_runtime_v2.nodes import continue_turn_execution_node
+    from awp_rp_runtime_v3.nodes import continue_turn_execution_node
 
     monkeypatch.setattr(
         continue_turn_execution_node,

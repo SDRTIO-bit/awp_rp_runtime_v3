@@ -1,31 +1,31 @@
 """Integration tests for the complete turn lifecycle."""
 
 import pytest
-from awp_rp_runtime_v2.testing.fakes import (
+from awp_rp_runtime_v3.testing.fakes import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore,
     FakeRagMemoryStore, FakeLLMProvider,
 )
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry
-from awp_rp_runtime_v2.contracts.quality_decision import QualityDecision, QualityVerdict
-from awp_rp_runtime_v2.contracts.state_update_proposal import StateUpdateProposal, PatchOp, PatchOpEntry
-from awp_rp_runtime_v2.contracts.suggestion_merge_result import SuggestionMergeResult
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry
+from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
+from awp_rp_runtime_v3.contracts.state_update_proposal import StateUpdateProposal, PatchOp, PatchOpEntry
+from awp_rp_runtime_v3.contracts.suggestion_merge_result import SuggestionMergeResult
 
-from awp_rp_runtime_v2.runtime.round_snapshot_builder import RoundSnapshotBuilder
-from awp_rp_runtime_v2.runtime.director_runtime import DirectorRuntime, FakeDirectorAdapter
-from awp_rp_runtime_v2.runtime.delegation_planner import DelegationPlanner
-from awp_rp_runtime_v2.runtime.suggestion_merger import SuggestionMerger
-from awp_rp_runtime_v2.runtime.writer_runtime import WriterRuntime
-from awp_rp_runtime_v2.runtime.critic_runtime import CriticRuntime
-from awp_rp_runtime_v2.runtime.state_proposal_runtime import StateProposalRuntime
-from awp_rp_runtime_v2.runtime.card_state_commit_runtime import CardStateCommitRuntime
-from awp_rp_runtime_v2.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
-from awp_rp_runtime_v2.runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
-from awp_rp_runtime_v2.runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
-from awp_rp_runtime_v2.runtime.turn_orchestrator import TurnOrchestrator
-from awp_rp_runtime_v2.runtime.retry_runtime import RetryRuntime
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import AgentRuntimeRegistry
-from awp_rp_runtime_v2.runtime.task_envelope_builder import TaskEnvelopeBuilder
-from awp_rp_runtime_v2.runtime.dynamic_subagent_pool import DynamicSubAgentPool
+from awp_rp_runtime_v3.runtime.round_snapshot_builder import RoundSnapshotBuilder
+from awp_rp_runtime_v3.runtime.director_runtime import DirectorRuntime, FakeDirectorAdapter
+from awp_rp_runtime_v3.runtime.delegation_planner import DelegationPlanner
+from awp_rp_runtime_v3.runtime.suggestion_merger import SuggestionMerger
+from awp_rp_runtime_v3.runtime.writer_runtime import WriterRuntime
+from awp_rp_runtime_v3.runtime.critic_runtime import CriticRuntime
+from awp_rp_runtime_v3.runtime.state_proposal_runtime import StateProposalRuntime
+from awp_rp_runtime_v3.runtime.card_state_commit_runtime import CardStateCommitRuntime
+from awp_rp_runtime_v3.runtime.turn_record_commit_runtime import TurnRecordCommitRuntime
+from awp_rp_runtime_v3.runtime.active_memory_commit_runtime import ActiveMemoryCommitRuntime
+from awp_rp_runtime_v3.runtime.rag_memory_commit_runtime import RagMemoryCommitRuntime
+from awp_rp_runtime_v3.runtime.turn_orchestrator import TurnOrchestrator
+from awp_rp_runtime_v3.runtime.retry_runtime import RetryRuntime
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import AgentRuntimeRegistry
+from awp_rp_runtime_v3.runtime.task_envelope_builder import TaskEnvelopeBuilder
+from awp_rp_runtime_v3.runtime.dynamic_subagent_pool import DynamicSubAgentPool
 
 
 class TestTurnLifecycleIntegration:
@@ -126,12 +126,12 @@ class TestTurnLifecycleIntegration:
         assert not result.success
 
     def test_subagent_cannot_write_state(self):
-        from awp_rp_runtime_v2.contracts.agent_task_envelope import AgentTaskEnvelope
+        from awp_rp_runtime_v3.contracts.agent_task_envelope import AgentTaskEnvelope
         envelope = AgentTaskEnvelope(task_id="t1", role="continuity-checker")
         assert "Cannot write to CardState" in envelope.prohibitions
 
     def test_writer_cannot_use_tools(self):
-        from awp_rp_runtime_v2.contracts.writer_contract import WriterContract
+        from awp_rp_runtime_v3.contracts.writer_contract import WriterContract
         contract = WriterContract()
         assert "Must not use tools" in contract.prohibitions[0]
 
@@ -143,11 +143,11 @@ class TestTurnLifecycleIntegration:
 
     def test_suggestion_merge_explainable(self):
         merger = SuggestionMerger()
-        from awp_rp_runtime_v2.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
-        from awp_rp_runtime_v2.contracts.agent_execution_result import AgentExecutionResult
-        from awp_rp_runtime_v2.contracts.delegation_plan import DelegationPlan
-        from awp_rp_runtime_v2.contracts.turn_brief import TurnBrief
-        from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
+        from awp_rp_runtime_v3.contracts.agent_suggestion import AgentSuggestion, SuggestionKind
+        from awp_rp_runtime_v3.contracts.agent_execution_result import AgentExecutionResult
+        from awp_rp_runtime_v3.contracts.delegation_plan import DelegationPlan
+        from awp_rp_runtime_v3.contracts.turn_brief import TurnBrief
+        from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
 
         sug = AgentSuggestion(suggestion_id="s1", kind=SuggestionKind.NARRATIVE_OPPORTUNITY,
                               summary="detail", evidence=["e1"], source_refs=["r1"])

@@ -11,26 +11,26 @@ from pathlib import Path
 
 import pytest
 
-from awp_rp_runtime_v2.contracts.card_definition import CardDefinition, CardDefinitionStatus
-from awp_rp_runtime_v2.contracts.card_greeting import CardGreeting
-from awp_rp_runtime_v2.contracts.card_worldbook_entry import CardWorldbookEntry
-from awp_rp_runtime_v2.contracts.card_worldbook_chunk import CardWorldbookChunk
-from awp_rp_runtime_v2.contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
-from awp_rp_runtime_v2.contracts.card_session_binding import CardSessionBinding, CardSessionBindingStatus
-from awp_rp_runtime_v2.contracts.greeting_selection import GreetingSelection
-from awp_rp_runtime_v2.contracts.opening_record import OpeningRecord
-from awp_rp_runtime_v2.contracts.worldbook_binding import WorldbookBinding, WorldbookBindingEntry
-from awp_rp_runtime_v2.contracts.card_session_bootstrap_receipt import CardSessionBootstrapReceipt
-from awp_rp_runtime_v2.contracts.card_session_bootstrap_failure import (
+from awp_rp_runtime_v3.contracts.card_definition import CardDefinition, CardDefinitionStatus
+from awp_rp_runtime_v3.contracts.card_greeting import CardGreeting
+from awp_rp_runtime_v3.contracts.card_worldbook_entry import CardWorldbookEntry
+from awp_rp_runtime_v3.contracts.card_worldbook_chunk import CardWorldbookChunk
+from awp_rp_runtime_v3.contracts.card_session_bootstrap_request import CardSessionBootstrapRequest
+from awp_rp_runtime_v3.contracts.card_session_binding import CardSessionBinding, CardSessionBindingStatus
+from awp_rp_runtime_v3.contracts.greeting_selection import GreetingSelection
+from awp_rp_runtime_v3.contracts.opening_record import OpeningRecord
+from awp_rp_runtime_v3.contracts.worldbook_binding import WorldbookBinding, WorldbookBindingEntry
+from awp_rp_runtime_v3.contracts.card_session_bootstrap_receipt import CardSessionBootstrapReceipt
+from awp_rp_runtime_v3.contracts.card_session_bootstrap_failure import (
     CardSessionBootstrapFailure, BootstrapFailureCode,
 )
-from awp_rp_runtime_v2.contracts.card_session_bootstrap_diagnostics import CardSessionBootstrapDiagnostics
-from awp_rp_runtime_v2.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.card_session_bootstrap_diagnostics import CardSessionBootstrapDiagnostics
+from awp_rp_runtime_v3.contracts.card_state import CardState
 
-from awp_rp_runtime_v2.runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
+from awp_rp_runtime_v3.runtime.card_session_bootstrap_pipeline import CardSessionBootstrapPipeline
 
-from awp_rp_runtime_v2.testing.fakes.fake_card_import_stores import FakeCardDefinitionStore
-from awp_rp_runtime_v2.testing.fakes.fake_card_session_stores import (
+from awp_rp_runtime_v3.testing.fakes.fake_card_import_stores import FakeCardDefinitionStore
+from awp_rp_runtime_v3.testing.fakes.fake_card_session_stores import (
     FakeCardSessionBindingStore, FakeOpeningRecordStore,
     FakeWorldbookBindingStore, FakeBootstrapReceiptStore,
 )

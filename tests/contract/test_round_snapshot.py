@@ -1,9 +1,9 @@
 """Tests for RoundSnapshot contract."""
 
 import pytest
-from awp_rp_runtime_v2.contracts.round_snapshot import RoundSnapshot
-from awp_rp_runtime_v2.contracts.card_state import CardState
-from awp_rp_runtime_v2.contracts.turn_record import TurnRecord
+from awp_rp_runtime_v3.contracts.round_snapshot import RoundSnapshot
+from awp_rp_runtime_v3.contracts.card_state import CardState
+from awp_rp_runtime_v3.contracts.turn_record import TurnRecord
 
 
 class TestRoundSnapshotContract:

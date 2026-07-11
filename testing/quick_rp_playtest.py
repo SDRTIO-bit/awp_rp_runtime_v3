@@ -53,7 +53,7 @@ print("=" * 70)
 print("  1. BOOTSTRAP")
 print("=" * 70)
 
-from awp_rp_runtime_v2.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
+from awp_rp_runtime_v3.nodes.persistent_bootstrap_node import AWPV2PersistentBootstrap
 
 boot = call_node(AWPV2PersistentBootstrap,
     source_path=CARD_PATH,
@@ -77,11 +77,11 @@ print(f"  greetings={len(greetings)}")
 # ═══════════════════════════════════════════════════════════════════════
 # 多回合循环
 # ═══════════════════════════════════════════════════════════════════════
-from awp_rp_runtime_v2.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
-from awp_rp_runtime_v2.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
-from awp_rp_runtime_v2.nodes.continue_turn_execution_node import AWPV2ContinueTurn
-from awp_rp_runtime_v2.nodes.accepted_text_output_node import AWPV2AcceptedTextOutput
-from awp_rp_runtime_v2.nodes.turn_result_probe_node import AWPV2TurnResultProbe
+from awp_rp_runtime_v3.nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
+from awp_rp_runtime_v3.nodes.persistent_continuation_turn_node import AWPV2PersistentContinuationTurn
+from awp_rp_runtime_v3.nodes.continue_turn_execution_node import AWPV2ContinueTurn
+from awp_rp_runtime_v3.nodes.accepted_text_output_node import AWPV2AcceptedTextOutput
+from awp_rp_runtime_v3.nodes.turn_result_probe_node import AWPV2TurnResultProbe
 
 # ── 玩家输入序列 ──
 player_inputs = [
@@ -204,7 +204,7 @@ print(f"  cs_revision={cont_cs.get('revision','?')}")
 print(f"\n{'='*70}")
 print(f"  5. RESTART + CONTINUATION VERIFICATION")
 print(f"{'='*70}")
-from awp_rp_runtime_v2.runtime.runtime_store_factory import clear_registry_cache
+from awp_rp_runtime_v3.runtime.runtime_store_factory import clear_registry_cache
 clear_registry_cache()
 print(f"  cache cleared, re-instantiating...")
 

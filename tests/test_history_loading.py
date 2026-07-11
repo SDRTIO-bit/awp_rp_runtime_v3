@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.storage.sqlite.database import Database
-from awp_rp_runtime_v2.tests.factories import (
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.storage.sqlite.database import Database
+from awp_rp_runtime_v3.tests.factories import (
     make_binding,
     make_opening_record,
     make_turn_record,
 )
-from awp_rp_runtime_v2.tests.test_management_api_new_endpoints import (
+from awp_rp_runtime_v3.tests.test_management_api_new_endpoints import (
     _Request,
     _data,
     _load_api,

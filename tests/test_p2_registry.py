@@ -1,10 +1,10 @@
 """P2 Tests: AgentRuntimeRegistry."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.agent_runtime_registry import (
+from awp_rp_runtime_v3.runtime.agent_runtime_registry import (
     AgentRuntimeRegistry, AgentRoleSpec, AgentRunner,
 )
-from awp_rp_runtime_v2.contracts.agent_suggestion import SuggestionKind
+from awp_rp_runtime_v3.contracts.agent_suggestion import SuggestionKind
 
 
 class TestAgentRuntimeRegistry:

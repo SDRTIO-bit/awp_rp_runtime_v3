@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from awp_rp_runtime_v2.runtime import execution_dispatcher
-from awp_rp_runtime_v2.runtime.execution_dispatcher import ExecutionDispatcher
+from awp_rp_runtime_v3.runtime import execution_dispatcher
+from awp_rp_runtime_v3.runtime.execution_dispatcher import ExecutionDispatcher
 
 
 def test_execute_turn_streaming_calls_callbacks_in_order(monkeypatch):
@@ -27,7 +27,7 @@ def test_execute_turn_streaming_calls_callbacks_in_order(monkeypatch):
                 {},
             )
 
-    from awp_rp_runtime_v2.nodes import persistent_continuation_turn_node
+    from awp_rp_runtime_v3.nodes import persistent_continuation_turn_node
 
     monkeypatch.setattr(
         persistent_continuation_turn_node,
@@ -35,7 +35,7 @@ def test_execute_turn_streaming_calls_callbacks_in_order(monkeypatch):
         FakeContinuationNode,
     )
     monkeypatch.setattr(
-        "awp_rp_runtime_v2.runtime.execution_dispatcher._id",
+        "awp_rp_runtime_v3.runtime.execution_dispatcher._id",
         lambda prefix, seed: f"{prefix}-fixed",
     )
 
@@ -87,7 +87,7 @@ def test_execute_turn_streaming_done_reports_failure(monkeypatch):
                 {},
             )
 
-    from awp_rp_runtime_v2.nodes import persistent_continuation_turn_node
+    from awp_rp_runtime_v3.nodes import persistent_continuation_turn_node
 
     monkeypatch.setattr(
         persistent_continuation_turn_node,

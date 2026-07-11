@@ -1,11 +1,11 @@
 """Tests for CardState store."""
 
 import pytest
-from awp_rp_runtime_v2.testing.fakes.fake_stores import FakeCardStateStore
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry
-from awp_rp_runtime_v2.contracts.card_state_patch import CardStatePatch, CardStatePatchOperation, PatchOpType
-from awp_rp_runtime_v2.contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
-from awp_rp_runtime_v2.storage.interfaces import RevisionConflictError, DuplicatePatchError
+from awp_rp_runtime_v3.testing.fakes.fake_stores import FakeCardStateStore
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry
+from awp_rp_runtime_v3.contracts.card_state_patch import CardStatePatch, CardStatePatchOperation, PatchOpType
+from awp_rp_runtime_v3.contracts.card_state_commit import CardStateCommitRequest, CardStateCommitStatus
+from awp_rp_runtime_v3.storage.interfaces import RevisionConflictError, DuplicatePatchError
 
 
 class TestCardStateStore:
