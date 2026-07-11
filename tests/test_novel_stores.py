@@ -175,10 +175,17 @@ class TestNovelCharacterStore:
 class TestNovelBatchProgressStore:
     def test_save_and_load(self, reg):
         reg.novel_project_store.create(NovelProject(project_id="p1"))
-        bp = BatchProgress(batch_id="b1", project_id="p1", chapter_start=1, chapter_end=5)
+        bp = BatchProgress(
+            batch_id="b1",
+            project_id="p1",
+            chapter_start=1,
+            chapter_end=5,
+            failed_chapters=(2, 4),
+        )
         reg.novel_batch_progress_store.save(bp)
         loaded = reg.novel_batch_progress_store.load("b1")
         assert loaded.chapter_end == 5
+        assert loaded.failed_chapters == (2, 4)
 
     def test_list_by_project(self, reg):
         reg.novel_project_store.create(NovelProject(project_id="p1"))

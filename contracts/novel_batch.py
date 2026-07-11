@@ -25,6 +25,7 @@ class BatchProgress:
     chapter_index: int = 0       # 当前处理的章节
     status: str = "pending"      # pending / in_progress / completed / failed
     retry_count: int = 0
+    failed_chapters: tuple[int, ...] = ()
     error_message: str = ""
     created_at: str = ""
     updated_at: str = ""
@@ -40,6 +41,7 @@ class BatchProgress:
             "chapter_index": self.chapter_index,
             "status": self.status,
             "retry_count": self.retry_count,
+            "failed_chapters": list(self.failed_chapters),
             "error_message": self.error_message,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -57,6 +59,7 @@ class BatchProgress:
             chapter_index=data.get("chapter_index", 0),
             status=data.get("status", "pending"),
             retry_count=data.get("retry_count", 0),
+            failed_chapters=tuple(data.get("failed_chapters", ()) or ()),
             error_message=data.get("error_message", ""),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),

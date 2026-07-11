@@ -4,6 +4,7 @@ import pytest
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
 from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan
+from awp_rp_runtime_v3.contracts.novel_draft import ChapterDraft
 
 
 def test_v3_package_is_importable():
@@ -71,9 +72,23 @@ class TestNovelEngine:
         assert draft2.revision == 2
         assert draft2.chapter_id == "ch1"
 
-    def test_batch_write(self, reg, engine):
+    def test_batch_write(self, reg, engine, monkeypatch):
         reg.novel_project_store.create(NovelProject(project_id="p1"))
         completed = []
+
+        def plan_chapter(*, project_id, chapter_index):
+            return ChapterPlan(
+                chapter_id=f"ch{chapter_index}",
+                project_id=project_id,
+                chapter_index=chapter_index,
+            )
+
+        def write_chapter(*, project_id, chapter_index):
+            return ChapterDraft(chapter_id=f"ch{chapter_index}", text="正文")
+
+        monkeypatch.setattr(engine, "plan_chapter", plan_chapter)
+        monkeypatch.setattr(engine, "write_chapter", write_chapter)
+        monkeypatch.setattr("time.sleep", lambda _: None)
 
         def on_complete(idx, draft):
             completed.append(idx)
@@ -91,3 +106,49 @@ class TestNovelEngine:
         progress_list = reg.novel_batch_progress_store.list_by_project("p1")
         assert len(progress_list) > 0
         assert progress_list[0].status == "completed"
+
+    def test_batch_write_marks_partial_failures_in_final_progress(self, reg, engine, monkeypatch):
+        reg.novel_project_store.create(NovelProject(project_id="p1"))
+        for chapter_index in (1, 2, 3):
+            reg.novel_chapter_plan_store.save(ChapterPlan(
+                chapter_id=f"ch{chapter_index}",
+                project_id="p1",
+                chapter_index=chapter_index,
+            ))
+
+        def write_chapter(*, project_id, chapter_index):
+            if chapter_index == 2:
+                raise RuntimeError("writer unavailable")
+            return ChapterDraft(chapter_id=f"ch{chapter_index}", text="正文")
+
+        monkeypatch.setattr(engine, "write_chapter", write_chapter)
+        monkeypatch.setattr("time.sleep", lambda _: None)
+
+        drafts = engine.batch_write(project_id="p1", chapter_start=1, chapter_end=3)
+
+        progress = reg.novel_batch_progress_store.list_by_project("p1")[0]
+        assert progress.status == "completed_with_failures"
+        assert progress.failed_chapters == (2,)
+        assert len(drafts) == 2
+
+    def test_batch_write_marks_total_failure_in_final_progress(self, reg, engine, monkeypatch):
+        reg.novel_project_store.create(NovelProject(project_id="p1"))
+        for chapter_index in (1, 2):
+            reg.novel_chapter_plan_store.save(ChapterPlan(
+                chapter_id=f"ch{chapter_index}",
+                project_id="p1",
+                chapter_index=chapter_index,
+            ))
+
+        def write_chapter(*, project_id, chapter_index):
+            raise RuntimeError("writer unavailable")
+
+        monkeypatch.setattr(engine, "write_chapter", write_chapter)
+        monkeypatch.setattr("time.sleep", lambda _: None)
+
+        drafts = engine.batch_write(project_id="p1", chapter_start=1, chapter_end=2)
+
+        progress = reg.novel_batch_progress_store.list_by_project("p1")[0]
+        assert progress.status == "failed"
+        assert progress.failed_chapters == (1, 2)
+        assert drafts == []

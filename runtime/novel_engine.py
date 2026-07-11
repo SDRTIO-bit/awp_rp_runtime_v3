@@ -901,6 +901,7 @@ class NovelEngine:
 
         batch_id = f"batch-{uuid.uuid4().hex[:8]}"
         drafts: list[ChapterDraft] = []
+        failures: list[tuple[int, str]] = []
 
         # Initialize batch progress
         progress = BatchProgress(
@@ -950,6 +951,8 @@ class NovelEngine:
 
             except Exception as e:
                 # Mark failed and continue
+                error_message = str(e)[:200]
+                failures.append((chapter_index, error_message))
                 progress = BatchProgress(
                     batch_id=batch_id,
                     project_id=project_id,
@@ -957,19 +960,32 @@ class NovelEngine:
                     chapter_end=chapter_end,
                     chapter_index=chapter_index,
                     status="failed",
-                    error_message=str(e)[:200],
+                    failed_chapters=tuple(index for index, _ in failures),
+                    error_message=error_message,
                 )
                 self._registry.novel_batch_progress_store.save(progress)
                 continue
 
-        # Mark completed
+        if not failures:
+            final_status = "completed"
+        elif drafts:
+            final_status = "completed_with_failures"
+        else:
+            final_status = "failed"
+
+        # Persist the aggregate final outcome after all chapters have run.
         progress = BatchProgress(
             batch_id=batch_id,
             project_id=project_id,
             chapter_start=chapter_start,
             chapter_end=chapter_end,
             chapter_index=chapter_end,
-            status="completed",
+            status=final_status,
+            failed_chapters=tuple(index for index, _ in failures),
+            error_message="; ".join(
+                f"chapter {index}: {error_message}"
+                for index, error_message in failures
+            ),
         )
         self._registry.novel_batch_progress_store.save(progress)
 
