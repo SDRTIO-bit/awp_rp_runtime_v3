@@ -483,11 +483,11 @@ class NovelEvolutionCurator:
         return compact[:limit]
 
     def _fit_active_summary(self, text: str) -> str:
-        compact = self._summary(text, 120)
+        compact = self._summary(text, 80)
         if len(compact) >= 60:
             return compact
         suffix = "，需要在后续章节保持连续性和因果回收。"
-        return (compact + suffix)[:120]
+        return (compact + suffix)[:80]
 
 
 __all__ = ["NovelEvolutionCurator", "novel_memory_scope"]

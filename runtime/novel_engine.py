@@ -802,31 +802,18 @@ class NovelEngine:
         quality_decision,
     ) -> None:
         """Update ledger and memory after chapter writing."""
+        if quality_decision is None or not quality_decision.is_accepted():
+            return
+
         from .novel_evolution_curator import NovelEvolutionCurator
-        from ..contracts.quality_decision import QualityDecision, QualityVerdict
         try:
-            side_effect_decision = quality_decision
-            if text and (
-                quality_decision is None or not quality_decision.is_accepted()
-            ):
-                side_effect_decision = QualityDecision(
-                    verdict=QualityVerdict.ACCEPTED,
-                    candidate_text=text,
-                    warnings=(
-                        list(getattr(quality_decision, "blocking_reasons", []))
-                        + list(getattr(quality_decision, "warnings", []))
-                    ) if quality_decision else [],
-                    acceptance_notes=[
-                        "novel_persisted_draft_memory_indexing",
-                    ],
-                )
             curator = NovelEvolutionCurator(self._registry)
             curator.curate(
                 chapter_text=text,
                 chapter_plan=plan,
                 current_ledger_items=current_ledger,
                 characters=characters,
-                quality_decision=side_effect_decision,
+                quality_decision=quality_decision,
             )
         except Exception:
             pass  # Don't fail the chapter write if evolution update fails
@@ -848,6 +835,10 @@ class NovelEngine:
             raise ValueError(f"No draft to revise: {plan.chapter_id}")
 
         # Load context and regenerate
+        project = self._registry.novel_project_store.load(project_id)
+        project_config = getattr(project, "config", {}) or {}
+        writer_prompt_name = project_config.get("writer_prompt", "writer")
+        skip_drumbeat = writer_prompt_name != "writer"
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         characters = self._registry.novel_character_store.list_by_project(project_id)
         character_states = self._build_character_context(characters)

@@ -13,6 +13,12 @@ from ..contracts.novel_chapter import ChapterPlan, BeatDetail
 # Thinking configuration for creative writing
 _THINKING_MEDIUM = {"thinking": {"type": "enabled", "reasoning_effort": "medium"}}
 
+# 前文衔接尾段长度：取上一个 beat 正文结尾的字数喂给下一个 beat，
+# 让 Writer 知道上文写到哪、从哪里接续，避免每个 beat 重新开场。
+# 只取尾部一段而非全文，控制鼓点风格被模仿放大的风险（quality 阶段
+# 的 check_drumbeat_density + rewrite_drumbeat_snippets 会兜底改写短句）。
+BEAT_TAIL_CHARS = 500
+
 # Writer system prompt — loaded from prompts/writer.md
 from .prompt_loader import load_prompt
 
@@ -179,7 +185,16 @@ class NovelWriterAdapter:
 
     def _build_beat_prompt(self, packet: NovelWritePacket, write_guidance: str = "") -> tuple[str, str]:
         """Build prompt for a single beat. Returns (system_prompt, user_prompt).
-        No accumulated_text — beats are independent to avoid drumbeat amplification."""
+
+        beat 之间靠两条通道衔接：
+        1. PREVIOUS BEAT TAIL — 取 accumulated_text 结尾约 BEAT_TAIL_CHARS 字，
+           让 Writer 知道上文写到哪、必须从那里接续，不得重新开场。
+        2. BEAT DETAIL — 从 director_guidance.beat_details 按 beat_id 匹配当前
+           beat 的 BeatGuidance（McKee 细纲），注入 content_outline/complication
+           等递进指令。complication（"比上一个 beat 复杂在哪"）天然防止 beat
+           重复 beat1 的场景。
+        首 beat（accumulated_text 为空）不注入 PREVIOUS BEAT TAIL。
+        """
         beat = packet.current_scene_beat
         p = packet.chapter_plan
 
@@ -208,13 +223,43 @@ class NovelWriterAdapter:
         if packet.character_states:
             parts.append(f"\n=== CHARACTER STATES ===\n{packet.character_states}")
 
+        # Previous beat tail — beat 间衔接核心通道
+        # 取上一个 beat 正文结尾，强制本 beat 从那里接续，不得重新开场。
+        tail = (packet.accumulated_text or "").strip()
+        if tail:
+            tail_snippet = tail[-BEAT_TAIL_CHARS:]
+            parts.append(
+                f"\n=== PREVIOUS BEAT TAIL ===\n"
+                f"（这是上一个 beat 已写出的正文结尾。本 beat 必须从这段结尾处直接接续，"
+                f"不得重新开场、不得重写已发生的场景、不得复述已出现的动作或对话。）\n{tail_snippet}"
+            )
+
         # Current beat
-        parts.append(
-            f"\n=== CURRENT BEAT ===\n"
-            f"描述: {beat.description}\n"
-            f"功能: {beat.function_tag}\n"
-            f"注意：以上描述只是骨架。你必须用对话填充血肉。没有对话的beat是失败的。"
+        beat_lines = [
+            f"描述: {beat.description}",
+            f"功能: {beat.function_tag}",
+        ]
+        # 注入当前 beat 的 Director 细纲（McKee 框架），如果 Director 产出了的话。
+        beat_guidance = self._match_beat_guidance(packet, beat.beat_id)
+        if beat_guidance:
+            detail_lines = []
+            if beat_guidance.content_outline:
+                detail_lines.append(f"事件: {beat_guidance.content_outline}")
+            if beat_guidance.complication:
+                detail_lines.append(f"比上一 beat 递进: {beat_guidance.complication}")
+            if beat_guidance.emotion_shift:
+                detail_lines.append(f"情绪翻转: {beat_guidance.emotion_shift}")
+            if beat_guidance.dialogue_keys:
+                detail_lines.append(f"对白要点: {'；'.join(beat_guidance.dialogue_keys)}")
+            if beat_guidance.hook_execution:
+                detail_lines.append(f"钩子落地: {beat_guidance.hook_execution}")
+            if detail_lines:
+                beat_lines.append("Director 细纲:")
+                beat_lines.extend(f"  {ln}" for ln in detail_lines)
+        beat_lines.append(
+            "注意：以上描述只是骨架。你必须用对话填充血肉。没有对话的beat是失败的。"
         )
+        parts.append("\n=== CURRENT BEAT ===\n" + "\n".join(beat_lines))
 
         # Chapter context (lightweight)
         parts.append(
@@ -246,6 +291,20 @@ class NovelWriterAdapter:
             parts.append(f"\n=== WRITER GUIDANCE ===\n{write_guidance}\n（以上引导是硬性要求，必须执行）")
 
         return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
+
+    def _match_beat_guidance(self, packet: NovelWritePacket, beat_id: str):
+        """从 director_guidance.beat_details 按 beat_id 匹配当前 beat 的细纲。
+
+        Director 输出的 BeatGuidance 按 beat_id 对齐 Architect 的 BeatDetail。
+        匹配失败（Director 未产出 / id 不一致）时返回 None，prompt 退化为只用骨架。
+        """
+        beat_details = getattr(packet.director_guidance, "beat_details", None) or ()
+        if not beat_details or not beat_id:
+            return None
+        for bg in beat_details:
+            if getattr(bg, "beat_id", "") == beat_id:
+                return bg
+        return None
 
     def _format_memory_items(self, items: list[dict[str, Any]]) -> str:
         lines = []

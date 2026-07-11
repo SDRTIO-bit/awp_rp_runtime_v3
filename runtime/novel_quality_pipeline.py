@@ -64,7 +64,7 @@ class NovelQualityPipeline:
                         current = rewritten
                         continue
             # 定向改写：把 blocking 原始问题清单交给 StyleCleaner
-            style_issues = self._style_cleaner.full_check(current)["issues"]
+            style_issues = self._style_cleaner.full_check(current, chapter_plan)["issues"]
             raw_issues = [i for i in style_issues if i.get("severity") == "blocking"]
             rewritten = self._style_cleaner.rewrite_for_issues(current, raw_issues)
             if rewritten and rewritten.strip() and rewritten != current:
@@ -140,14 +140,28 @@ class NovelQualityPipeline:
                 fixable=True,
             ))
 
-        # 4.5 Drumbeat density — 短句密度超标时硬错误，触发改写（NSFW项目跳过）
+        # 4.6 Scene repeat — beat 间"重新开场"硬错误
+        # 各段开场指纹高度相似时，说明 beat 重新写了已发生场景，触发改写。
+        scene_repeats = self._style_cleaner.check_scene_repeat(text, chapter_plan)
+        for s in scene_repeats:
+            issues.append(QualityIssue(
+                gate_name="scene_repeat",
+                category="structure",
+                severity=IssueSeverity.ERROR,
+                description=s["detail"],
+                fixable=True,
+                fix_guidance="删除重复开场，从上一 beat 结尾处直接接续",
+            ))
+
+        # 4.5 Drumbeat density — 对话密集的校园喜剧中短句是常用节奏，
+        # 仅报告为 warning，避免把可读性风格误判为硬性质量失败。
         if not skip_drumbeat_check:
             drumbeat_issues = self._style_cleaner.check_drumbeat_density(text)
             for di in drumbeat_issues:
                 issues.append(QualityIssue(
                 gate_name="drumbeat",
                 category="style",
-                severity=IssueSeverity.ERROR if di["severity"] == "blocking" else IssueSeverity.WARNING,
+                severity=IssueSeverity.WARNING,
                 description=di["detail"],
                 fixable=True,
                 fix_guidance="减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下",

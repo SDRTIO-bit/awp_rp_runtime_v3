@@ -75,6 +75,12 @@ AI_REFUSAL_PATTERNS = [
 # Engineering words tier 1
 TIER1_ENGINEERING_WORDS = ["细纲", "情节点", "卷纲", "功能标签", "字数预算"]
 
+# Scene-repeat detection — beat 间"重新开场"兜底
+# 取每段前 N 字作开场指纹，与前序段做 NGRAM-gram Jaccard 相似度比对。
+SCENE_REPEAT_FINGERPRINT_CHARS = 120
+SCENE_REPEAT_NGRAM = 3
+SCENE_REPEAT_THRESHOLD = 0.5
+
 
 class NovelStyleCleaner:
     """Style Cleaner for novel mode — deterministic checks + optional LLM."""
@@ -259,6 +265,91 @@ class NovelStyleCleaner:
 
         return issues
 
+    @staticmethod
+    def _ngrams(text: str, n: int = SCENE_REPEAT_NGRAM) -> set[str]:
+        """取文本的字符级 n-gram 集合（去空白）。"""
+        cleaned = re.sub(r"\s+", "", text)
+        if len(cleaned) < n:
+            return {cleaned} if cleaned else set()
+        return {cleaned[i:i + n] for i in range(len(cleaned) - n + 1)}
+
+    def check_scene_repeat(self, text: str, chapter_plan: Any = None) -> list[dict]:
+        """检测 beat 间"重新开场"——各段开场指纹高度相似。
+
+        按 chapter_plan.scene_beats 的 budget_chars 把正文切成 N 段（N=beat 数）；
+        plan 缺失时退化为按 beat 数等分。对每段前 SCENE_REPEAT_FINGERPRINT_CHARS
+        字作开场指纹，与前序各段做 NGRAM-gram Jaccard 相似度，超
+        SCENE_REPEAT_THRESHOLD 报 blocking（会进入 quality pipeline 改写循环）。
+
+        这层兜底光靠 prompt 接续指令拦不住的"重新开场"：beat2 用词不同但
+        情节重复 beat1 的开场，逐字复读检测抓不到，n-gram 指纹能抓到。
+        """
+        if not text or not text.strip():
+            return []
+        # 确定分段数与各段长度
+        beats = getattr(chapter_plan, "scene_beats", None) or ()
+        seg_count = len(beats) if beats else 0
+        if seg_count < 2:
+            # 少于 2 段无法比对，跳过
+            return []
+
+        total_len = len(text)
+        if total_len < 200:
+            return []
+
+        budgets = [int(getattr(b, "budget_chars", 0) or 0) for b in beats]
+        if sum(budgets) <= 0:
+            # 预算全为 0 → 等分
+            seg_len = total_len // seg_count
+            bounds = [(i * seg_len, (i + 1) * seg_len if i < seg_count - 1 else total_len)
+                      for i in range(seg_count)]
+        else:
+            # 按 budget 比例切
+            total_budget = sum(budgets)
+            bounds = []
+            cursor = 0
+            for i, b in enumerate(budgets):
+                start = cursor
+                end = int(total_len * b / total_budget) + start
+                if i == seg_count - 1:
+                    end = total_len
+                bounds.append((start, min(end, total_len)))
+                cursor = end
+
+        # 取各段开场指纹
+        fingerprints = []
+        for start, end in bounds:
+            seg_text = text[start:end].strip()
+            if not seg_text:
+                fingerprints.append(None)
+                continue
+            head = seg_text[:SCENE_REPEAT_FINGERPRINT_CHARS]
+            fingerprints.append(self._ngrams(head))
+
+        # 与前序段比对
+        issues = []
+        for i in range(1, len(fingerprints)):
+            fp_i = fingerprints[i]
+            if not fp_i:
+                continue
+            for j in range(i):
+                fp_j = fingerprints[j]
+                if not fp_j:
+                    continue
+                union = fp_i | fp_j
+                if not union:
+                    continue
+                inter = fp_i & fp_j
+                sim = len(inter) / len(union)
+                if sim >= SCENE_REPEAT_THRESHOLD:
+                    issues.append({
+                        "type": "scene_repeat",
+                        "severity": "blocking",
+                        "detail": f"第{i+1}段开场与第{j+1}段高度相似（Jaccard={sim:.2f}），疑似 beat 间重新开场",
+                    })
+                    break  # 该段命中一次即可，避免重复报
+        return issues
+
     def normalize_punctuation(self, text: str) -> str:
         """Normalize punctuation."""
         text = text.replace("……", "。")
@@ -270,7 +361,7 @@ class NovelStyleCleaner:
         text = re.sub(r"\n---$", "\n", text)
         return text
 
-    def full_check(self, text: str) -> dict:
+    def full_check(self, text: str, chapter_plan: Any = None) -> dict:
         """Run all deterministic checks.
 
         Returns dict with:
@@ -284,6 +375,8 @@ class NovelStyleCleaner:
         all_issues.extend(self.check_metadata_leak(text))
         all_issues.extend(self.check_degeneration(text))
         all_issues.extend(self.check_drumbeat_density(text))
+        if chapter_plan is not None:
+            all_issues.extend(self.check_scene_repeat(text, chapter_plan))
 
         structure_issues = self.check_chapter_structure(text)
         for si in structure_issues:

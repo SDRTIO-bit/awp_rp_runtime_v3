@@ -161,8 +161,11 @@ def _read_text(path: Path) -> str:
 
 
 def _load_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
-    """加载微调引导：guidance/chapter_NN.md + CLI --guidance 合并。"""
+    """加载故事圣经、章节微调和 CLI 引导，并以此约束规划与写作。"""
     parts = []
+    story_bible = _read_text(novel_dir / "story_bible.md")
+    if story_bible:
+        parts.append("【项目故事圣经 — 优先于旧角色设定】\n" + story_bible.strip())
     guidance_file = novel_dir / "guidance" / f"chapter_{chapter:02d}.md"
     file_content = _read_text(guidance_file)
     if file_content:
