@@ -1,6 +1,6 @@
-# AWP RP Runtime V2
+# AWP RP Runtime V3
 
-ComfyUI RP Runtime V2：持久化会话 + 双主 Agent + 受控动态子 Agent + 确定性 CardState + 三层记忆 + 管理面板
+ComfyUI RP Runtime V3：持久化会话 + 双主 Agent + 受控动态子 Agent + 确定性 CardState + 三层记忆 + 管理面板
 
 ---
 

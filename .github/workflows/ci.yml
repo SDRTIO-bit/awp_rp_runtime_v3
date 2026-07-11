@@ -1,4 +1,4 @@
-name: AWP RP Runtime V2 CI
+name: AWP RP Runtime V3 CI
 
 on:
   push:
