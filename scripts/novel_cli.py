@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -537,9 +538,38 @@ def _load_state(novel_dir: Path) -> dict:
     return json.loads(state_file.read_text(encoding="utf-8"))
 
 
+def _sync_project_runtime_config(novel_dir: Path, state: dict) -> None:
+    """Keep the DB runtime prompt config aligned with project.json.
+
+    Existing projects may have been seeded before prompt overrides or the
+    project directory were added. Plan/write commands repair that drift
+    without rebuilding story state.
+    """
+    meta_path = novel_dir / "project.json"
+    if not meta_path.exists():
+        return
+    meta = _read_json(meta_path)
+    file_project = meta.get("project", {})
+    project_id = state.get("project_id") or file_project.get("id", "")
+    if not project_id:
+        return
+    engine = _get_engine(state["db_path"])
+    stored = engine._registry.novel_project_store.load(project_id)
+    if stored is None:
+        return
+    merged = dict(getattr(stored, "config", {}) or {})
+    merged.update(dict(file_project.get("config", {}) or {}))
+    merged["novel_dir"] = str(novel_dir.resolve())
+    if merged != stored.config:
+        engine._registry.novel_project_store.update(
+            replace(stored, config=merged)
+        )
+
+
 def cmd_plan(args: argparse.Namespace) -> None:
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
+    _sync_project_runtime_config(novel_dir, state)
     engine = _get_engine(state["db_path"])
     pid = state["project_id"]
     chapter = int(args.chapter)
@@ -590,6 +620,7 @@ def cmd_plan(args: argparse.Namespace) -> None:
 def cmd_write(args: argparse.Namespace) -> None:
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
+    _sync_project_runtime_config(novel_dir, state)
     pid = state["project_id"]
     chapter = int(args.chapter)
     use_stream = getattr(args, "stream", False)

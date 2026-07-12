@@ -21,7 +21,11 @@ from awp_rp_runtime_v3.runtime.novel_writer_context import NovelWriterContextCom
 from awp_rp_runtime_v3.runtime.novel_write_packet_builder import NovelWritePacketBuilder
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter
-from awp_rp_runtime_v3.scripts.novel_cli import _load_plan_guidance, _load_writer_guidance
+from awp_rp_runtime_v3.scripts.novel_cli import (
+    _load_plan_guidance,
+    _load_writer_guidance,
+    _sync_project_runtime_config,
+)
 from awp_rp_runtime_v3.runtime.prompt_loader import load_prompt
 
 
@@ -186,3 +190,40 @@ def test_romcom_architect_uses_medium_granularity_short_chapters() -> None:
     assert "2000—2600" in prompt
     assert "禁止预写具体对白" in prompt
     assert "每个叙事动作只写1—2句话" in prompt
+
+
+def test_cli_syncs_file_prompt_config_into_existing_database(tmp_path: Path) -> None:
+    from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+    from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+    from awp_rp_runtime_v3.storage.sqlite.database import Database
+    import json
+
+    db_path = tmp_path / "novel.db"
+    database = Database(str(db_path))
+    database.initialize()
+    registry = SessionRuntimeStoreRegistry(database)
+    registry.novel_project_store.create(
+        NovelProject(project_id="demo", config={"writer_prompt": "writer"})
+    )
+    (tmp_path / "project.json").write_text(
+        json.dumps({
+            "project": {
+                "id": "demo",
+                "config": {
+                    "writer_prompt": "writer_romcom",
+                    "architect_prompt": "architect_romcom",
+                },
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    _sync_project_runtime_config(
+        tmp_path,
+        {"db_path": str(db_path), "project_id": "demo"},
+    )
+
+    updated = registry.novel_project_store.load("demo")
+    assert updated is not None
+    assert updated.config["writer_prompt"] == "writer_romcom"
+    assert updated.config["novel_dir"] == str(tmp_path.resolve())
