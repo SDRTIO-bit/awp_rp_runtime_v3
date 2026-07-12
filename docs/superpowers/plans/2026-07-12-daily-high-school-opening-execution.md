@@ -25,6 +25,8 @@
 
 - Modify: \`novels/daily_high_school/outline.md\`
 - Modify: \`novels/daily_high_school/project.json\`
+- Modify: \`novels/daily_high_school/story_bible.md\`
+- Modify: \`novels/daily_high_school/world.md\`
 - Test: inline Markdown and JSON assertions
 
 **Interfaces:**
@@ -51,7 +53,7 @@ Replace chapter tasks with the approved structure: chapters 1—3 are a continuo
 
 - [ ] **Step 3: Update volume metadata**
 
-In \`project.json\`, retain all IDs and appearance orders. Add \`教材危机闭环\` and \`赵小麦秒表交接\` to the first chapter block anchors, replace the second block's first anchor with \`正式测试与放水\`, and revise \`volume.core_conflict\` to include Chen Mo using jokes to avoid seriousness while preserving others' dignity.
+In \`project.json\`, retain all IDs and set Zhao Xiaomai's \`first_appearance\` from \`2\` to \`5\`. Add \`教材危机闭环\` and \`赵小麦秒表交接\` to the first chapter block anchors, replace the second block's first anchor with \`正式测试与放水\`, and revise \`volume.core_conflict\` to include Chen Mo using jokes to avoid seriousness while preserving others' dignity. Make matching chapter 1—15 and Zhao Xiaomai timing changes in \`story_bible.md\` and \`world.md\`, because the Plan Agent reads both files as higher-level context.
 
 - [ ] **Step 4: Run source acceptance checks**
 
@@ -185,4 +187,3 @@ Then read the three drafts: chapter 1 must end at the retrieval decision, chapte
 - [ ] **Step 4: Report without committing runtime data**
 
 Do not commit \`novel.db\` or generated drafts unless requested. Report absolute output paths, plan/draft character counts, Quality status, and any single revision made after reading.
-
