@@ -163,7 +163,7 @@ class NovelStyleCleaner:
         # Truncation detection (only for texts long enough to expect sentence terminators)
         if len(text) > 100:
             last_50 = text[-50:].strip()
-            if last_50 and last_50[-1] not in "。！？」』）】":
+            if last_50 and last_50[-1] not in "。！？’”』）】":
                 issues.append({
                     "type": "truncation",
                     "severity": "blocking",
@@ -653,7 +653,7 @@ class NovelStyleCleaner:
         # 末尾未收束
         if len(out) > 100:
             last = out[-1]
-            if last not in "。！？」』）】":
+            if last not in "。！？’”』）】":
                 return True
         # 大段重复
         import re as _re

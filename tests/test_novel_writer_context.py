@@ -12,6 +12,7 @@ from awp_rp_runtime_v3.contracts.novel_chapter import (
     PlotArrangement,
 )
 from awp_rp_runtime_v3.contracts.novel_director_guidance import DirectorGuidance
+from awp_rp_runtime_v3.contracts.novel_draft import ChapterDraft
 from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
 from awp_rp_runtime_v3.runtime.novel_writer_adapter import NovelWriterAdapter
 from awp_rp_runtime_v3.runtime.novel_writer_adapter import (
@@ -26,6 +27,7 @@ from awp_rp_runtime_v3.scripts.novel_cli import (
     _load_plan_guidance,
     _load_writer_guidance,
     _sync_project_runtime_config,
+    _write_quality_report,
 )
 from awp_rp_runtime_v3.runtime.prompt_loader import load_prompt
 from awp_rp_runtime_v3.runtime.novel_architect_adapter import NovelArchitectAdapter
@@ -267,3 +269,20 @@ def test_cli_syncs_file_prompt_config_into_existing_database(tmp_path: Path) -> 
     assert updated is not None
     assert updated.config["writer_prompt"] == "writer_romcom"
     assert updated.config["novel_dir"] == str(tmp_path.resolve())
+
+
+def test_cli_writes_quality_report_beside_chapter(tmp_path: Path) -> None:
+    draft = ChapterDraft(
+        draft_id="draft-1",
+        chapter_id="chapter-1",
+        revision=2,
+        status="accepted",
+        quality_decision_id="quality-1",
+        quality_annotations=({"description": "末尾可能被截断", "severity": "error"},),
+    )
+
+    report = _write_quality_report(tmp_path, 1, draft)
+
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["status"] == "accepted"
+    assert payload["annotations"] == [{"description": "末尾可能被截断", "severity": "error"}]

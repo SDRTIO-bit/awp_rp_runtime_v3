@@ -32,6 +32,18 @@ class NovelQualityPipeline:
         self._registry = registry
         self._style_cleaner = NovelStyleCleaner(registry)
 
+    @staticmethod
+    def annotate_only(decision: QualityDecision) -> QualityDecision:
+        """Keep quality findings visible without blocking novel continuity."""
+        findings = list(decision.blocking_reasons)
+        if findings:
+            decision.warnings.extend(f"需人工复核: {reason}" for reason in findings)
+            decision.acceptance_notes.append("质量检查仅标注，不拦截正文、账本或记忆提交。")
+        decision.blocking_reasons.clear()
+        decision.verdict = QualityVerdict.ACCEPTED
+        decision.retry_allowed = False
+        return decision
+
     def run_chapter(
         self,
         text: str,
@@ -39,48 +51,9 @@ class NovelQualityPipeline:
         *,
         skip_drumbeat_check: bool = False,
     ) -> tuple[QualityDecision, str]:
-        """检测 → (必要时)定向改写 → 复检。返回 (decision, 最终文本)。
-
-        不再让 Writer 整章重抽签。改写只针对命中问题，由低开销 flash 模型完成。
-        最终文本是改写后的版本；decision 标记是否仍残留硬错误（仍命中则降级
-        REJECT，由上层决定是否仍存盘——引擎默认降级接受）。
-        """
-        current = text
-        for round_idx in range(MAX_REWRITE_ROUNDS + 1):
-            decision = self.check_chapter(current, chapter_plan, skip_drumbeat_check=skip_drumbeat_check)
-            # 无 blocking 视为通过
-            if not decision.blocking_reasons:
-                return decision, current
-            # 还有 blocking 但轮次用尽 → 不再改写，交给上层（降级接受）
-            if round_idx >= MAX_REWRITE_ROUNDS:
-                break
-            # 鼓点片段改写（优先级最高）：抽取短句密集段落，flash 逐段改写
-            drumbeat_reasons = [r for r in decision.blocking_reasons if "短句" in r or "鼓点" in r or "独立成段" in r]
-            if drumbeat_reasons:
-                rewritten = self._style_cleaner.rewrite_drumbeat_snippets(current)
-                if rewritten and rewritten.strip() and rewritten != current:
-                    ratio = len(rewritten) / max(1, len(current))
-                    if 0.5 < ratio < 1.6:
-                        current = rewritten
-                        continue
-            # 定向改写：把 blocking 原始问题清单交给 StyleCleaner
-            style_issues = self._style_cleaner.full_check(current, chapter_plan)["issues"]
-            raw_issues = [i for i in style_issues if i.get("severity") == "blocking"]
-            rewritten = self._style_cleaner.rewrite_for_issues(current, raw_issues)
-            if rewritten and rewritten.strip() and rewritten != current:
-                # 防退化：改写后字数不应骤减或骤增异常，否则保留原文。
-                ratio = len(rewritten) / max(1, len(current))
-                if 0.5 < ratio < 1.6:
-                    current = rewritten
-                else:
-                    break
-            else:
-                # 改写器返回原文（无变化或失败），停止重试避免死循环
-                break
-
-        # 降级接受：返回当前文本 + 标记仍有的 blocking（由上层决定存盘与否）
-        final_decision = self.check_chapter(current, chapter_plan)
-        return final_decision, current
+        """Detect issues and attach annotations without rewriting or rejecting."""
+        decision = self.check_chapter(text, chapter_plan, skip_drumbeat_check=skip_drumbeat_check)
+        return self.annotate_only(decision), text
 
     def check_chapter(
         self,

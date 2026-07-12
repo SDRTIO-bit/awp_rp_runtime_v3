@@ -310,6 +310,7 @@ class NovelEngine:
             text=text,
             known_character_names={c.name for c in all_characters if c.name},
         )
+        self._quality_pipeline.annotate_only(quality_decision)
 
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
         # status 仍如实标记，便于事后筛选。
@@ -329,6 +330,7 @@ class NovelEngine:
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
+            quality_annotations=tuple(quality_decision.checks),
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
@@ -783,6 +785,7 @@ class NovelEngine:
             text=text,
             known_character_names={c.name for c in all_characters if c.name},
         )
+        self._quality_pipeline.annotate_only(quality_decision)
         self._safe_on_phase("end", "continuity", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),
@@ -801,6 +804,7 @@ class NovelEngine:
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
+            quality_annotations=tuple(quality_decision.checks),
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
@@ -974,6 +978,7 @@ class NovelEngine:
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
+            quality_annotations=tuple(quality_decision.checks),
         )
         self._registry.novel_chapter_draft_store.save(draft)
 

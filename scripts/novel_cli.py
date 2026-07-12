@@ -149,6 +149,27 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
+def _write_quality_report(output_dir: Path, chapter: int, draft) -> Path:
+    """Persist non-blocking quality annotations beside a generated chapter."""
+    report_file = output_dir / f"chapter_{chapter:02d}.quality.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "draft_id": draft.draft_id,
+                "chapter_id": draft.chapter_id,
+                "revision": draft.revision,
+                "status": draft.status,
+                "quality_decision_id": draft.quality_decision_id,
+                "annotations": list(draft.quality_annotations),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return report_file
+
+
 def _read_json(path: Path) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"文件不存在: {path}")
@@ -643,6 +664,7 @@ def cmd_write(args: argparse.Namespace) -> None:
         out_file = output_dir / f"chapter_{chapter:02d}.md"
         out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
         print(f"{DIM}已保存: {out_file}{RESET}")
+        print(f"{DIM}质检标注: {_write_quality_report(output_dir, chapter, draft)}{RESET}")
     else:
         engine = _get_engine(state["db_path"])
 
@@ -658,6 +680,7 @@ def cmd_write(args: argparse.Namespace) -> None:
         out_file = output_dir / f"chapter_{chapter:02d}.md"
         out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
         print(f"\n{DIM}已保存: {out_file}{RESET}")
+        print(f"{DIM}质检标注: {_write_quality_report(output_dir, chapter, draft)}{RESET}")
 
 
 def cmd_batch(args: argparse.Namespace) -> None:

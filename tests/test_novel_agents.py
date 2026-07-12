@@ -50,6 +50,26 @@ class TestNovelStyleCleaner:
         issues = cleaner.check_degeneration(text)
         assert any(i["type"] == "truncation" for i in issues)
 
+    def test_quoted_sentence_ending_is_not_truncation(self, reg):
+        cleaner = NovelStyleCleaner(reg)
+        text = ("他推开门走进教室。" * 20) + "沈溪说：‘明天别迟到。’"
+
+        issues = cleaner.check_degeneration(text)
+
+        assert not any(i["type"] == "truncation" for i in issues)
+
+    def test_quality_pipeline_annotates_truncation_without_rejecting(self, reg):
+        pipeline = NovelQualityPipeline(reg)
+        text = ("他推开门走进教室。" * 20) + "他走到了门"
+
+        decision, final_text = pipeline.run_chapter(text, ChapterPlan(target_chars=100))
+
+        assert decision.is_accepted()
+        assert decision.blocking_reasons == []
+        assert any("末尾可能被截断" in warning for warning in decision.warnings)
+        assert any(check["severity"] == "error" for check in decision.checks)
+        assert final_text == text
+
     def test_degeneration_ai_refusal(self, reg):
         cleaner = NovelStyleCleaner(reg)
         text = "作为AI，我无法续写这段内容。"
