@@ -62,7 +62,7 @@ In \`project.json\`, retain all IDs and set Zhao Xiaomai's \`first_appearance\` 
 import json
 from pathlib import Path
 outline = Path("novels/daily_high_school/outline.md").read_text(encoding="utf-8")
-for phrase in ("教材危机", "第3章 班长抓了个壮丁", "临时退出的人", "第15章", "正式测试"):
+for phrase in ("教材危机", "第3章 班长抓了个壮丁", "临时退出的人", "第15章", "正式接力测试"):
     assert phrase in outline, phrase
 data = json.loads(Path("novels/daily_high_school/project.json").read_text(encoding="utf-8"))
 zhao = next(item for item in data["characters"] if item["name"] == "赵小麦")

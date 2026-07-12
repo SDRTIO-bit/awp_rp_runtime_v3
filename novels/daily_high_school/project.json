@@ -67,7 +67,7 @@
     "end_hook_character": "char-sunian",
     "functional_appearance_character": "char-luxingchen",
     "objective": "建立沈溪与赵小麦两种不可互换的相处模式，让苏念在卷末以旧友身份回归；陈默尚未意识到感情选择已经开始。",
-    "core_conflict": "陈默习惯把自己放在关系外，用搞笑避免认真；女孩们先后看见他可靠的一面，而他的玩笑也开始伤到真正重要的关系。",
+    "core_conflict": "陈默习惯把自己放在关系外，用玩笑避免认真；他擅长看见别人难堪与真正卡住的问题，并用行动替人保留体面。女孩们先后看见他的可靠，而他的玩笑也会在真正重要的关系里造成伤害。",
     "emotional_arc": "轻松→温暖→微妙→不安→期待",
     "chapter_blocks": [
       {
@@ -75,13 +75,14 @@
         "title": "沈溪篇",
         "relationship_change": "他很烦→他虽然烦但确实可靠→为什么偏偏只有他看见真正的我",
         "anchor_events": [
-          "教材短缺",
+          "教材危机闭环",
           "班级杂务搭档",
           "文具店采购",
           "雨伞",
           "运动会报名",
           "楼梯尽头",
-          "奶茶条约"
+          "奶茶条约",
+          "赵小麦秒表交接"
         ]
       },
       {
@@ -89,7 +90,7 @@
         "title": "赵小麦篇",
         "relationship_change": "强行拉入接力队→真正成为队友→形成你跑我计时的长期暗号",
         "anchor_events": [
-          "秒表放桌上",
+          "正式测试与放水",
           "交棒训练",
           "第一次争执",
           "雨天教室训练",
@@ -277,7 +278,7 @@
       "class": "高二（3）班",
       "identity": "体委",
       "pov_eligible": false,
-      "first_appearance": 2,
+      "first_appearance": 5,
       "formal_story_entry": 15,
       "appearance": {
         "height_cm": 158,
