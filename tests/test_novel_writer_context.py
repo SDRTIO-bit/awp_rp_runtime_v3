@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from awp_rp_runtime_v3.contracts.novel_chapter import (
@@ -27,6 +28,7 @@ from awp_rp_runtime_v3.scripts.novel_cli import (
     _sync_project_runtime_config,
 )
 from awp_rp_runtime_v3.runtime.prompt_loader import load_prompt
+from awp_rp_runtime_v3.runtime.novel_architect_adapter import NovelArchitectAdapter
 
 
 def _plan() -> ChapterPlan:
@@ -44,7 +46,7 @@ def _plan() -> ChapterPlan:
             cause="陈默迟到并扣错扣子。",
             development="他用玩笑化解全班的注意。",
             turning_point="班主任让陈默协助沈溪分发教材。",
-            climax="陈默用自己的好书换走破损教材。",
+            climax="陈默宣布：‘我来换。’随后用自己的好书换走破损教材。",
             ending="沈溪在陈默名字旁留下一个问号。",
         ),
         plot_arrangement=PlotArrangement(
@@ -54,7 +56,7 @@ def _plan() -> ChapterPlan:
         ),
         character_appearance=CharacterAppearance(
             appearance_order=("陈默", "沈溪", "王磊"),
-            relationship_changes=("沈溪不再只把陈默当麻烦人物。",),
+            relationship_changes=("沈溪从‘觉得陈默麻烦’到‘愿意重新观察’。",),
             information_gap="陈默不知道沈溪已经改观。",
         ),
         scene_beats=(
@@ -123,16 +125,21 @@ def test_writer_prompt_contains_medium_granularity_contract() -> None:
     _system, prompt = NovelWriterAdapter(None, writer_prompt_name="writer_romcom")._build_prompt(packet)
 
     assert "允许出场角色: 陈默、沈溪、王磊" in prompt
-    assert "叙事动作1: 陈默迟到并扣错扣子。他用玩笑化解全班的注意。" in prompt
-    assert "叙事动作2: 班主任让陈默协助沈溪分发教材。" in prompt
-    assert "叙事动作3: 陈默用自己的好书换走破损教材。" in prompt
+    assert "入场与发展: 陈默迟到并扣错扣子。他用玩笑化解全班的注意。" in prompt
+    assert "局面转折: 班主任让陈默协助沈溪分发教材。" in prompt
+    assert "核心行动:" in prompt and "自己的好书换走破损教材" in prompt
+    assert "我来换" not in prompt
     assert "陈默迟到，用玩笑化解尴尬" not in prompt
     assert "班主任让陈默协助沈溪分发教材" in prompt
-    assert "陈默用自己的好书换走破损教材" in prompt
-    assert "名字旁的问号" in prompt
+    assert "自己的好书换走破损教材" in prompt
+    assert "名字旁" in prompt and "问号" in prompt
     assert "现实校园，不存在超能力" in prompt
     assert "赵小麦" not in prompt
     assert "不要添加章节内小标题或数字分节" in prompt
+    assert 150 <= len(packet.chapter_contract) <= 500
+    assert packet.chapter_contract.count("破损教材") == 1
+    assert "从‘觉得陈默麻烦’到‘愿意重新观察’" in packet.chapter_contract
+    assert "从到" not in packet.chapter_contract
 
 
 def test_writer_guidance_does_not_duplicate_story_bible(tmp_path: Path) -> None:
@@ -159,7 +166,7 @@ def test_existing_packet_builder_uses_compiled_context() -> None:
 
     assert packet.allowed_cast == ("陈默", "沈溪", "王磊")
     assert set(packet.character_states) == {"陈默", "沈溪", "王磊"}
-    assert "必须兑现的核心行动" in packet.chapter_contract
+    assert "核心行动" in packet.chapter_contract
 
 
 def test_unscheduled_first_appearance_zero_is_not_available() -> None:
@@ -190,6 +197,39 @@ def test_romcom_architect_uses_medium_granularity_short_chapters() -> None:
     assert "2000—2600" in prompt
     assert "禁止预写具体对白" in prompt
     assert "每个叙事动作只写1—2句话" in prompt
+    assert "自然语言总量不超过1200字" in prompt
+
+
+def test_architect_compacts_plan_without_losing_structural_fields() -> None:
+    verbose = _plan()
+
+    compact = NovelArchitectAdapter._compact_plan(verbose)
+    payload = json.dumps(compact.to_dict(), ensure_ascii=False)
+
+    assert len(payload) < compact.target_chars
+    assert len(compact.content_summary.climax) <= 50
+    assert all(len(beat.description) <= 45 for beat in compact.scene_beats)
+    assert compact.character_appearance.appearance_order == ("陈默", "沈溪", "王磊")
+    assert compact.content_summary.climax
+    assert "我来换" not in compact.content_summary.climax
+    assert "从‘觉得陈默麻烦’到‘愿意重新观察’" in compact.character_appearance.relationship_changes[0]
+    assert compact.ending_design.closing_state
+
+
+def test_compaction_ends_at_clause_boundary_and_generalizes_dialogue() -> None:
+    compact = NovelArchitectAdapter._compact_text(
+        "在沈溪准备记名时，陈默低头看到了自己扣错的扣子，顺势自嘲：‘今天先从细节失败。’化解尴尬。",
+        32,
+    )
+
+    assert compact.endswith("。")
+    assert not compact.endswith("顺势。")
+    assert "今天先从细节失败" not in compact
+    dependent = NovelArchitectAdapter._compact_text(
+        "新学期第一天，陈默匆忙赶到学校。他跑到教室门口时，早读已经开始，所有人都抬头看他。",
+        30,
+    )
+    assert not dependent.endswith("时。")
 
 
 def test_cli_syncs_file_prompt_config_into_existing_database(tmp_path: Path) -> None:

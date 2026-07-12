@@ -6,9 +6,17 @@ Uses DeepSeekAdapter with thinking=high for chapter planning.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
-from ..contracts.novel_chapter import ChapterPlan, BeatDetail
+from ..contracts.novel_chapter import (
+    BeatDetail,
+    ChapterPlan,
+    CharacterAppearance,
+    ContentSummary,
+    EndingDesign,
+    PlotArrangement,
+)
 
 # Thinking configuration for structural planning
 _THINKING_HIGH = {"thinking": {"type": "enabled", "reasoning_effort": "high"}}
@@ -119,7 +127,112 @@ class NovelArchitectAdapter:
             ending_design=plan.ending_design,
             cost_and_reward=plan.cost_and_reward,
         )
-        return plan
+        return self._compact_plan(plan)
+
+    @staticmethod
+    def _compact_text(value: Any, limit: int) -> str:
+        """Remove screenplay-level detail and cap one planning field."""
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        # Remove spoken lines, but preserve quoted state labels such as
+        # “从‘戒备’到‘信任’”; those labels carry structural meaning.
+        dialogue_replacements = {
+            "说": "简短说明",
+            "问": "追问",
+            "喊": "喊了一声",
+            "宣布": "说明了处理结果",
+            "自嘲": "自嘲了一句",
+            "回应": "简短回应",
+        }
+        text = re.sub(
+            r"(说|问|喊|宣布|自嘲|回应)(?:道)?[：，]?\s*[‘“\"][^’”\"]+[’”\"]",
+            lambda match: dialogue_replacements[match.group(1)] + "，",
+            text,
+        )
+        text = re.sub(r"：\s*[‘“\"][^’”\"]+[’”\"]", "", text)
+        text = re.sub(r"[，；：]+([。！？])", r"\1", text)
+        text = re.sub(r"\s+([，。；：！？])", r"\1", text).strip(" ，；：")
+        text = re.sub(r"([，。；：！？])\s+", r"\1", text)
+        text = text.replace("，同时，", "。同时，")
+        if len(text) <= limit:
+            return text
+        candidate = text[:limit]
+        boundaries = sorted(
+            (index for index, char in enumerate(candidate) if char in "。！？；，"),
+            reverse=True,
+        )
+        dependent_endings = ("时", "后", "却", "但", "并", "而", "因为", "如果", "虽然", "同时")
+        for boundary in boundaries:
+            clause = candidate[:boundary].rstrip()
+            if boundary >= limit // 2 and not clause.endswith(dependent_endings):
+                ending = candidate[boundary]
+                return clause + (ending if ending in "。！？" else "。")
+        return candidate.rstrip("，；：") + "。"
+
+    @classmethod
+    def _compact_plan(cls, plan: ChapterPlan) -> ChapterPlan:
+        """Keep the persisted Plan meaningfully shorter than its chapter."""
+        cs = plan.content_summary
+        plot = plan.plot_arrangement
+        appearance = plan.character_appearance
+        ending = plan.ending_design
+        return ChapterPlan(
+            schema_id=plan.schema_id,
+            schema_version=plan.schema_version,
+            chapter_id=plan.chapter_id,
+            project_id=plan.project_id,
+            volume_id=plan.volume_id,
+            chapter_index=plan.chapter_index,
+            title=cls._compact_text(plan.title, 30),
+            target_chars=plan.target_chars,
+            chapter_position=cls._compact_text(plan.chapter_position, 24),
+            target_emotion=cls._compact_text(plan.target_emotion, 40),
+            opening_hook=cls._compact_text(plan.opening_hook, 50),
+            main_payoff=cls._compact_text(plan.main_payoff, 50),
+            content_summary=ContentSummary(
+                cause=cls._compact_text(cs.cause, 50),
+                development=cls._compact_text(cs.development, 50),
+                turning_point=cls._compact_text(cs.turning_point, 50),
+                climax=cls._compact_text(cs.climax, 50),
+                ending=cls._compact_text(cs.ending, 50),
+            ),
+            plot_arrangement=PlotArrangement(
+                main_line=cls._compact_text(plot.main_line, 40),
+                sub_line=cls._compact_text(plot.sub_line, 30),
+                event_line=cls._compact_text(plot.event_line, 30),
+                emotion_line=cls._compact_text(plot.emotion_line, 40),
+                logic_line=cls._compact_text(plot.logic_line, 40),
+            ),
+            character_appearance=CharacterAppearance(
+                appearance_order=appearance.appearance_order,
+                relationship_changes=tuple(
+                    cls._compact_text(change, 40)
+                    for change in appearance.relationship_changes[:2]
+                ),
+                information_gap=cls._compact_text(appearance.information_gap, 30),
+            ),
+            scene_beats=tuple(
+                BeatDetail(
+                    beat_id=beat.beat_id,
+                    description=cls._compact_text(beat.description, 45),
+                    function_tag=cls._compact_text(beat.function_tag, 12),
+                    density=beat.density,
+                    budget_chars=beat.budget_chars,
+                )
+                for beat in plan.scene_beats[:4]
+            ),
+            ending_design=EndingDesign(
+                closing_state=cls._compact_text(ending.closing_state, 40),
+                open_questions=tuple(
+                    cls._compact_text(question, 30)
+                    for question in ending.open_questions[:1]
+                ),
+                next_chapter_push=cls._compact_text(ending.next_chapter_push, 30),
+                hook_type=cls._compact_text(ending.hook_type, 12),
+                hook_detail=cls._compact_text(ending.hook_detail, 40),
+                hook_strength=ending.hook_strength,
+            ),
+            cost_and_reward=cls._compact_text(plan.cost_and_reward, 60),
+        )
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:

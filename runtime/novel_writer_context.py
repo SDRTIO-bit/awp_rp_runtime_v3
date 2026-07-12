@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 
 from ..contracts.novel_chapter import ChapterPlan
 from ..contracts.novel_director_guidance import DirectorGuidance
@@ -138,50 +139,66 @@ class NovelWriterContextCompiler:
 
     @staticmethod
     def _chapter_contract(plan: ChapterPlan, allowed_cast: tuple[str, ...]) -> str:
+        def short(value: str, limit: int) -> str:
+            text = re.sub(r"\s+", " ", value or "").strip()
+            dialogue_replacements = {
+                "说": "简短说明",
+                "问": "追问",
+                "喊": "喊了一声",
+                "宣布": "说明了处理结果",
+                "自嘲": "自嘲了一句",
+                "回应": "简短回应",
+            }
+            text = re.sub(
+                r"(说|问|喊|宣布|自嘲|回应)(?:道)?[：，]?\s*[‘“\"][^’”\"]+[’”\"]",
+                lambda match: dialogue_replacements[match.group(1)] + "，",
+                text,
+            )
+            text = re.sub(r"：\s*[‘“\"][^’”\"]+[’”\"]", "", text)
+            text = re.sub(r"[，；：]+([。！？])", r"\1", text)
+            text = re.sub(r"\s+([，。；：！？])", r"\1", text).strip(" ，；：")
+            text = re.sub(r"([，。；：！？])\s+", r"\1", text)
+            text = text.replace("，同时，", "。同时，")
+            if len(text) <= limit:
+                return text
+            candidate = text[:limit]
+            boundaries = sorted(
+                (index for index, char in enumerate(candidate) if char in "。！？；，"),
+                reverse=True,
+            )
+            dependent_endings = ("时", "后", "却", "但", "并", "而", "因为", "如果", "虽然", "同时")
+            for boundary in boundaries:
+                clause = candidate[:boundary].rstrip()
+                if boundary >= limit // 2 and not clause.endswith(dependent_endings):
+                    ending = candidate[boundary]
+                    return clause + (ending if ending in "。！？" else "。")
+            return candidate.rstrip("，；：") + "。"
+
+        summary = plan.content_summary
+        entry = "".join(part for part in (summary.cause, summary.development) if part)
+        relationship = (
+            plan.character_appearance.relationship_changes[0]
+            if plan.character_appearance.relationship_changes
+            else plan.plot_arrangement.emotion_line
+        )
         lines = [
             f"标题: {plan.title}",
-            f"章节定位: {plan.chapter_position}",
-            f"目标情绪: {plan.target_emotion}",
             f"目标字数: {plan.target_chars}",
             f"允许出场角色: {'、'.join(allowed_cast)}",
-            f"开场状态: {plan.opening_hook or plan.content_summary.cause}",
+            f"写作目标: {short(plan.chapter_position + '；' + plan.target_emotion, 55)}",
+            f"入场与发展: {short(entry, 100)}",
         ]
-        summary = plan.content_summary
-        moves = []
-        opening_move = "".join(
-            part for part in (summary.cause, summary.development) if part
-        )
-        if opening_move:
-            moves.append(opening_move)
         if summary.turning_point:
-            moves.append(summary.turning_point)
+            lines.append(f"局面转折: {short(summary.turning_point, 65)}")
         if summary.climax:
-            moves.append(summary.climax)
-        if moves:
-            lines.append("叙事动作（只约束事件与局面变化，不规定具体对白和段落格式）:")
-            lines.extend(
-                f"叙事动作{index}: {move}"
-                for index, move in enumerate(moves, start=1)
-            )
-        if summary.turning_point:
-            lines.append(f"必须发生的转折: {summary.turning_point}")
-        if summary.climax:
-            lines.append(f"必须兑现的核心行动: {summary.climax}")
-        if plan.main_payoff:
-            lines.append(f"本章回报: {plan.main_payoff}")
-        if plan.plot_arrangement.emotion_line:
-            lines.append(f"关系变化: {plan.plot_arrangement.emotion_line}")
-        lines.extend(
-            f"关系变化要求: {change}"
-            for change in plan.character_appearance.relationship_changes
-        )
-        ending = plan.ending_design
+            lines.append(f"核心行动: {short(summary.climax, 65)}")
+        elif plan.main_payoff:
+            lines.append(f"核心行动: {short(plan.main_payoff, 65)}")
+        if relationship:
+            lines.append(f"关系落点: {short(relationship, 60)}")
         if summary.ending:
-            lines.append(f"章末事件: {summary.ending}")
-        if ending.closing_state:
-            lines.append(f"章末状态: {ending.closing_state}")
-        if ending.hook_detail:
-            lines.append(f"收束画面: {ending.hook_detail}")
+            lines.append(f"章末状态: {short(summary.ending, 65)}")
+        ending = plan.ending_design
         if ending.next_chapter_push:
-            lines.append(f"不可提前展开，只作尾部推动: {ending.next_chapter_push}")
+            lines.append(f"禁止提前展开: {short(ending.next_chapter_push, 40)}")
         return "\n".join(line for line in lines if not line.endswith(": "))
