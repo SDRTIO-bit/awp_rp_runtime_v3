@@ -139,6 +139,43 @@ class BeatDetail:
         )
 
 
+def normalize_scene_beats(
+    beats: tuple[BeatDetail, ...] | list[BeatDetail],
+    *,
+    chapter_index: int,
+    target_chars: int,
+) -> tuple[BeatDetail, ...]:
+    """Fill metadata required by the beat-by-beat writer for legacy/LLM plans."""
+    items = tuple(beats)
+    if not items:
+        return items
+
+    fallback_budget = max(1, target_chars // len(items))
+    remainder = max(0, target_chars - fallback_budget * len(items))
+    seen_ids: set[str] = set()
+    normalized: list[BeatDetail] = []
+    for index, beat in enumerate(items, start=1):
+        beat_id = beat.beat_id.strip()
+        if not beat_id or beat_id in seen_ids:
+            beat_id = f"ch{chapter_index}-b{index}"
+        seen_ids.add(beat_id)
+
+        budget = beat.budget_chars
+        if budget <= 0:
+            budget = fallback_budget + (remainder if index == len(items) else 0)
+
+        normalized.append(
+            BeatDetail(
+                beat_id=beat_id,
+                description=beat.description,
+                function_tag=beat.function_tag,
+                density=beat.density,
+                budget_chars=budget,
+            )
+        )
+    return tuple(normalized)
+
+
 @dataclass(frozen=True)
 class EndingDesign:
     """结尾设定和钩子。"""

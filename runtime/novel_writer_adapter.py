@@ -5,6 +5,7 @@ Uses DeepSeekAdapter with thinking=medium for creative writing.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..contracts.novel_write_packet import NovelWritePacket
@@ -48,7 +49,13 @@ def _get_style_benchmark(project_root: str = "", project_id: str = "") -> str:
             # Detect project_type from path to adjust the adaptation hint
             is_romcom = "daily_high_school" in p
             adapt_hint = (
-                "以下是你的写作风格参考（校园恋爱喜剧背景，严格模仿其对话节奏、吐槽时机、情绪表达方式和场景切换的流畅度）：\n\n"
+                "以下是你的写作风格参考（校园恋爱喜剧）。\n"
+                "请严格模仿以下所有特征：\n"
+                "- 对话节奏和吐槽时机\n"
+                "- 动作承载情绪（绝不写内心说明）\n"
+                "- 场景切换的流畅度\n"
+                "- 零比喻、零精确数字、零否定定义句\n"
+                "把你的输出和下面这段文字放在一起对比——读者不应该能分辨出哪段是AI写的。\n\n"
                 if is_romcom else
                 "以下是你的写作风格参考（都市背景，蒸汽魔法项目需转换为西幻背景，\n"
                 "但要模仿其对话节奏、情绪表达方式、场景切换的流畅度）：\n\n"
@@ -84,19 +91,22 @@ class NovelWriterAdapter:
         system_prompt, user_prompt = self._build_beat_prompt(packet, write_guidance=write_guidance)
         return self._call_llm_stream(user_prompt, system_prompt, on_chunk)
 
+    @staticmethod
+    def _crosses_next_beat_boundary(text: str, next_description: str) -> bool:
+        """Return whether a beat has already written the next beat's opening action."""
+        description = re.sub(r"^【[^】]+】", "", next_description or "").strip()
+        anchor = re.split(r"[。！？；，]", description, maxsplit=1)[0].strip()
+        return len(anchor) >= 6 and anchor in (text or "")
+
     def _build_prompt(self, packet: NovelWritePacket, write_guidance: str = "") -> tuple[str, str]:
         """Build the full chapter generation prompt. Returns (system_prompt, user_prompt).
 
-        Cache-optimized order (DeepSeek prefix caching):
-        1. OUTPUT RULES (always same → full cache hit)
-        2. GLOBAL SUMMARIES (grows 1 line/ch → mostly cached)
-        3. CHARACTER STATES (stable)
-        4. Continuity / ledger (varies)
-        5. Chapter-specific: plan + ending (changes every call)
+        DeepSeek 前缀缓存排序：
+          稳定前缀（跨章跨 beat 复用）先放 → 章节上下文 → 变体内容最后。
         """
         p = packet.chapter_plan
 
-        # ---- Tier 1: Stable prefix (cache hits) ----
+        # ═══ Tier 1: 稳定前缀 — 最大化缓存命中 ═══
 
         parts = [
             "=== OUTPUT RULES ===\n"
@@ -104,50 +114,37 @@ class NovelWriterAdapter:
             "- 结尾必须留悬念/钩子\n"
             "- 不复述上一章结尾即可\n"
             "- 对话+行为占正文60%以上，描写不超过40%\n"
-            "- 每个场景必须有对话（独处场景用自言自语/回忆/打电话）"
+            "- 每个场景必须有对话（独处场景用自言自语/回忆/打电话）\n"
+            "\n"
+            "=== 红线（最高优先） ===\n"
+            "- 禁止'不是A而是B'否定对比句式\n"
+            "- 本章比喻总数不超过三个。日常描写不附加比喻\n"
+            "- 禁止精确秒数/分钟数\n"
+            "- 情绪不拆三层，一句话写完\n"
+            "- 叙述者不替读者感受"
         ]
 
-        # Style benchmark (stable, cache hit)
+        # Style benchmark (稳定，缓存命中)
         benchmark = _get_style_benchmark(project_id=packet.project_id)
         if benchmark:
             parts.append(benchmark)
 
-        # Global summaries: all completed chapters, 1 line each
+        # Global summaries (缓慢增长，前缀缓存大部分命中)
         if packet.global_summaries:
             parts.append(f"\n=== STORY SO FAR ===\n{packet.global_summaries}")
 
-        # Character states (stable)
+        # Character states (稳定)
         if packet.character_states:
             parts.append(f"\n=== CHARACTER STATES ===\n{packet.character_states}")
 
-        # ---- Tier 2: Varying but compact ----
-
-        # Continuity: ledger items (trimmed)
-        if packet.relevant_ledger_items:
-            items_text = "\n".join(
-                f"- [{i.section}] {i.entity}: {i.content[:200]}"
-                for i in packet.relevant_ledger_items[:6]
-            )
-            parts.append(f"\n=== CONTINUITY ===\n{items_text}")
-
-        # Foreshadowing
-        if packet.foreshadowing_items:
-            parts.append(
-                "\n=== FORESHADOWING ===\n"
-                + "\n".join(
-                    f"- [{i.get('status','active')}] {i.get('entity','')}: {i.get('content','')}"
-                    for i in packet.foreshadowing_items[:5]
-                )
-            )
-
-        # World constraints (hard rules: setting, era, tone limits)
+        # World constraints (硬规则：世界观、时代、调性 — 跨章稳定)
         if packet.world_constraints:
             parts.append(
                 "\n=== WORLD CONSTRAINTS ===\n"
                 + "\n".join(f"- {c}" for c in packet.world_constraints)
             )
 
-        # ---- Tier 3: Chapter-specific (changes every call) ----
+        # ═══ Tier 2: 章节上下文 — 跨 beat 稳定 ═══
 
         # Chapter plan — lightweight: only title + emotion + position + beat outlines
         plan_lines = [f"标题: {p.title} | 情绪: {p.target_emotion} | 定位: {p.chapter_position}"]
@@ -178,6 +175,26 @@ class NovelWriterAdapter:
         if packet.writing_intent:
             parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
 
+        # ═══ Tier 3: 变体内容 — 随章节变化 ═══
+
+        # Continuity: ledger items (锐减过滤交给上游 NovelWritePacketBuilder)
+        if packet.relevant_ledger_items:
+            items_text = "\n".join(
+                f"- [{i.section}] {i.entity}: {i.content}"
+                for i in packet.relevant_ledger_items
+            )
+            parts.append(f"\n=== CONTINUITY ===\n{items_text}")
+
+        # Foreshadowing
+        if packet.foreshadowing_items:
+            parts.append(
+                "\n=== FORESHADOWING ===\n"
+                + "\n".join(
+                    f"- [{i.get('status','active')}] {i.get('entity','')}: {i.get('content','')}"
+                    for i in packet.foreshadowing_items
+                )
+            )
+
         if write_guidance:
             parts.append(f"\n=== WRITER GUIDANCE ===\n{write_guidance}\n（以上引导是硬性要求，必须执行）")
 
@@ -198,30 +215,62 @@ class NovelWriterAdapter:
         beat = packet.current_scene_beat
         p = packet.chapter_plan
 
-        # Stable prefix
+        # ═══ Tier 1: 稳定前缀 — DeepSeek 前缀缓存最大化命中 ═══
+        # 这一层跨 beat、跨章节都几乎不变，放在 prompt 最前端让缓存复用。
+
         parts = [
             "=== OUTPUT RULES ===\n"
             "- 只输出本 beat 的正文\n"
+            "- 不得提前写后续 beat；当前 beat 的目标完成后立即收束\n"
             "- 无标签、无 JSON、无元信息\n"
             "- 对话+行为占正文60%以上，描写不超过40%\n"
             "- 必须有对话。即使 beat 描述没提对话，也要加入：自言自语、回忆别人说过的话、对物件说话、打电话\n"
             "- 对话要有互动感和功能：要推进剧情/展示人设/制造冲突\n"
-            "- 描写点到即止：一个物件一句话，不要铺开写三句",
-            f"\n=== TARGET ===\n字数: {beat.budget_chars} | 密度: {beat.density}",
+            "- 描写点到即止：一个物件一句话，不要铺开写三句\n"
+            "\n"
+            "=== 红线（最高优先） ===\n"
+            "- 禁止'不是A而是B'否定对比句式\n"
+            "- 本章比喻总数不超过三个。日常描写不附加比喻。'像''如同''仿佛'等词尽量不用\n"
+            "- 禁止精确秒数/分钟数。用'片刻''一会儿''过了一阵'\n"
+            "- 情绪不拆三层。'不是X。就是Y。像Z一样'这种解读全禁止。一句话写完情绪\n"
+            "- 叙述者不替读者感受。不写'她全都知道''他自己都没意识到'这类上帝视角",
         ]
 
-        # Style benchmark (stable, cache hit)
+        # Style benchmark (稳定，读文件，缓存命中)
         benchmark = _get_style_benchmark(project_id=packet.project_id)
         if benchmark:
             parts.append(benchmark)
 
-        # Global summaries
+        # Global summaries (缓慢增长，前缀缓存大部分命中)
         if packet.global_summaries:
             parts.append(f"\n=== STORY SO FAR ===\n{packet.global_summaries}")
 
-        # Character states
+        # Character states (稳定)
         if packet.character_states:
             parts.append(f"\n=== CHARACTER STATES ===\n{packet.character_states}")
+
+        # Chapter context (章节内稳定)
+        parts.append(
+            f"\n=== CHAPTER CONTEXT ===\n"
+            f"标题: {p.title} | 情绪: {p.target_emotion} | 定位: {p.chapter_position}"
+        )
+
+        # Director anchor (章节内稳定)
+        if packet.director_guidance.guidance_id:
+            dg = packet.director_guidance
+            if dg.character_anchor:
+                parts.append(f"\n=== DIRECTOR ===\n角色: {dg.character_anchor}")
+
+        # Prev chapter ending (章节内稳定)
+        if packet.prev_chapter_ending:
+            parts.append(
+                f"\n=== PREV CHAPTER ENDING ===\n{packet.prev_chapter_ending}"
+            )
+
+        # ═══ Tier 2: 变体内容 — 以下随 beat / call 变化 ═══
+
+        # TARGET (per-beat)
+        parts.append(f"\n=== TARGET ===\n字数: {beat.budget_chars} | 密度: {beat.density}")
 
         # Previous beat tail — beat 间衔接核心通道
         # 取上一个 beat 正文结尾，强制本 beat 从那里接续，不得重新开场。
@@ -261,29 +310,24 @@ class NovelWriterAdapter:
         )
         parts.append("\n=== CURRENT BEAT ===\n" + "\n".join(beat_lines))
 
-        # Chapter context (lightweight)
-        parts.append(
-            f"\n=== CHAPTER CONTEXT ===\n"
-            f"标题: {p.title} | 情绪: {p.target_emotion} | 定位: {p.chapter_position}"
-        )
+        # Give the writer an explicit stopping boundary. A positive word budget
+        # alone is not enough when adjacent beats describe the same scene.
+        for index, candidate in enumerate(p.scene_beats):
+            if candidate == beat or candidate.beat_id == beat.beat_id:
+                if index + 1 < len(p.scene_beats):
+                    next_beat = p.scene_beats[index + 1]
+                    parts.append(
+                        "\n=== BEAT BOUNDARY ===\n"
+                        "下一 beat 的起点如下；不得写入其中的事件，只能在它发生前收束：\n"
+                        f"{next_beat.description}"
+                    )
+                break
 
-        # Director anchor only
-        if packet.director_guidance.guidance_id:
-            dg = packet.director_guidance
-            if dg.character_anchor:
-                parts.append(f"\n=== DIRECTOR ===\n角色: {dg.character_anchor}")
-
-        # Prev chapter ending (hook)
-        if packet.prev_chapter_ending:
-            parts.append(
-                f"\n=== PREV CHAPTER ENDING ===\n{packet.prev_chapter_ending}"
-            )
-
-        # Continuity ledger
+        # Continuity ledger (per-beat，过滤粒度不同 → 变体)
         if packet.relevant_ledger_items:
             items_text = "\n".join(
-                f"- [{i.section}] {i.entity}: {i.content[:150]}"
-                for i in packet.relevant_ledger_items[:5]
+                f"- [{i.section}] {i.entity}: {i.content}"
+                for i in packet.relevant_ledger_items
             )
             parts.append(f"\n=== CONTINUITY ===\n{items_text}")
 

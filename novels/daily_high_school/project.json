@@ -43,7 +43,7 @@
       "王磊和顾远持续参与，避免故事变成陈默与女主轮流单独相处的展示会"
     ],
     "config": {
-      "writer_prompt": "writer",
+      "writer_prompt": "writer_romcom",
       "architect_prompt": "architect_romcom",
       "story_bible": "story_bible.md",
       "canon_priority": [

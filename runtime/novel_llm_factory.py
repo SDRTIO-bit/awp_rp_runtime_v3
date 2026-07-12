@@ -129,7 +129,9 @@ class NovelLLMFactory:
                 "ledger_curator":     "mimo-v2.5-pro",
             }
             model_id = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}", default_map.get(role, "mimo-v2.5-pro"))
-            return {**base, "model": model_id}
+            config = {**base, "model": model_id}
+            self._adjust_for_thinking_models(config, model_id)
+            return config
 
         # Override model names with OpenCode-available ids.
         # 2026-07-05: max 长程一致性暴露问题（8K 输出窗内同句重复、48h→72h 自相矛盾），
@@ -143,8 +145,19 @@ class NovelLLMFactory:
             "style_cleaner":      "qwen3.7-plus",
             "ledger_curator":     "qwen3.7-plus",
         }
-        model_id = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}", default_map.get(role, "qwen3.7-max"))
-        return {**base, "model": model_id}
+        global_model = os.environ.get("NOVEL_LLM_MODEL")
+        role_model = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}")
+        model_id = role_model or global_model or default_map.get(role, "qwen3.7-max")
+        config = {**base, "model": model_id}
+        self._adjust_for_thinking_models(config, model_id)
+        return config
+
+    @staticmethod
+    def _adjust_for_thinking_models(config: dict[str, Any], model_id: str) -> None:
+        """GLM 等内置思考模型会吃掉约 90% 的 max_tokens 做 internal reasoning。
+        放大 max_tokens 以避免 content 部分被挤压为 0。"""
+        if "glm" in model_id.lower():
+            config["max_tokens"] = config["max_tokens"] * 4
 
     def get_thinking_config(self, role: str) -> dict[str, Any]:
         config = self._role_config(role)

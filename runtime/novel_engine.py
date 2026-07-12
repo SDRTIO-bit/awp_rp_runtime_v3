@@ -6,11 +6,12 @@ Independent from PersistentTurnEngine, shares infrastructure (LLM adapters, stor
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any, Callable
 
 from ..contracts.novel_project import NovelProject
 from ..contracts.novel_volume import VolumePlan
-from ..contracts.novel_chapter import ChapterPlan, BeatDetail
+from ..contracts.novel_chapter import ChapterPlan, BeatDetail, normalize_scene_beats
 from ..contracts.novel_draft import ChapterDraft
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
@@ -47,6 +48,18 @@ class NovelEngine:
     - WriterInputBundleV2Builder（RP 专用 bundle 构建）
     - SubAgentLLMRunner（RP 的 thinking 被硬编码禁用）
     """
+
+    @staticmethod
+    def _normalize_plan_beats(plan: ChapterPlan) -> ChapterPlan:
+        """Ensure both fresh and legacy plans satisfy beat-writer invariants."""
+        beats = normalize_scene_beats(
+            plan.scene_beats,
+            chapter_index=plan.chapter_index,
+            target_chars=plan.target_chars,
+        )
+        if beats == plan.scene_beats:
+            return plan
+        return replace(plan, scene_beats=beats)
 
     def __init__(self, registry: SessionRuntimeStoreRegistry, profile: str = "production",
                  callbacks: NovelStreamCallbacks | None = None):
@@ -122,6 +135,15 @@ class NovelEngine:
         from .novel_style_cleaner import NovelStyleCleaner
         plan = NovelStyleCleaner.clean_plan(plan)
 
+        # Replanning must retain the existing primary key: replacing it would
+        # delete the parent row and violate the foreign key held by old drafts.
+        existing_plan = self._registry.novel_chapter_plan_store.load_by_index(
+            project_id, chapter_index
+        )
+        if existing_plan:
+            plan = replace(plan, chapter_id=existing_plan.chapter_id)
+        plan = self._normalize_plan_beats(plan)
+
         # Persist
         self._registry.novel_chapter_plan_store.save(plan)
 
@@ -152,6 +174,10 @@ class NovelEngine:
         plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index)
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
+        normalized_plan = self._normalize_plan_beats(plan)
+        if normalized_plan != plan:
+            plan = normalized_plan
+            self._registry.novel_chapter_plan_store.save(plan)
 
         # Load project config for writer_prompt / genre overrides
         project = self._registry.novel_project_store.load(project_id)
@@ -288,8 +314,9 @@ class NovelEngine:
                 return ""
 
         accumulated_text = ""
-        for beat in plan.scene_beats:
+        for beat_index, beat in enumerate(plan.scene_beats):
             beat_text = ""
+            attempt_guidance = write_guidance
             for attempt in range(3):
                 beat_packet = self._packet_builder.build_beat_packet(
                     beat=beat,
@@ -301,7 +328,17 @@ class NovelEngine:
                     memory_recall=memory_recall,
                 )
                 try:
-                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
+                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name, write_guidance=attempt_guidance)
+                    if beat_index + 1 < len(plan.scene_beats):
+                        from .novel_writer_adapter import NovelWriterAdapter
+                        next_description = plan.scene_beats[beat_index + 1].description
+                        if NovelWriterAdapter._crosses_next_beat_boundary(beat_text, next_description):
+                            attempt_guidance = (
+                                f"{write_guidance}\n上一尝试已经写入下一 beat 的开场动作；"
+                                "必须删去该动作，并在当前 beat 的事件完成处立即收束。"
+                            ).strip()
+                            beat_text = ""
+                            continue
                     if beat_text and beat_text.strip():
                         break
                 except RuntimeError:
@@ -535,6 +572,7 @@ class NovelEngine:
             })
 
             beat_text = ""
+            attempt_guidance = write_guidance
             for attempt in range(3):
                 beat_packet = self._packet_builder.build_beat_packet(
                     beat=beat,
@@ -550,9 +588,19 @@ class NovelEngine:
                     beat_text = self._call_writer_beat_stream(
                         beat_packet, self._safe_on_chunk,
                         writer_prompt_name=writer_prompt_name,
-                        write_guidance=write_guidance,
+                        write_guidance=attempt_guidance,
                     )
                     duration_ms = int((time.time() - t_start) * 1000)
+                    if i + 1 < len(plan.scene_beats):
+                        from .novel_writer_adapter import NovelWriterAdapter
+                        next_description = plan.scene_beats[i + 1].description
+                        if NovelWriterAdapter._crosses_next_beat_boundary(beat_text, next_description):
+                            attempt_guidance = (
+                                f"{write_guidance}\n上一尝试已经写入下一 beat 的开场动作；"
+                                "必须删去该动作，并在当前 beat 的事件完成处立即收束。"
+                            ).strip()
+                            beat_text = ""
+                            continue
                     if beat_text and beat_text.strip():
                         self._safe_on_beat("end", beat_idx, {
                             "duration_ms": duration_ms,
@@ -589,6 +637,10 @@ class NovelEngine:
         plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index)
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
+        normalized_plan = self._normalize_plan_beats(plan)
+        if normalized_plan != plan:
+            plan = normalized_plan
+            self._registry.novel_chapter_plan_store.save(plan)
 
         project = self._registry.novel_project_store.load(project_id)
         project_config = getattr(project, "config", {}) or {}
