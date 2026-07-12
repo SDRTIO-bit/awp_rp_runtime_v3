@@ -229,10 +229,11 @@ class NovelWritePacketBuilder:
         """一句话写作意图。"""
         parts = []
         parts.append(f"目标情绪: {plan.target_emotion}")
-        if guidance.timeline_anchor:
+        if getattr(guidance, 'timeline_anchor', None):
             parts.append(f"时间: {guidance.timeline_anchor}")
-        if guidance.beat_details:
-            beats_summary = " → ".join(bd.emotion_shift for bd in guidance.beat_details if bd.emotion_shift)
+        beat_details = getattr(guidance, 'beat_details', None) or ()
+        if beat_details:
+            beats_summary = " → ".join(bd.emotion_shift for bd in beat_details if getattr(bd, 'emotion_shift', ''))
             if beats_summary:
                 parts.append(f"情绪弧线: {beats_summary}")
         if emotion_module:

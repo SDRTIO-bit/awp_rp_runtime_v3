@@ -197,8 +197,13 @@ class OpenAICompatibleAdapter(BaseLlmAdapter):
                     kwargs["extra_body"] = filtered
 
             response = self._client.chat.completions.create(**kwargs)
+            import sys
+            if not response.choices:
+            elif response.choices[0].message:
+                m = response.choices[0].message
 
         except Exception as exc:
+            import sys
             failure = ProviderFailure(
                 failure_code=FailureCode.CONNECTION_ERROR,
                 failure_message=f"OpenAI-compatible API call failed: {exc}",
@@ -224,6 +229,7 @@ class OpenAICompatibleAdapter(BaseLlmAdapter):
         text = _message_text(
             response.choices[0].message if response.choices else None
         )
+        import sys
         usage = _provider_usage_from_openai(
             getattr(response, "usage", None),
             use_model,

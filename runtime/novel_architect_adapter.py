@@ -5,6 +5,7 @@ Uses DeepSeekAdapter with thinking=high for chapter planning.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from ..contracts.novel_chapter import ChapterPlan, BeatDetail
@@ -36,16 +37,17 @@ class NovelArchitectAdapter:
         ledger_items: list,
         character_states: dict,
         task_description: str = "",
+        prev_chapter_ending: str = "",
+        prev_ending_design: Any = None,
     ) -> ChapterPlan:
         """Generate a chapter plan."""
         system_prompt, user_prompt = self._build_prompt(
             project_id, chapter_index, volume_plan,
             completed_chapters, ledger_items, character_states,
-            task_description,
+            task_description, prev_chapter_ending, prev_ending_design,
         )
         # Call LLM and parse JSON response
         from .novel_llm_factory import NovelLLMFactory
-        import json
         factory = NovelLLMFactory.get_instance()
         adapter = factory.get_adapter("architect")
         thinking = factory.get_thinking_config("architect")
@@ -65,7 +67,6 @@ class NovelArchitectAdapter:
             text = ""
 
         # Parse JSON response robustly (tolerate ```json fences, leading prose).
-        import json
         extracted = self._extract_json_object(text)
         if extracted is None:
             # Parsing failed. Previously we silently returned an empty ChapterPlan
@@ -202,7 +203,7 @@ class NovelArchitectAdapter:
     def _build_prompt(
         self, project_id, chapter_index, volume_plan,
         completed_chapters, ledger_items, character_states,
-        task_description,
+        task_description, prev_chapter_ending="", prev_ending_design=None,
     ) -> tuple[str, str]:
         """Returns (system_prompt, user_prompt).
 
@@ -231,6 +232,18 @@ class NovelArchitectAdapter:
 
         if volume_plan:
             parts.append(f"\n卷计划:\n{volume_plan.to_dict() if hasattr(volume_plan, 'to_dict') else volume_plan}")
+
+        # ═══ CRITICAL: 上章结尾钩子——本章必须推进 ═══
+        hook_parts = []
+        if prev_chapter_ending:
+            hook_parts.append(f"【上一章结尾原文】\n{prev_chapter_ending}")
+        if prev_ending_design:
+            ed = prev_ending_design
+            if hasattr(ed, 'to_dict'):
+                ed = ed.to_dict()
+            hook_parts.append(f"【上一章设计的钩子/悬念】\n{json.dumps(ed, ensure_ascii=False, default=str)}")
+        if hook_parts:
+            parts.append(f"\n=== MUST CONTINUE FROM PREV CHAPTER ===\n" + "\n\n".join(hook_parts))
 
         chapter_summaries = []
         if ledger_items:

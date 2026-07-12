@@ -124,11 +124,24 @@ class NovelEngine:
         characters = [c for c in all_characters if c.first_appearance <= chapter_index]
         character_states = self._build_character_context(characters)
 
+        # Load previous chapter's ending text (hook handoff)
+        prev_chapter_ending = ""
+        prev_ending_design = None
+        if chapter_index > 1:
+            prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
+            if prev_plan:
+                prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
+                if prev_draft:
+                    prev_chapter_ending = prev_draft.text[-600:]
+                prev_ending_design = getattr(prev_plan, "ending_design", None) or getattr(prev_plan, "ending_hook", None)
+
         # Call Architect
         plan = self._call_architect(
             project_id, chapter_index, volume_plan,
             completed_chapters, ledger_items, character_states,
             task_description, architect_prompt_name=architect_prompt_name,
+            prev_chapter_ending=prev_chapter_ending,
+            prev_ending_design=prev_ending_design,
         )
 
         # Clean drumbeat patterns from plan text before storing
@@ -207,27 +220,10 @@ class NovelEngine:
         # Build global chapter summaries (lightweight, no plan detail)
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Build completed-chapters summary + foreshadowing + subplot for Director's
-        # global view. Previously these were all empty, so Director's "全局优化"
-        # role was a no-op that still burned thinking tokens.
-        completed_chapters_summary = self._build_completed_chapters_summary(project_id, chapter_index)
-        foreshadowing_list = [
-            i for i in ledger_items if i.section == "foreshadowing"
-        ]
-        subplot_status = [
-            i for i in ledger_items if i.section == "open_threads"
-        ]
-
-        # Call Director (placeholder)
-        director_guidance = self._call_director(
-            project_id, plan, ledger_items, character_states,
-            prev_chapter_ending,
-            completed_chapters_summary=completed_chapters_summary,
-            foreshadowing_list=foreshadowing_list,
-            subplot_status=subplot_status,
+        # Build packet (Director 层已砍，传最小占位符)
+        director_guidance = DirectorGuidance(
+            guidance_id=f"dg-{plan.chapter_id}-skip",
         )
-
-        # Build packet
         packet = self._packet_builder.build(
             chapter_plan=plan,
             ledger_items=ledger_items,
@@ -239,7 +235,7 @@ class NovelEngine:
             director_guidance=director_guidance,
         )
 
-        # Generate with beat-by-beat approach
+        # Single-pass 生成（不再分 beat）
         text = self._generate_with_beats(
             plan,
             packet,
@@ -249,6 +245,7 @@ class NovelEngine:
             memory_recall=memory_recall,
             writer_prompt_name=writer_prompt_name,
             write_guidance=write_guidance,
+            single_pass=True,
         )
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
@@ -305,12 +302,18 @@ class NovelEngine:
         *,
         writer_prompt_name: str = "writer",
         write_guidance: str = "",
+        single_pass: bool = False,
     ) -> str:
-        """Generate chapter text beat by beat (sequential, 3 beats)."""
-        if not plan.scene_beats:
+        """Generate chapter text beat by beat (sequential, 3 beats).
+        
+        single_pass=True: 不分 beat，整章一次 LLM 调用。
+        """
+        if single_pass or not plan.scene_beats:
             try:
                 return self._call_writer(packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
-            except RuntimeError:
+            except RuntimeError as e:
+                import sys
+                print(f"[DEBUG _gen_beats] RuntimeError: {e}", file=sys.stderr)
                 return ""
 
         accumulated_text = ""
@@ -352,6 +355,7 @@ class NovelEngine:
         self, project_id, chapter_index, volume_plan,
         completed_chapters, ledger_items, character_states,
         task_description, architect_prompt_name="architect",
+        prev_chapter_ending="", prev_ending_design=None,
     ) -> ChapterPlan:
         """Call Architect agent."""
         from .novel_architect_adapter import NovelArchitectAdapter
@@ -364,6 +368,8 @@ class NovelEngine:
             ledger_items=ledger_items,
             character_states=character_states,
             task_description=task_description,
+            prev_chapter_ending=prev_chapter_ending,
+            prev_ending_design=prev_ending_design,
         )
 
     def _call_director(
@@ -533,11 +539,11 @@ class NovelEngine:
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
         return adapter.generate_beat(packet, write_guidance=write_guidance)
 
-    def _call_writer_beat_stream(self, packet: NovelWritePacket, on_chunk, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
-        """Call Writer for a single beat with streaming callback."""
+    def _call_writer_stream(self, packet: NovelWritePacket, on_chunk, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
+        """Call Writer for full chapter with streaming callback."""
         from .novel_writer_adapter import NovelWriterAdapter
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
-        return adapter.generate_beat_stream(packet, on_chunk, write_guidance=write_guidance)
+        return adapter.generate_chapter_stream(packet, on_chunk, write_guidance=write_guidance)
 
     def _generate_with_beats_stream(
         self,
@@ -550,13 +556,19 @@ class NovelEngine:
         *,
         writer_prompt_name: str = "writer",
         write_guidance: str = "",
+        single_pass: bool = False,
     ) -> str:
-        """Generate chapter text beat by beat with streaming callbacks."""
-        if not plan.scene_beats:
+        """Generate chapter text beat by beat with streaming callbacks.
+        
+        single_pass=True: 不分 beat，整章一次 LLM 流式调用。
+        """
+        if single_pass or not plan.scene_beats:
             try:
-                text = self._call_writer(packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
-                self._safe_on_chunk(text)
-                return text
+                return self._call_writer_stream(
+                    packet, self._safe_on_chunk,
+                    writer_prompt_name=writer_prompt_name,
+                    write_guidance=write_guidance,
+                )
             except RuntimeError:
                 return ""
 
@@ -662,27 +674,11 @@ class NovelEngine:
                 prev_chapter_ending = prev_draft.text[-500:]
 
         global_summaries = self._build_global_summaries(project_id, chapter_index)
-        completed_chapters_summary = self._build_completed_chapters_summary(project_id, chapter_index)
-        foreshadowing_list = [i for i in ledger_items if i.section == "foreshadowing"]
-        subplot_status = [i for i in ledger_items if i.section == "open_threads"]
 
-        # Phase: director
-        self._safe_on_phase("start", "director", {"ch": chapter_index, "thinking": "high"})
-        t = time.time()
-        director_guidance = self._call_director(
-            project_id, plan, ledger_items, character_states,
-            prev_chapter_ending,
-            completed_chapters_summary=completed_chapters_summary,
-            foreshadowing_list=foreshadowing_list,
-            subplot_status=subplot_status,
+        # Phase: writer (Director 层已砍 — 改为占位符)
+        director_guidance = DirectorGuidance(
+            guidance_id=f"dg-{plan.chapter_id}-skip",
         )
-        self._safe_on_phase("end", "director", {
-            "ch": chapter_index,
-            "duration_ms": int((time.time() - t) * 1000),
-            "character_anchor": director_guidance.character_anchor[:200] if director_guidance.character_anchor else "",
-            "timeline_anchor": director_guidance.timeline_anchor[:200] if director_guidance.timeline_anchor else "",
-            "beat_details": [{"id": b.beat_id, "goal": b.narrative_strategy[:80] if hasattr(b, 'narrative_strategy') else b.content_outline[:80]} for b in (director_guidance.beat_details or [])],
-        })
 
         packet = self._packet_builder.build(
             chapter_plan=plan, ledger_items=ledger_items,
@@ -703,6 +699,7 @@ class NovelEngine:
             memory_recall=memory_recall,
             writer_prompt_name=writer_prompt_name,
             write_guidance=write_guidance,
+            single_pass=True,
         )
         self._safe_on_phase("end", "writer", {
             "ch": chapter_index,
