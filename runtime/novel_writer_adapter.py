@@ -157,6 +157,7 @@ class NovelWriterAdapter:
             "叙述者不替读者感受",
             "对话+行为占正文60%以上",
             "结尾留悬念/钩子",
+            "不要添加章节内小标题或数字分节，正文保持连续流动",
             "只输出正文，无标签、无JSON、无元信息",
         ]
         parts.append("\n=== 必须遵守 ===\n" + "\n".join(f"- {r}" for r in rules))

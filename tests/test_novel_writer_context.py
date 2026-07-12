@@ -22,6 +22,7 @@ from awp_rp_runtime_v3.runtime.novel_write_packet_builder import NovelWritePacke
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter
 from awp_rp_runtime_v3.scripts.novel_cli import _load_plan_guidance, _load_writer_guidance
+from awp_rp_runtime_v3.runtime.prompt_loader import load_prompt
 
 
 def _plan() -> ChapterPlan:
@@ -118,14 +119,16 @@ def test_writer_prompt_contains_medium_granularity_contract() -> None:
     _system, prompt = NovelWriterAdapter(None, writer_prompt_name="writer_romcom")._build_prompt(packet)
 
     assert "允许出场角色: 陈默、沈溪、王磊" in prompt
-    assert "陈默迟到，用玩笑化解尴尬" in prompt
-    assert "两人被安排一起分发教材" in prompt
-    assert "陈默换走破损教材" in prompt
+    assert "叙事动作1: 陈默迟到并扣错扣子。他用玩笑化解全班的注意。" in prompt
+    assert "叙事动作2: 班主任让陈默协助沈溪分发教材。" in prompt
+    assert "叙事动作3: 陈默用自己的好书换走破损教材。" in prompt
+    assert "陈默迟到，用玩笑化解尴尬" not in prompt
     assert "班主任让陈默协助沈溪分发教材" in prompt
     assert "陈默用自己的好书换走破损教材" in prompt
     assert "名字旁的问号" in prompt
     assert "现实校园，不存在超能力" in prompt
     assert "赵小麦" not in prompt
+    assert "不要添加章节内小标题或数字分节" in prompt
 
 
 def test_writer_guidance_does_not_duplicate_story_bible(tmp_path: Path) -> None:
@@ -175,3 +178,11 @@ def test_style_benchmark_resolves_normalized_project_directory() -> None:
 
     assert "扣子" in benchmark
     assert "蒸汽魔法项目需转换为西幻背景" not in benchmark
+
+
+def test_romcom_architect_uses_medium_granularity_short_chapters() -> None:
+    prompt = load_prompt("architect_romcom")
+
+    assert "2000—2600" in prompt
+    assert "禁止预写具体对白" in prompt
+    assert "每个叙事动作只写1—2句话" in prompt

@@ -146,16 +146,27 @@ class NovelWriterContextCompiler:
             f"允许出场角色: {'、'.join(allowed_cast)}",
             f"开场状态: {plan.opening_hook or plan.content_summary.cause}",
         ]
-        if plan.scene_beats:
+        summary = plan.content_summary
+        moves = []
+        opening_move = "".join(
+            part for part in (summary.cause, summary.development) if part
+        )
+        if opening_move:
+            moves.append(opening_move)
+        if summary.turning_point:
+            moves.append(summary.turning_point)
+        if summary.climax:
+            moves.append(summary.climax)
+        if moves:
             lines.append("叙事动作（只约束事件与局面变化，不规定具体对白和段落格式）:")
             lines.extend(
-                f"{index}. {beat.description}"
-                for index, beat in enumerate(plan.scene_beats, start=1)
+                f"叙事动作{index}: {move}"
+                for index, move in enumerate(moves, start=1)
             )
-        if plan.content_summary.turning_point:
-            lines.append(f"必须发生的转折: {plan.content_summary.turning_point}")
-        if plan.content_summary.climax:
-            lines.append(f"必须兑现的核心行动: {plan.content_summary.climax}")
+        if summary.turning_point:
+            lines.append(f"必须发生的转折: {summary.turning_point}")
+        if summary.climax:
+            lines.append(f"必须兑现的核心行动: {summary.climax}")
         if plan.main_payoff:
             lines.append(f"本章回报: {plan.main_payoff}")
         if plan.plot_arrangement.emotion_line:
@@ -165,8 +176,8 @@ class NovelWriterContextCompiler:
             for change in plan.character_appearance.relationship_changes
         )
         ending = plan.ending_design
-        if plan.content_summary.ending:
-            lines.append(f"章末事件: {plan.content_summary.ending}")
+        if summary.ending:
+            lines.append(f"章末事件: {summary.ending}")
         if ending.closing_state:
             lines.append(f"章末状态: {ending.closing_state}")
         if ending.hook_detail:
