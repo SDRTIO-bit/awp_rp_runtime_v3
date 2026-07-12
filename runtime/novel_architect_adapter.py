@@ -132,15 +132,11 @@ class NovelArchitectAdapter:
         t = text.strip()
 
         # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
-        if t.startswith("```"):
-            first_newline = t.find("\n")
-            if first_newline != -1:
-                t = t[first_newline + 1:]
-            # Remove trailing fence (may have whitespace/newline before ```)
-            last_fence = t.rfind("```")
-            if last_fence != -1:
-                t = t[:last_fence]
-            t = t.strip()
+        import re
+        # Strip opening fence: ^```[json]?$
+        t = re.sub(r"^```[a-z]*\s*", "", t)
+        # Strip trailing fence: ```$ (possibly preceded by whitespace)
+        t = re.sub(r"\s*```\s*$", "", t)
 
         # 2. Find the first { and extract balanced JSON object
         start = t.find("{")

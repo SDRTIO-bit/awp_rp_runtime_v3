@@ -5,6 +5,7 @@ schemaId: awp.novel.chapter-plan.v1
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
