@@ -11,6 +11,7 @@ from ..contracts.novel_write_packet import NovelWritePacket
 from ..contracts.novel_chapter import ChapterPlan
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
+from .novel_writer_context import NovelWriterContextCompiler
 
 
 class NovelWritePacketBuilder:
@@ -18,6 +19,7 @@ class NovelWritePacketBuilder:
 
     def __init__(self, registry):
         self._registry = registry
+        self._context_compiler = NovelWriterContextCompiler()
 
     def build(
         self,
@@ -37,17 +39,14 @@ class NovelWritePacketBuilder:
         Step 2: 模块召回 — 从对标书找情绪/节奏/文风参考
         Step 3: 意图确认 — 一句话概括本章写作目标
         """
-        # Step 1: 状态筛选
-        chapter_index = getattr(chapter_plan, 'chapter_index', 0)
-        relevant_items = self._filter_relevant_ledger(chapter_plan, ledger_items, chapter_index=chapter_index)
-        relevant_characters = self._filter_relevant_characters(chapter_plan, character_states)
-        foreshadowing_items = [
-            i.to_dict() for i in relevant_items if i.section == "foreshadowing"
-        ]
-        # Extract world constraints from ledger world_rules
-        world_constraints = [
-            i.content for i in ledger_items if i.section == "world_rules"
-        ]
+        project_root = ""
+        if self._registry is not None:
+            try:
+                project = self._registry.novel_project_store.load(chapter_plan.project_id)
+                config = getattr(project, "config", {}) or {}
+                project_root = str(config.get("novel_dir", "") or "")
+            except (AttributeError, TypeError):
+                project_root = ""
 
         # Step 2: 模块召回
         ref_books = reference_books or []
@@ -60,25 +59,22 @@ class NovelWritePacketBuilder:
             chapter_plan, emotion_module, rhythm_reference, director_guidance
         )
 
-        return NovelWritePacket(
-            packet_id=f"pkt-{chapter_plan.chapter_id}",
-            project_id=chapter_plan.project_id,
-            chapter_id=chapter_plan.chapter_id,
+        packet = self._context_compiler.compile(
             chapter_plan=chapter_plan,
+            ledger_items=ledger_items,
             prev_chapter_ending=prev_chapter_ending,
             global_summaries=global_summaries,
-            relevant_ledger_items=relevant_items,
-            character_states=relevant_characters,
-            active_memory_context=list(active_memory_context or []),
-            memory_recall=list(memory_recall or []),
-            foreshadowing_items=foreshadowing_items,
-            world_constraints=world_constraints,
+            character_states=character_states,
             director_guidance=director_guidance,
-            writing_intent=writing_intent,
-            emotion_module=emotion_module,
-            rhythm_reference=rhythm_reference,
-            style_profile=style_profile,
+            project_root=project_root,
+            active_memory_context=active_memory_context,
+            memory_recall=memory_recall,
         )
+        packet.writing_intent = writing_intent
+        packet.emotion_module = emotion_module
+        packet.rhythm_reference = rhythm_reference
+        packet.style_profile = style_profile
+        return packet
 
     def build_beat_packet(
         self,

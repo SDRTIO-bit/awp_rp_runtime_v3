@@ -1,20 +1,20 @@
 """Tests for novel mode storage layer."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
-from awp_rp_runtime_v2.contracts.novel_project import NovelProject
-from awp_rp_runtime_v2.contracts.novel_volume import VolumePlan
-from awp_rp_runtime_v2.contracts.novel_chapter import ChapterPlan, BeatDetail, ContentSummary
-from awp_rp_runtime_v2.contracts.novel_draft import ChapterDraft
-from awp_rp_runtime_v2.contracts.novel_ledger import LedgerItem
-from awp_rp_runtime_v2.contracts.novel_character import NovelCharacter, CharacterRelationship
-from awp_rp_runtime_v2.contracts.novel_batch import BatchProgress
-from awp_rp_runtime_v2.contracts.novel_reference import ReferenceBook
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_volume import VolumePlan
+from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan, BeatDetail, ContentSummary
+from awp_rp_runtime_v3.contracts.novel_draft import ChapterDraft
+from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
+from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter, CharacterRelationship
+from awp_rp_runtime_v3.contracts.novel_batch import BatchProgress
+from awp_rp_runtime_v3.contracts.novel_reference import ReferenceBook
 
 
 @pytest.fixture
 def reg(tmp_path):
-    from awp_rp_runtime_v2.storage.sqlite.database import Database
+    from awp_rp_runtime_v3.storage.sqlite.database import Database
     db = Database(str(tmp_path / "test.db"))
     db.initialize()
     return SessionRuntimeStoreRegistry(db)

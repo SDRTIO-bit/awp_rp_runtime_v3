@@ -1,18 +1,18 @@
 """Tests for novel mode agent layer."""
 
 import pytest
-from awp_rp_runtime_v2.runtime.novel_style_cleaner import NovelStyleCleaner
-from awp_rp_runtime_v2.runtime.novel_quality_pipeline import NovelQualityPipeline
-from awp_rp_runtime_v2.runtime.novel_write_packet_builder import NovelWritePacketBuilder
-from awp_rp_runtime_v2.contracts.novel_chapter import ChapterPlan, BeatDetail, ContentSummary
-from awp_rp_runtime_v2.contracts.novel_ledger import LedgerItem
-from awp_rp_runtime_v2.contracts.novel_director_guidance import DirectorGuidance
+from awp_rp_runtime_v3.runtime.novel_style_cleaner import NovelStyleCleaner
+from awp_rp_runtime_v3.runtime.novel_quality_pipeline import NovelQualityPipeline
+from awp_rp_runtime_v3.runtime.novel_write_packet_builder import NovelWritePacketBuilder
+from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan, BeatDetail, ContentSummary
+from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
+from awp_rp_runtime_v3.contracts.novel_director_guidance import DirectorGuidance
 
 
 @pytest.fixture
 def reg(tmp_path):
-    from awp_rp_runtime_v2.storage.sqlite.database import Database
-    from awp_rp_runtime_v2.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+    from awp_rp_runtime_v3.storage.sqlite.database import Database
+    from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
     db = Database(str(tmp_path / "test.db"))
     db.initialize()
     return SessionRuntimeStoreRegistry(db)
@@ -131,7 +131,7 @@ class TestNovelWritePacketBuilder:
             project_id="p1",
             chapter_index=1,
             target_chars=3000,
-            content_summary=ContentSummary(cause="起因", development="发展"),
+            content_summary=ContentSummary(cause="发现金锁", development="研究金锁"),
         )
         items = [
             LedgerItem(item_id="li1", project_id="p1", section="foreshadowing", entity="金锁", status="active"),

@@ -20,6 +20,7 @@ from ..contracts.memory_recall_request import MemoryRecallRequest
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_write_packet_builder import NovelWritePacketBuilder
 from .novel_quality_pipeline import NovelQualityPipeline
+from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
@@ -81,6 +82,45 @@ class NovelEngine:
     def _safe_on_error(self, phase: str, message: str) -> None:
         safe_on_error(self._callbacks.on_error, phase, message)
 
+    @staticmethod
+    def _characters_available_for_chapter(characters: list, chapter_index: int) -> list:
+        """Return characters scheduled to have appeared by this chapter.
+
+        ``first_appearance <= 0`` means the appearance has not been scheduled.
+        """
+        return [
+            character for character in characters
+            if 0 < character.first_appearance <= chapter_index
+        ]
+
+    @staticmethod
+    def _merge_plan_adherence(
+        *,
+        decision: QualityDecision,
+        plan: ChapterPlan,
+        text: str,
+        known_character_names: set[str],
+    ) -> None:
+        """Merge deterministic Plan-contract checks into the quality decision."""
+        from .novel_plan_adherence import NovelPlanAdherenceChecker
+
+        result = NovelPlanAdherenceChecker().check(
+            plan=plan,
+            text=text,
+            known_character_names=known_character_names,
+        )
+        decision.blocking_reasons.extend(result.blocking_reasons)
+        decision.warnings.extend(result.warnings)
+        decision.checks.append({
+            "gate_name": "plan_adherence",
+            "category": "structure",
+            "blocking_reasons": list(result.blocking_reasons),
+            "warnings": list(result.warnings),
+            "coverage": result.coverage,
+        })
+        if result.blocking_reasons:
+            decision.verdict = QualityVerdict.REVISE
+
     def plan_chapter(
         self,
         *,
@@ -121,7 +161,7 @@ class NovelEngine:
 
         # Load character states — only characters that have appeared
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
-        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        characters = self._characters_available_for_chapter(all_characters, chapter_index)
         character_states = self._build_character_context(characters)
 
         # Load previous chapter's ending text (hook handoff)
@@ -201,7 +241,7 @@ class NovelEngine:
         # Load context
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
-        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        characters = self._characters_available_for_chapter(all_characters, chapter_index)
         character_states = self._build_character_context(characters)
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id,
@@ -263,6 +303,13 @@ class NovelEngine:
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
+
+        self._merge_plan_adherence(
+            decision=quality_decision,
+            plan=plan,
+            text=text,
+            known_character_names={c.name for c in all_characters if c.name},
+        )
 
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
         # status 仍如实标记，便于事后筛选。
@@ -660,7 +707,7 @@ class NovelEngine:
 
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
-        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        characters = self._characters_available_for_chapter(all_characters, chapter_index)
         character_states = self._build_character_context(characters)
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id, plan=plan, characters=characters,
@@ -730,6 +777,12 @@ class NovelEngine:
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
+        self._merge_plan_adherence(
+            decision=quality_decision,
+            plan=plan,
+            text=text,
+            known_character_names={c.name for c in all_characters if c.name},
+        )
         self._safe_on_phase("end", "continuity", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),

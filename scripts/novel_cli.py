@@ -160,8 +160,8 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _load_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
-    """加载故事圣经、章节微调和 CLI 引导，并以此约束规划与写作。"""
+def _load_plan_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
+    """Load broad project guidance for the context-heavy Plan Agent."""
     parts = []
     story_bible = _read_text(novel_dir / "story_bible.md")
     if story_bible:
@@ -173,6 +173,22 @@ def _load_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str
     if cli_guidance:
         parts.append(cli_guidance.strip())
     return "\n\n".join(parts)
+
+
+def _load_writer_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
+    """Load only chapter-local guidance for the context-light Writer Agent."""
+    parts = []
+    guidance_file = novel_dir / "guidance" / f"chapter_{chapter:02d}.md"
+    file_content = _read_text(guidance_file)
+    if file_content:
+        parts.append(file_content.strip())
+    if cli_guidance:
+        parts.append(cli_guidance.strip())
+    return "\n\n".join(parts)
+
+
+# Backward-compatible alias for integrations that imported the old helper.
+_load_guidance = _load_plan_guidance
 
 
 def _parse_outline(md_text: str) -> list[dict]:
@@ -409,6 +425,8 @@ def cmd_seed(args: argparse.Namespace) -> None:
     engine = _get_engine(db_path)
     project = meta["project"]
     pid = project["id"]
+    project_config = dict(project.get("config", {}) or {})
+    project_config["novel_dir"] = str(novel_dir)
 
     # 1. Create project
     engine._registry.novel_project_store.create(NovelProject(
@@ -419,7 +437,7 @@ def cmd_seed(args: argparse.Namespace) -> None:
         one_sentence_pitch=project.get("one_sentence_pitch", ""),
         target_reader=project.get("target_reader", ""),
         target_platform=project.get("target_platform", ""),
-        config=project.get("config", {}),
+        config=project_config,
         status="writing",
     ))
     print(f"{GREEN}项目: {project['title']} ({pid}){RESET}")
@@ -529,7 +547,7 @@ def cmd_plan(args: argparse.Namespace) -> None:
     outline = _read_text(novel_dir / "outline.md")
     chapters = _parse_outline(outline)
     task = getattr(args, "task", "") or ""
-    guidance = _load_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
+    guidance = _load_plan_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
 
     # Try to find task_description from outline
     outline_task = ""
@@ -575,7 +593,7 @@ def cmd_write(args: argparse.Namespace) -> None:
     pid = state["project_id"]
     chapter = int(args.chapter)
     use_stream = getattr(args, "stream", False)
-    guidance = _load_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
+    guidance = _load_writer_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
 
     if guidance:
         print(f"{DIM}微调引导: {guidance[:100]}...{RESET}" if len(guidance) > 100 else f"{DIM}微调引导: {guidance}{RESET}")

@@ -33,11 +33,11 @@ except ModuleNotFoundError:
     sys.modules["comfy_execution.validation"] = _stub_validation
 
 import pytest
-from awp_rp_runtime_v2.testing.fakes import (
+from awp_rp_runtime_v3.testing.fakes import (
     FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore,
     FakeRagMemoryStore, FakeTraceStore, FakeLLMProvider,
 )
-from awp_rp_runtime_v2.contracts.card_state import CardState, VariableEntry, SceneState
+from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
 
 
 @pytest.fixture

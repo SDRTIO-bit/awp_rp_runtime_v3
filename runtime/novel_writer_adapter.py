@@ -40,25 +40,18 @@ def _get_style_benchmark(project_root: str = "", project_id: str = "") -> str:
     if project_root:
         paths.append(os.path.join(project_root, "reference_benchmark.txt"))
     if project_id:
-        paths.append(os.path.join(os.path.dirname(__file__), "..", "novels", project_id, "reference_benchmark.txt"))
-    paths.append(os.path.join(os.path.dirname(__file__), "..", "novels", "steam_magic", "reference_benchmark.txt"))
+        novels_root = os.path.join(os.path.dirname(__file__), "..", "novels")
+        paths.append(os.path.join(novels_root, project_id, "reference_benchmark.txt"))
+        normalized_id = project_id.replace("-", "_")
+        if normalized_id != project_id:
+            paths.append(os.path.join(novels_root, normalized_id, "reference_benchmark.txt"))
     for p in paths:
         if os.path.exists(p):
             with open(p, "r", encoding="utf-8") as f:
                 text = f.read().strip()
-            # Detect project_type from path to adjust the adaptation hint
-            is_romcom = "daily_high_school" in p
             adapt_hint = (
-                "以下是你的写作风格参考（校园恋爱喜剧）。\n"
-                "请严格模仿以下所有特征：\n"
-                "- 对话节奏和吐槽时机\n"
-                "- 动作承载情绪（绝不写内心说明）\n"
-                "- 场景切换的流畅度\n"
-                "- 零比喻、零精确数字、零否定定义句\n"
-                "把你的输出和下面这段文字放在一起对比——读者不应该能分辨出哪段是AI写的。\n\n"
-                if is_romcom else
-                "以下是你的写作风格参考（都市背景，蒸汽魔法项目需转换为西幻背景，\n"
-                "但要模仿其对话节奏、情绪表达方式、场景切换的流畅度）：\n\n"
+                "以下样本只用于学习行文流畅度、对话节奏、动作衔接和信息释放速度。\n"
+                "不得照搬人物、事件、设定或原句；项目设定和章节契约优先。\n\n"
             )
             _STYLE_BENCHMARK_CACHE[cache_key] = (
                 "=== STYLE BENCHMARK ===\n" + adapt_hint + text
@@ -110,42 +103,50 @@ class NovelWriterAdapter:
         减法结构：benchmark 先行 → 情境 → 计划 → 红线 → 约束 → 开写。
         不做 beat 切分，不给结构指令。靠 benchmark + 红线约束，其余交给 Writer 自由发挥。
         """
-        p = packet.chapter_plan
         parts: list[str] = []
 
         # ═══ 1. STYLE BENCHMARK — 最先，最强的风格参考 ═══
-        benchmark = _get_style_benchmark(project_id=packet.project_id)
+        benchmark = _get_style_benchmark(
+            project_root=packet.project_root,
+            project_id=packet.project_id,
+        )
         if benchmark:
             parts.append(benchmark)
 
         # ═══ 2. 故事情境 — 故事进展 + 角色现状 ═══
         context_lines: list[str] = []
-        if packet.global_summaries:
-            context_lines.append(packet.global_summaries)
+        if packet.history_context:
+            context_lines.append("【最近章节摘要】\n" + packet.history_context)
         if packet.character_states:
             chars_text = "\n".join(
-                f"- {name}: {info.get('personality','')}, 位置={info.get('location','')}, 情绪={info.get('emotion','')}"
+                (
+                    f"- {name}: 性格={info.get('personality','')}; "
+                    f"口吻={info.get('voice_style','')}; "
+                    f"动机={info.get('core_motivation','')}; "
+                    f"弱点={info.get('weakness','')}; "
+                    f"关系={info.get('relationships','')}; "
+                    f"位置={info.get('location','')}; 情绪={info.get('emotion','')}"
+                )
                 for name, info in packet.character_states.items()
             )
-            context_lines.append(chars_text)
+            context_lines.append("【本章角色卡】\n" + chars_text)
         if context_lines:
             parts.append("\n=== 故事情境 ===\n" + "\n".join(context_lines))
 
-        # ═══ 3. 本章计划 — 极简：标题 + 情绪 + 剧情一句话 ═══
-        plan_parts = [f"标题: {p.title}"]
-        if p.target_chars:
-            plan_parts.append(f"目标字数: {p.target_chars}字")
-        if p.target_emotion:
-            plan_parts.append(f"情绪: {p.target_emotion}")
-        if p.chapter_position:
-            plan_parts.append(f"定位: {p.chapter_position}")
-        if p.main_payoff:
-            plan_parts.append(f"本章落点: {p.main_payoff}")
-        # 剧情一句话（从 content_summary 取核心因果链）
-        cs = p.content_summary
-        story_line = f"{cs.cause} → {cs.development} → {cs.ending}".strip(" →")
-        plan_parts.append(f"剧情: {story_line}")
-        parts.append("\n=== 本章计划 ===\n" + "\n".join(plan_parts))
+        # ═══ 3. 章节契约 — 中等粒度，约束事件但不规定正文句子 ═══
+        contract = packet.chapter_contract
+        if not contract:
+            from .novel_writer_context import NovelWriterContextCompiler
+            contract = NovelWriterContextCompiler._chapter_contract(
+                packet.chapter_plan, packet.allowed_cast
+            )
+        parts.append("\n=== 章节契约（必须兑现，具体对白与写法自由） ===\n" + contract)
+
+        if packet.world_constraints:
+            parts.append(
+                "\n=== 本章世界约束 ===\n"
+                + "\n".join(f"- {rule}" for rule in packet.world_constraints)
+            )
 
         # ═══ 4. 必须遵守 — 红线 + 输出规则合一 ═══
         rules = [
