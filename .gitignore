@@ -42,6 +42,9 @@ htmlcov/
 venv/
 env/
 
+# Node dependencies for the embedded Pi novel harness
+agent_harness/node_modules/
+
 # Logs and traces
 *.log
 logs/

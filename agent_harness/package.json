@@ -1,0 +1,14 @@
+{
+  "name": "awp-novel-agent-harness",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/novel_agent_host.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.6",
+    "typebox": "1.1.38"
+  }
+}
