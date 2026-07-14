@@ -58,6 +58,18 @@ class TestNovelEngine:
         with pytest.raises(ValueError, match="Chapter plan not found"):
             engine.write_chapter(project_id="p1", chapter_index=1)
 
+    def test_streaming_blank_writer_output_raises_before_draft_save(self, reg, engine, monkeypatch):
+        reg.novel_project_store.create(NovelProject(project_id="p1", title="测试"))
+        reg.novel_chapter_plan_store.save(ChapterPlan(
+            chapter_id="ch1", project_id="p1", chapter_index=1, target_chars=100,
+        ))
+        monkeypatch.setattr(engine, "_generate_with_beats_stream", lambda *args, **kwargs: "")
+
+        with pytest.raises(RuntimeError, match="Writer returned empty output"):
+            engine.write_chapter_stream(project_id="p1", chapter_index=1)
+
+        assert reg.novel_chapter_draft_store.load_latest("ch1") is None
+
     def test_revise_chapter(self, reg, engine):
         reg.novel_project_store.create(NovelProject(project_id="p1"))
         reg.novel_chapter_plan_store.save(ChapterPlan(

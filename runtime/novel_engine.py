@@ -224,6 +224,8 @@ class NovelEngine:
             writer_prompt_name=writer_prompt_name,
             write_guidance=write_guidance,
         )
+        if not text or not text.strip():
+            raise RuntimeError("Writer returned empty output")
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
@@ -652,6 +654,9 @@ class NovelEngine:
             writer_prompt_name=writer_prompt_name,
             write_guidance=write_guidance,
         )
+        if not text or not text.strip():
+            self._safe_on_error("writer", "Writer returned empty output")
+            raise RuntimeError("Writer returned empty output")
         self._safe_on_phase("end", "writer", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),
@@ -714,6 +719,52 @@ class NovelEngine:
         })
 
         return draft
+
+    def audit_chapter(self, *, project_id: str, chapter_index: int) -> dict[str, Any]:
+        """Run quality and continuity checks without mutating drafts or ledgers."""
+        plan = self._registry.novel_chapter_plan_store.load_by_index(
+            project_id, chapter_index
+        )
+        if not plan:
+            raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
+        draft = self._registry.novel_chapter_draft_store.load_latest(plan.chapter_id)
+        if not draft or not draft.text:
+            raise ValueError(f"Chapter draft not found: {project_id} ch{chapter_index}")
+
+        project = self._registry.novel_project_store.load(project_id)
+        project_config = getattr(project, "config", {}) or {}
+        skip_drumbeat = project_config.get("writer_prompt", "writer") != "writer"
+        quality_decision = self._quality_pipeline.check_chapter(
+            draft.text, plan, skip_drumbeat_check=skip_drumbeat
+        )
+        ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
+        all_characters = self._registry.novel_character_store.list_by_project(project_id)
+        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        character_states = self._build_character_context(characters)
+        prev_plan = self._registry.novel_chapter_plan_store.load_by_index(
+            project_id, chapter_index - 1
+        )
+        previous_ending = ""
+        if prev_plan:
+            previous_draft = self._registry.novel_chapter_draft_store.load_latest(
+                prev_plan.chapter_id
+            )
+            if previous_draft:
+                previous_ending = previous_draft.text[-500:]
+        continuity_issues = self._check_continuity(
+            text=draft.text,
+            chapter_plan=plan,
+            ledger_items=ledger_items,
+            character_states=character_states,
+            prev_chapter_ending=previous_ending,
+        )
+        return {
+            "chapter": chapter_index,
+            "verdict": quality_decision.verdict.value,
+            "blocking_reasons": list(quality_decision.blocking_reasons),
+            "warnings": list(quality_decision.warnings),
+            "continuity_issues": continuity_issues,
+        }
 
     def _recall_novel_memory(
         self,
