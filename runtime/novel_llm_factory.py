@@ -220,6 +220,13 @@ class NovelLLMFactory:
             else str(thinking.get("reasoning_effort", "low"))
         )
         model = self.get_model(role)
+        # Kimi's medium reasoning turns prose generation into a checklist: it
+        # spends most of the shared completion budget restating constraints.
+        # Writer quality here comes from the chapter packet and prompt, so ask
+        # Pi for direct prose instead. Some gateway reasoning may remain, but
+        # Pi will no longer request an additional reasoning mode.
+        if role == "writer" and "kimi" in model.lower():
+            thinking_level = "off"
         max_tokens = self.get_max_tokens(role)
         # Kimi reasoning models charge their visible thinking against the same
         # completion window as the final answer.  Keep the legacy adapters

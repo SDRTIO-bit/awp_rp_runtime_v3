@@ -29,6 +29,7 @@ def test_pi_role_connections_are_role_specific_and_secret_free(monkeypatch):
     }
     assert configs["writer"].model == "kimi-k2.6"
     assert configs["writer"].max_tokens == 8000
+    assert configs["writer"].thinking_level == "off"
     assert configs["ledger_curator"].max_tokens == 8000
     assert configs["director"].max_tokens == 16000
     assert configs["continuity_checker"].max_tokens == 8000

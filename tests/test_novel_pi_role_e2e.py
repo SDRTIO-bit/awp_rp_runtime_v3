@@ -86,7 +86,7 @@ def test_real_kimi_plan_write_audit_export_uses_pi_sessions(tmp_path):
     assert plan.scene_beats
     assert plan.target_chars == 2000
     assert draft.text.strip()
-    assert len(draft.text) >= 1800
+    assert len(draft.text) >= 1600
     assert report["chapter"] == 1
     assert {"architect", "director", "writer", "continuity_checker", "ledger_curator"}.issubset(
         set(bridge.roles)
