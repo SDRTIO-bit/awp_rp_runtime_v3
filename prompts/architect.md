@@ -42,11 +42,10 @@ sub_line、event_line 有实际内容就写，没有不强求。
 appearance_order：按出场顺序列出人物名。**只能使用 CHARACTERS 列表中给出的角色，不得引入任何不在列表中的角色。** CHARACTERS 列表已经按 first_appearance 过滤，列表中的人就是本章可以出场的全部人选。
 relationship_changes：任意二人的关系在本章若有变化——哪怕只是"她看他的眼神多停了一秒"——用一句话写出来。
 
-5. 节拍细化（scene_beats）
-每章 2~3 个 beat。每个 beat 是完整的故事段落，不是碎片动作。
-beat description 写清"核心事件 + 关键对话方向 + 情绪走向"。
-beat 之间保持叙事接力——上一 beat 的情绪余波成为下一 beat 的起手气氛。
-单个 beat 预算不超 3000 字，总和落在 [章目标, 章目标×1.1]。
+5. 单场景推进（scene_beats）
+每章只规划 1 个连续 beat，目标约 2000 字。一个 beat 内可以有起因、升级、反转与收束，但不要把同一场戏拆成多次生成的碎段。
+beat description 写清"核心事件 + 关键对话方向 + 情绪走向 + 结尾变化"。
+target_chars 固定写 2000；beat 的 budget_chars 也写 2000。正文允许自然浮动，不为凑字数拖慢场景。
 
 6. 章尾钩子（ending_design）
 closing_state：收束时人物的状态（一句）。

@@ -119,7 +119,10 @@ class NovelArchitectAdapter:
             volume_id=plan.volume_id,
             chapter_index=chapter_index,
             title=plan.title or f"第{chapter_index}章",
-            target_chars=plan.target_chars or 3000,
+            # Novel mode now uses a single continuous scene per chapter.
+            # Keep the target stable so Architect/Writer/quality checks do not
+            # reintroduce the previous multi-beat 3k–6k tug of war.
+            target_chars=2000,
             chapter_position=plan.chapter_position,
             target_emotion=plan.target_emotion,
             opening_hook=plan.opening_hook,
@@ -331,7 +334,9 @@ class NovelArchitectAdapter:
             "content_summary(五段式), plot_arrangement(多线), "
             "character_appearance(出场顺序), scene_beats(beat预算), "
             "ending_design(钩子), cost_and_reward。\n"
-            "所有字段必须有实质内容，不允许空字符串或空数组。",
+            "所有字段必须有实质内容，不允许空字符串或空数组。\n"
+            "本项目每章只生成一次连续场景：target_chars 必须为 2000，"
+            "scene_beats 只保留一个 beat，budget_chars 必须为 2000。",
         ]
 
         # Varying context

@@ -81,6 +81,7 @@ def test_architect_uses_pi_role_runtime(monkeypatch, reg):
     assert runtime.tasks[0].role == "architect"
     assert runtime.tasks[0].session_key.startswith("task:")
     assert runtime.tasks[0].input_payload["response_format"] == "chapter_plan_json"
+    assert plan.target_chars == 2000
     assert plan.scene_beats
 
 
