@@ -33,8 +33,18 @@
 | File | Purpose |
 |------|---------|
 | `runtime/novel_brain.py` | ReAct agent with 5 tool functions, drives `NovelEngine` |
+| `runtime/novel_agent_runtime.py` | Selects embedded Pi (`pi`, default) or explicit legacy NovelBrain runtime |
+| `runtime/novel_pi_bridge.py` | Local JSON Lines bridge between Python and the Node Pi Host |
+| `runtime/novel_pi_tool_service.py` | Project-bound allowlist that routes Pi calls through `NovelEngine` |
 | `scripts/awp_tui.py` | Textual TUI — left/right split (pipeline + chat) |
 | `tui.bat` | Windows launcher — `tui [project_name]` |
+
+### Embedded Pi Novel Harness
+- `agent_harness/` pins `@earendil-works/pi-coding-agent` at `0.80.6` and requires Node `>=22.19`.
+- The Host is a Node child process, not an external Pi CLI. It communicates only through stdin/stdout JSON Lines; it opens no port.
+- Pi starts with `noTools: "all"` and exposes only `project_status`, `read_chapter`, `plan_chapter`, `write_chapter`, and `audit_chapter`.
+- Run `npm test` in `agent_harness/` for Node tests and `pytest tests/test_novel_pi_*.py -v` for Python bridge tests.
+- `NOVEL_AGENT_RUNTIME=pi` is the default. `NOVEL_AGENT_RUNTIME=legacy` is the only manual fallback; Pi failures must not silently switch runtimes.
 
 ### LLM Role Config (`novel_llm_factory.py`)
 | Role | Model | Max Tokens | Thinking |

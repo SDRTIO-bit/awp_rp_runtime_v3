@@ -2,6 +2,8 @@
 
 **状态：** 已确认
 
+**实施：** `agent_harness/`、`NovelPiBridge`、`NovelPiToolService` 与 `NovelAgentRuntime` 已按本文边界落地；真实模型联调仍由 `NOVEL_PI_E2E=1` 显式开启。
+
 ## 目标
 
 将 Pi 0.80.6 的 `AgentSession` 作为小说模式的 Agent harness，替换 TUI 直接使用的固定 Python `NovelBrain` ReAct 循环。Pi 负责会话、技能、工具循环、上下文压缩、取消与流式 Agent 事件；Python 小说管线继续负责生成、质量门、账本和所有持久化写入。
