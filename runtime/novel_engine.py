@@ -6,6 +6,7 @@ Independent from PersistentTurnEngine, shares infrastructure (LLM adapters, stor
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any, Callable
 
@@ -25,6 +26,7 @@ from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
 from .novel_role_context import novel_role_scope
+from .novel_role_runtime import get_novel_role_runtime
 from .novel_trace import (
     NovelStreamCallbacks,
     safe_on_phase,
@@ -289,17 +291,18 @@ class NovelEngine:
         )
 
         # Single-pass 生成（不再分 beat）
-        text = self._generate_with_beats(
-            plan,
-            packet,
-            director_guidance,
-            ledger_items,
-            active_memory_context=active_memory_context,
-            memory_recall=memory_recall,
-            writer_prompt_name=writer_prompt_name,
-            write_guidance=write_guidance,
-            single_pass=True,
-        )
+        with self._writer_session(packet, revision=revision):
+            text = self._generate_with_beats(
+                plan,
+                packet,
+                director_guidance,
+                ledger_items,
+                active_memory_context=active_memory_context,
+                memory_recall=memory_recall,
+                writer_prompt_name=writer_prompt_name,
+                write_guidance=write_guidance,
+                single_pass=True,
+            )
         if not text or not text.strip():
             raise RuntimeError("Writer returned empty output")
 
@@ -612,6 +615,28 @@ class NovelEngine:
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
         return adapter.generate_chapter(packet, write_guidance=write_guidance)
 
+    @contextmanager
+    def _writer_session(self, packet: NovelWritePacket, *, revision: int):
+        """Bind and deterministically close one chapter/revision Writer session."""
+
+        chapter_index = packet.chapter_plan.chapter_index
+        session_key = f"{packet.project_id}:{chapter_index}:{revision}:writer"
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=packet.project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="writer",
+            artifacts={"write_packet": packet},
+        ) as context:
+            try:
+                yield context
+            finally:
+                get_novel_role_runtime().close_session(
+                    session_key,
+                    context=context,
+                )
+
     def _call_writer_beat(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
         """Call Writer for a single beat."""
         from .novel_writer_adapter import NovelWriterAdapter
@@ -791,14 +816,15 @@ class NovelEngine:
         # Phase: writer (with streaming beats)
         self._safe_on_phase("start", "writer", {"ch": chapter_index, "thinking": "medium"})
         t = time.time()
-        text = self._generate_with_beats_stream(
-            plan, packet, director_guidance, ledger_items,
-            active_memory_context=active_memory_context,
-            memory_recall=memory_recall,
-            writer_prompt_name=writer_prompt_name,
-            write_guidance=write_guidance,
-            single_pass=True,
-        )
+        with self._writer_session(packet, revision=revision):
+            text = self._generate_with_beats_stream(
+                plan, packet, director_guidance, ledger_items,
+                active_memory_context=active_memory_context,
+                memory_recall=memory_recall,
+                writer_prompt_name=writer_prompt_name,
+                write_guidance=write_guidance,
+                single_pass=True,
+            )
         if not text or not text.strip():
             self._safe_on_error("writer", "Writer returned empty output")
             raise RuntimeError("Writer returned empty output")
@@ -1063,11 +1089,19 @@ class NovelEngine:
             director_guidance=director_guidance,
         )
 
-        text = self._generate_with_beats(plan, packet, director_guidance, ledger_items)
+        new_revision = current_draft.revision + 1
+        with self._writer_session(packet, revision=new_revision):
+            text = self._generate_with_beats(
+                plan,
+                packet,
+                director_guidance,
+                ledger_items,
+                writer_prompt_name=writer_prompt_name,
+                write_guidance=feedback,
+            )
         quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
         status = "accepted" if quality_decision.verdict.value == "accept" else "rejected"
 
-        new_revision = current_draft.revision + 1
         draft = ChapterDraft(
             draft_id=f"draft-{plan.chapter_id}-r{new_revision}",
             chapter_id=plan.chapter_id,
