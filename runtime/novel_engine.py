@@ -24,6 +24,7 @@ from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
+from .novel_role_context import novel_role_scope
 from .novel_trace import (
     NovelStreamCallbacks,
     safe_on_phase,
@@ -260,9 +261,21 @@ class NovelEngine:
         # Build global chapter summaries (lightweight, no plan detail)
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Build packet (Director 层已砍，传最小占位符)
-        director_guidance = DirectorGuidance(
-            guidance_id=f"dg-{plan.chapter_id}-skip",
+        # Director expands the structural plan inside its own task-scoped Pi session.
+        director_guidance = self._call_director(
+            project_id,
+            plan,
+            ledger_items,
+            character_states,
+            prev_chapter_ending,
+            completed_chapters_summary=global_summaries,
+            foreshadowing_list=[
+                item for item in ledger_items if item.section == "foreshadowing"
+            ],
+            subplot_status=[
+                item for item in ledger_items if item.section == "subplot"
+            ],
+            revision=revision,
         )
         packet = self._packet_builder.build(
             chapter_plan=plan,
@@ -411,17 +424,24 @@ class NovelEngine:
         """Call Architect agent."""
         from .novel_architect_adapter import NovelArchitectAdapter
         adapter = NovelArchitectAdapter(self._registry, architect_prompt_name=architect_prompt_name)
-        return adapter.plan_chapter(
+        with novel_role_scope(
+            registry=self._registry,
             project_id=project_id,
             chapter_index=chapter_index,
-            volume_plan=volume_plan,
-            completed_chapters=completed_chapters,
-            ledger_items=ledger_items,
-            character_states=character_states,
-            task_description=task_description,
-            prev_chapter_ending=prev_chapter_ending,
-            prev_ending_design=prev_ending_design,
-        )
+            revision=1,
+            phase="architect",
+        ):
+            return adapter.plan_chapter(
+                project_id=project_id,
+                chapter_index=chapter_index,
+                volume_plan=volume_plan,
+                completed_chapters=completed_chapters,
+                ledger_items=ledger_items,
+                character_states=character_states,
+                task_description=task_description,
+                prev_chapter_ending=prev_chapter_ending,
+                prev_ending_design=prev_ending_design,
+            )
 
     def _call_director(
         self, project_id, plan, ledger_items, character_states,
@@ -429,20 +449,28 @@ class NovelEngine:
         completed_chapters_summary: str = "",
         foreshadowing_list: list | None = None,
         subplot_status: list | None = None,
+        revision: int = 1,
     ) -> DirectorGuidance:
         """Call Director agent."""
         from .novel_director_adapter import NovelDirectorAdapter
         adapter = NovelDirectorAdapter(self._registry)
-        return adapter.generate_guidance(
+        with novel_role_scope(
+            registry=self._registry,
             project_id=project_id,
-            chapter_plan=plan,
-            completed_chapters_summary=completed_chapters_summary,
-            ledger_items=ledger_items,
-            character_states=character_states,
-            foreshadowing_list=foreshadowing_list or [],
-            subplot_status=subplot_status or [],
-            previous_chapter_ending=prev_chapter_ending,
-        )
+            chapter_index=plan.chapter_index,
+            revision=revision,
+            phase="director",
+        ):
+            return adapter.generate_guidance(
+                project_id=project_id,
+                chapter_plan=plan,
+                completed_chapters_summary=completed_chapters_summary,
+                ledger_items=ledger_items,
+                character_states=character_states,
+                foreshadowing_list=foreshadowing_list or [],
+                subplot_status=subplot_status or [],
+                previous_chapter_ending=prev_chapter_ending,
+            )
 
     def _check_continuity(
         self,
@@ -726,10 +754,29 @@ class NovelEngine:
 
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Phase: writer (Director 层已砍 — 改为占位符)
-        director_guidance = DirectorGuidance(
-            guidance_id=f"dg-{plan.chapter_id}-skip",
+        # Phase: director — separate task-scoped Pi Agent Session.
+        self._safe_on_phase("start", "director", {"ch": chapter_index})
+        director_started = time.time()
+        director_guidance = self._call_director(
+            project_id,
+            plan,
+            ledger_items,
+            character_states,
+            prev_chapter_ending,
+            completed_chapters_summary=global_summaries,
+            foreshadowing_list=[
+                item for item in ledger_items if item.section == "foreshadowing"
+            ],
+            subplot_status=[
+                item for item in ledger_items if item.section == "subplot"
+            ],
+            revision=revision,
         )
+        self._safe_on_phase("end", "director", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - director_started) * 1000),
+            "beats": len(director_guidance.beat_details),
+        })
 
         packet = self._packet_builder.build(
             chapter_plan=plan, ledger_items=ledger_items,

@@ -6,12 +6,17 @@
 
 from __future__ import annotations
 
+import json
+import uuid
 from typing import Any
 
 from ..contracts.novel_director_guidance import (
     DirectorGuidance, BeatGuidance, ForeshadowingAction, SubplotStatus, OutlineEnhancement,
 )
+from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
 from .prompt_loader import load_prompt
+from .novel_role_context import get_novel_role_context
+from .novel_role_runtime import get_novel_role_runtime
 
 def _get_director_prompt() -> str:
     return load_prompt("director")
@@ -96,15 +101,6 @@ class NovelDirectorAdapter:
         subplot_status=None,
     ) -> dict[str, Any]:
         """调 LLM 生成 beat 细纲 + 全局优化。返回完整 JSON 解析结果。"""
-        from .novel_llm_factory import NovelLLMFactory
-        import json
-
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("director")
-        thinking = factory.get_thinking_config("director")
-        model = factory.get_model("director")
-        max_tokens = factory.get_max_tokens("director")
-
         # 构造 user prompt
         parts = [f"=== 角色锚点 ===\n{character_anchor}"]
         parts.append(f"=== 时间锚点 ===\n{timeline_anchor}")
@@ -135,17 +131,24 @@ class NovelDirectorAdapter:
 
         user_prompt = "\n\n".join(parts)
 
-        try:
-            text, receipt = adapter.generate_text(
-                user_prompt,
-                max_tokens=max_tokens,
-                provider_role="novel_director",
-                model=model,
-                extra_body=thinking,
-                system_prompt=_get_director_prompt(),
-            )
-        except Exception:
-            text = ""
+        context = get_novel_role_context()
+        role_result = get_novel_role_runtime().run(
+            NovelPiRoleTask(
+                role="director",
+                project_id=context.project_id,
+                chapter_index=chapter_plan.chapter_index,
+                revision=context.revision,
+                phase="director_guidance",
+                session_key=f"task:{uuid.uuid4().hex}",
+                task_contract=_get_director_prompt(),
+                input_payload={
+                    "prompt": user_prompt,
+                    "response_format": "director_guidance_json",
+                },
+            ),
+            context=context,
+        )
+        text = role_result.text
 
         # 解析 JSON
         extracted = self._extract_json_object(text)
