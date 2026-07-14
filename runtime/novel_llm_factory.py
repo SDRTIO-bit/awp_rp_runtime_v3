@@ -10,6 +10,8 @@ DeepSeekAdapter 的 "thinking 吃光 content 后 max_tokens=16000 重试" 分支
 
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from typing import Any
 
 from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
@@ -31,6 +33,18 @@ ROLE_CONFIGS = {
     "style_cleaner":     {"model": "deepseek-v4-flash", "max_tokens": 2000, "thinking": THINKING_DISABLED},
     "ledger_curator":    {"model": "deepseek-v4-flash", "max_tokens": 4000, "thinking": THINKING_DISABLED},
 }
+
+
+@dataclass(frozen=True)
+class NovelPiConnectionConfig:
+    """Non-secret model settings passed to the embedded Pi host."""
+
+    provider: str
+    model: str
+    base_url: str
+    api_key_env: str
+    thinking_level: str = "low"
+    api_key: None = None
 
 
 class NovelLLMFactory:
@@ -63,12 +77,11 @@ class NovelLLMFactory:
         extra_body keys (e.g. ``thinking``) are stripped by OpenAICompatibleAdapter.
         """
         if role not in self._adapters:
-            config = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
+            config = self._role_config(role)
             provider = self._provider_choice()
 
             if provider == "mimo":
                 from ..adapters.llm.openai_compatible import OpenAICompatibleAdapter
-                import os
                 self._adapters[role] = OpenAICompatibleAdapter(
                     model=os.environ.get("NOVEL_LLM_MODEL", "mimo-v2.5-pro"),
                     base_url=os.environ.get(
@@ -84,7 +97,6 @@ class NovelLLMFactory:
                 )
             elif provider == "opencode":
                 from ..adapters.llm.openai_compatible import OpenAICompatibleAdapter
-                import os
                 self._adapters[role] = OpenAICompatibleAdapter(
                     model=config["model"],
                     base_url=os.environ.get(
@@ -117,8 +129,6 @@ class NovelLLMFactory:
             return base
 
         provider = self._provider_choice()
-        import os
-
         if provider == "mimo":
             default_map = {
                 "director":           "mimo-v2.5-pro",
@@ -128,7 +138,11 @@ class NovelLLMFactory:
                 "style_cleaner":      "mimo-v2.5-pro",
                 "ledger_curator":     "mimo-v2.5-pro",
             }
-            model_id = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}", default_map.get(role, "mimo-v2.5-pro"))
+            model_id = (
+                os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}")
+                or os.environ.get("NOVEL_LLM_MODEL")
+                or default_map.get(role, "mimo-v2.5-pro")
+            )
             return {**base, "model": model_id}
 
         # Override model names with OpenCode-available ids.
@@ -143,8 +157,41 @@ class NovelLLMFactory:
             "style_cleaner":      "qwen3.7-plus",
             "ledger_curator":     "qwen3.7-plus",
         }
-        model_id = os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}", default_map.get(role, "qwen3.7-max"))
+        model_id = (
+            os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}")
+            or os.environ.get("NOVEL_LLM_MODEL")
+            or default_map.get(role, "qwen3.7-max")
+        )
         return {**base, "model": model_id}
+
+    def get_pi_agent_connection(self) -> NovelPiConnectionConfig:
+        """Resolve model connection metadata without reading or returning a key."""
+
+        provider = self._provider_choice()
+        if provider == "opencode":
+            return NovelPiConnectionConfig(
+                provider="awp-opencode",
+                model=self.get_model("brain"),
+                base_url=os.environ.get(
+                    "NOVEL_LLM_BASE_URL", "https://opencode.ai/zen/go/v1"
+                ),
+                api_key_env=os.environ.get("NOVEL_LLM_API_KEY_ENV", "OPENCODE_API_KEY"),
+            )
+        if provider == "mimo":
+            return NovelPiConnectionConfig(
+                provider="awp-mimo",
+                model=self.get_model("brain"),
+                base_url=os.environ.get(
+                    "NOVEL_LLM_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"
+                ),
+                api_key_env=os.environ.get("NOVEL_LLM_API_KEY_ENV", "MIMO_API_KEY"),
+            )
+        return NovelPiConnectionConfig(
+            provider="awp-deepseek",
+            model=self.get_model("brain"),
+            base_url=os.environ.get("NOVEL_LLM_BASE_URL", "https://api.deepseek.com/v1"),
+            api_key_env=os.environ.get("NOVEL_LLM_API_KEY_ENV", "DEEPSEEK_API_KEY"),
+        )
 
     def get_thinking_config(self, role: str) -> dict[str, Any]:
         config = self._role_config(role)
