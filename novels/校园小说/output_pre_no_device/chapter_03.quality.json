@@ -1,0 +1,64 @@
+{
+  "draft_id": "draft-ch-lost-scene-aftermath-003-r1",
+  "chapter_id": "ch-lost-scene-aftermath-003",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-ch-lost-scene-aftermath-003-190e4632",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '微微' 出现 3 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "degeneration",
+      "category": "format",
+      "severity": "error",
+      "description": "复读: '”赵小麦说' 出现 3 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": ""
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "degeneration",
+      "category": "format",
+      "severity": "error",
+      "description": "末尾可能被截断",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": ""
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "drumbeat",
+      "category": "style",
+      "severity": "warning",
+      "description": "短句密度过高: 317/463 句 ≤12字 (比例 68%)，AI鼓点综合征",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

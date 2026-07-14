@@ -1,0 +1,40 @@
+{
+  "draft_id": "draft-daily-high-school-ch2-r1",
+  "chapter_id": "daily-high-school-ch2",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-daily-high-school-ch2-114c49c2",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '轻轻' 出现 2 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "metadata_leak",
+      "category": "content_leak",
+      "severity": "error",
+      "description": "行109: 工程词泄露 ['读者']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "删除工程词/章名标记"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

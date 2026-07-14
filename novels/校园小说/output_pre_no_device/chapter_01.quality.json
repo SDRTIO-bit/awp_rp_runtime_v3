@@ -1,0 +1,42 @@
+{
+  "draft_id": "draft-ch-001-r1",
+  "chapter_id": "ch-001",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-ch-001-1ff81738",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '深吸一口气' 出现 2 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "drumbeat",
+      "category": "style",
+      "severity": "warning",
+      "description": "短句密度过高: 92/167 句 ≤12字 (比例 55%)，AI鼓点综合征",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [
+        "出现计划外已知角色: 王磊"
+      ],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

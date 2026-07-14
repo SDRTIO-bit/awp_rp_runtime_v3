@@ -1,0 +1,52 @@
+{
+  "draft_id": "draft-ch-daily-high-school-5-r1",
+  "chapter_id": "ch-daily-high-school-5",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-ch-daily-high-school-5-fa22aef8",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '微微' 出现 1 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_patterns",
+      "category": "style",
+      "severity": "warning",
+      "description": "禁用句式: 不是.{1,20}。\\s*是.{1,20}[。！]，匹配: ['不是回答陈默的问题。是那种——把什么东西甩掉的摇头。']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "拆短句或换动作"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "drumbeat",
+      "category": "style",
+      "severity": "warning",
+      "description": "短句密度过高: 151/225 句 ≤12字 (比例 67%)，AI鼓点综合征",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}
