@@ -33,6 +33,15 @@ for raw in sys.stdin:
     elif kind == "role_prompt":
         print(json.dumps({"schema_version": 1, "kind": "event", "request_id": request_id,
                           "payload": {"type": "text_delta", "text": "正"}}), flush=True)
+        if tool_name == "__echo_max_tokens__":
+            print(json.dumps({"schema_version": 1, "kind": "role_end", "request_id": request_id,
+                              "payload": {"request_id": request_id, "role": "writer",
+                                          "session_key": "p1:2:1:writer",
+                                          "text": str(frame["payload"]["max_tokens"]),
+                                          "structured_data": None, "model": "kimi-k2.6",
+                                          "usage": {}, "finish_reason": "stop",
+                                          "latency_ms": 1}}), flush=True)
+            continue
         print(json.dumps({"schema_version": 1, "kind": "tool_call", "request_id": request_id,
                           "payload": {"tool_call_id": "tc-1", "name": tool_name, "arguments": {}}}), flush=True)
         tool_result = json.loads(sys.stdin.readline())
@@ -127,6 +136,25 @@ def test_bridge_refuses_non_read_tool_without_executing_it(tmp_path):
 
     assert "unsupported Pi role read tool" in result.text
     assert bridge.sent_tool_results[0]["payload"]["ok"] is False
+
+
+def test_bridge_uses_task_specific_max_tokens_override(tmp_path):
+    bridge = NovelPiRoleBridge(
+        SimpleNamespace(),
+        project_dir=tmp_path,
+        project_id="p1",
+        host_command=_host_command(tmp_path, "__echo_max_tokens__"),
+        connection_resolver=_connection,
+    )
+    try:
+        result = bridge.run(
+            _task().model_copy(update={"max_tokens": 7350}),
+            context=_context(),
+        )
+    finally:
+        bridge.close()
+
+    assert result.text == "7350"
 
 
 def test_bridge_never_falls_back_when_role_host_cannot_start(tmp_path):

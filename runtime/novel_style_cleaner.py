@@ -6,7 +6,12 @@ Deterministic checks + optional LLM style verification.
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any
+
+from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
+from .novel_role_context import get_novel_role_context
+from .novel_role_runtime import get_novel_role_runtime
 
 # Banned words tier 1 (from oh-story)
 BANNED_WORDS_TIER1 = {
@@ -478,12 +483,6 @@ class NovelStyleCleaner:
         if not regions:
             return text
 
-        from .novel_llm_factory import NovelLLMFactory
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("style_cleaner")
-        thinking = factory.get_thinking_config("style_cleaner")
-        model = factory.get_model("style_cleaner")
-
         # Process regions from end to start to preserve positions
         result = text
         for start, end, snippet in reversed(regions):
@@ -501,13 +500,11 @@ class NovelStyleCleaner:
 
             for attempt in range(max_retries + 1):
                 try:
-                    out, _ = adapter.generate_text(
+                    out = self._run_style_role(
                         user_prompt,
-                        max_tokens=max(500, int(snippet_len * 1.5)),
-                        provider_role="novel_drumbeat_rewriter",
-                        model=model,
-                        extra_body=thinking,
                         system_prompt=self._DRUMBEAT_SNIPPET_PROMPT,
+                        phase="drumbeat_snippet",
+                        max_tokens=max(500, int(snippet_len * 1.5)),
                     )
                 except Exception:
                     continue
@@ -602,28 +599,19 @@ class NovelStyleCleaner:
             "只输出改写后的完整正文，不要任何解释或标记。"
         )
 
-        from .novel_llm_factory import NovelLLMFactory
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("style_cleaner")
-        thinking = factory.get_thinking_config("style_cleaner")
-        model = factory.get_model("style_cleaner")
-        max_tokens = factory.get_max_tokens("style_cleaner")
-
         # 改写输出预算：按原文长度 + 余量估算，但封顶 8000 避免 flash 模型
         # 输出超长导致 finish_reason=length 截断（之前第7章 37531 字怪物就是
         # 改写器返回截断文本被当成功写回所致）。
         # 中文逐字≈1 token，加改写余量；最少 style_cleaner 配置值。
-        max_tokens = max(max_tokens, min(len(text) + 800, 8000))
+        max_tokens = max(2000, min(len(text) + 800, 8000))
 
         for attempt in range(max_retries + 1):
             try:
-                out, receipt = adapter.generate_text(
+                out = self._run_style_role(
                     user_prompt,
-                    max_tokens=max_tokens,
-                    provider_role="novel_style_cleaner",
-                    model=model,
-                    extra_body=thinking,
                     system_prompt=self._REWRITE_SYSTEM_PROMPT,
+                    phase="issue_rewrite",
+                    max_tokens=max_tokens,
                 )
             except Exception:
                 continue
@@ -636,6 +624,36 @@ class NovelStyleCleaner:
             return cleaned
         # 改写 LLM 失败或多次截断：保留原文，由上层决定降级接受或拒收。
         return text
+
+    @staticmethod
+    def _run_style_role(
+        prompt: str,
+        *,
+        system_prompt: str,
+        phase: str,
+        max_tokens: int,
+    ) -> str:
+        """Run one isolated, tool-free style-cleaner Pi task."""
+
+        context = get_novel_role_context()
+        result = get_novel_role_runtime().run(
+            NovelPiRoleTask(
+                role="style_cleaner",
+                project_id=context.project_id,
+                chapter_index=context.chapter_index,
+                revision=context.revision,
+                phase=phase,
+                session_key=f"task:{uuid.uuid4().hex}",
+                task_contract=system_prompt,
+                input_payload={
+                    "prompt": prompt,
+                    "response_format": "rewritten_prose",
+                },
+                max_tokens=max_tokens,
+            ),
+            context=context,
+        )
+        return result.text
 
     @staticmethod
     def _looks_truncated_or_broken(out: str, orig: str) -> bool:

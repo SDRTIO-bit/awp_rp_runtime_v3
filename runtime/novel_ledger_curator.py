@@ -6,7 +6,13 @@ and producing narrative chapter summaries.
 
 from __future__ import annotations
 
+import json
+import uuid
 from typing import Any
+
+from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
+from .novel_role_context import get_novel_role_context
+from .novel_role_runtime import get_novel_role_runtime
 
 
 LEDGER_CURATOR_PROMPT = """=== STABLE LEDGER CURATOR CONTRACT ===
@@ -70,25 +76,24 @@ class NovelLedgerCurator:
         system_prompt, user_prompt = self._build_prompt(
             chapter_text, chapter_plan, current_ledger_items, previous_chapter_summaries
         )
-        from .novel_llm_factory import NovelLLMFactory
-        import json
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("ledger_curator")
-        thinking = factory.get_thinking_config("ledger_curator")
-        model = factory.get_model("ledger_curator")
-        max_tokens = factory.get_max_tokens("ledger_curator")
-
-        try:
-            text, receipt = adapter.generate_text(
-                user_prompt,
-                max_tokens=max_tokens,
-                provider_role="novel_ledger_curator",
-                model=model,
-                extra_body=thinking,
-                system_prompt=system_prompt,
-            )
-        except Exception:
-            text = ""
+        context = get_novel_role_context()
+        result = get_novel_role_runtime().run(
+            NovelPiRoleTask(
+                role="ledger_curator",
+                project_id=context.project_id,
+                chapter_index=context.chapter_index,
+                revision=context.revision,
+                phase="ledger_curate",
+                session_key=f"task:{uuid.uuid4().hex}",
+                task_contract=system_prompt,
+                input_payload={
+                    "prompt": user_prompt,
+                    "response_format": "ledger_update_json",
+                },
+            ),
+            context=context,
+        )
+        text = result.text
 
         try:
             text = text.strip()

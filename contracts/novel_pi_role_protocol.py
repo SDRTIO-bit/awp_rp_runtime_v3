@@ -56,6 +56,7 @@ class NovelPiRoleTask(BaseModel):
     session_key: str = Field(min_length=1, max_length=256)
     task_contract: str = Field(min_length=1)
     input_payload: dict[str, Any] = Field(default_factory=dict)
+    max_tokens: int = Field(default=0, ge=0, le=100_000)
     stream: bool = False
 
     @field_validator("role")
@@ -94,4 +95,3 @@ class NovelPiRoleResult(BaseModel):
         if value not in NOVEL_PI_ROLES:
             raise ValueError(f"unsupported Pi novel role: {value}")
         return value
-

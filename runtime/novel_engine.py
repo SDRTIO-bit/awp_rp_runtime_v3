@@ -308,7 +308,16 @@ class NovelEngine:
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="style_cleaner",
+        ):
+            quality_decision, text = self._quality_pipeline.run_chapter(
+                text, plan, skip_drumbeat_check=skip_drumbeat
+            )
 
         # Continuity check: 检查遗忘的伏笔/承诺、断层、角色矛盾。
         # 结果作为 informational warnings 注入，不阻塞存盘。
@@ -318,6 +327,7 @@ class NovelEngine:
             ledger_items=ledger_items,
             character_states=character_states,
             prev_chapter_ending=prev_chapter_ending,
+            revision=revision,
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
@@ -353,7 +363,8 @@ class NovelEngine:
         self._registry.novel_chapter_draft_store.save(draft)
 
         self._update_ledger(
-            project_id, plan, text, ledger_items, characters, quality_decision
+            project_id, plan, text, ledger_items, characters, quality_decision,
+            revision=revision,
         )
 
         return draft
@@ -483,18 +494,26 @@ class NovelEngine:
         ledger_items: list[LedgerItem],
         character_states: dict,
         prev_chapter_ending: str,
+        revision: int = 1,
     ) -> list[str]:
         """Run continuity checker. Returns list of warning messages."""
         try:
             from .novel_continuity_checker import NovelContinuityChecker
             checker = NovelContinuityChecker(self._registry)
-            result = checker.check_chapter(
-                chapter_text=text,
-                chapter_plan=chapter_plan,
-                ledger_items=ledger_items,
-                character_states=character_states,
-                prev_chapter_ending=prev_chapter_ending,
-            )
+            with novel_role_scope(
+                registry=self._registry,
+                project_id=chapter_plan.project_id,
+                chapter_index=chapter_plan.chapter_index,
+                revision=revision,
+                phase="continuity",
+            ):
+                result = checker.check_chapter(
+                    chapter_text=text,
+                    chapter_plan=chapter_plan,
+                    ledger_items=ledger_items,
+                    character_states=character_states,
+                    prev_chapter_ending=prev_chapter_ending,
+                )
             issues = result.get("issues", [])
             severity = result.get("severity", "info")
             warnings: list[str] = []
@@ -839,7 +858,16 @@ class NovelEngine:
         # Phase: quality
         self._safe_on_phase("start", "quality", {"ch": chapter_index})
         t = time.time()
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="style_cleaner",
+        ):
+            quality_decision, text = self._quality_pipeline.run_chapter(
+                text, plan, skip_drumbeat_check=skip_drumbeat
+            )
         self._safe_on_phase("end", "quality", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),
@@ -854,6 +882,7 @@ class NovelEngine:
         continuity_issues = self._check_continuity(
             text=text, chapter_plan=plan, ledger_items=ledger_items,
             character_states=character_states, prev_chapter_ending=prev_chapter_ending,
+            revision=revision,
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
@@ -890,7 +919,8 @@ class NovelEngine:
         self._safe_on_phase("start", "ledger", {"ch": chapter_index})
         t = time.time()
         self._update_ledger(
-            project_id, plan, text, ledger_items, characters, quality_decision
+            project_id, plan, text, ledger_items, characters, quality_decision,
+            revision=revision,
         )
         self._safe_on_phase("end", "ledger", {
             "ch": chapter_index,
@@ -936,6 +966,7 @@ class NovelEngine:
             ledger_items=ledger_items,
             character_states=character_states,
             prev_chapter_ending=previous_ending,
+            revision=draft.revision,
         )
         return {
             "chapter": chapter_index,
@@ -1030,6 +1061,8 @@ class NovelEngine:
         text: str, current_ledger: list[LedgerItem],
         characters: list,
         quality_decision,
+        *,
+        revision: int = 1,
     ) -> None:
         """Update ledger and memory after chapter writing."""
         if quality_decision is None or not quality_decision.is_accepted():
@@ -1038,13 +1071,20 @@ class NovelEngine:
         from .novel_evolution_curator import NovelEvolutionCurator
         try:
             curator = NovelEvolutionCurator(self._registry)
-            curator.curate(
-                chapter_text=text,
-                chapter_plan=plan,
-                current_ledger_items=current_ledger,
-                characters=characters,
-                quality_decision=quality_decision,
-            )
+            with novel_role_scope(
+                registry=self._registry,
+                project_id=project_id,
+                chapter_index=plan.chapter_index,
+                revision=revision,
+                phase="ledger_curator",
+            ):
+                curator.curate(
+                    chapter_text=text,
+                    chapter_plan=plan,
+                    current_ledger_items=current_ledger,
+                    characters=characters,
+                    quality_decision=quality_decision,
+                )
         except Exception:
             pass  # Don't fail the chapter write if evolution update fails
 
@@ -1099,7 +1139,16 @@ class NovelEngine:
                 writer_prompt_name=writer_prompt_name,
                 write_guidance=feedback,
             )
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=new_revision,
+            phase="style_cleaner",
+        ):
+            quality_decision, text = self._quality_pipeline.run_chapter(
+                text, plan, skip_drumbeat_check=skip_drumbeat
+            )
         status = "accepted" if quality_decision.verdict.value == "accept" else "rejected"
 
         draft = ChapterDraft(

@@ -128,7 +128,7 @@ class LegacyNovelRoleRuntime:
             ensure_ascii=False,
         ))
         common = {
-            "max_tokens": self._llm_factory.get_max_tokens(task.role),
+            "max_tokens": task.max_tokens or self._llm_factory.get_max_tokens(task.role),
             "provider_role": task.role,
             "model": self._llm_factory.get_model(task.role),
             "extra_body": self._llm_factory.get_thinking_config(task.role),

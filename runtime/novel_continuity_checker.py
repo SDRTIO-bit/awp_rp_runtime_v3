@@ -5,7 +5,13 @@ Uses DeepSeekAdapter with thinking=high for detecting contradictions.
 
 from __future__ import annotations
 
+import json
+import uuid
 from typing import Any
+
+from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
+from .novel_role_context import get_novel_role_context
+from .novel_role_runtime import get_novel_role_runtime
 
 # Thinking configuration for detail-oriented reasoning
 _THINKING_HIGH = {"thinking": {"type": "enabled", "reasoning_effort": "high"}}
@@ -89,26 +95,24 @@ class NovelContinuityChecker:
             chapter_text, chapter_plan, ledger_items,
             character_states, prev_chapter_ending,
         )
-        # Call LLM and parse JSON response
-        from .novel_llm_factory import NovelLLMFactory
-        import json
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("continuity_checker")
-        thinking = factory.get_thinking_config("continuity_checker")
-        model = factory.get_model("continuity_checker")
-        max_tokens = factory.get_max_tokens("continuity_checker")
-
-        try:
-            text, receipt = adapter.generate_text(
-                user_prompt,
-                max_tokens=max_tokens,
-                provider_role="novel_continuity_checker",
-                model=model,
-                extra_body=thinking,
-                system_prompt=system_prompt,
-            )
-        except Exception:
-            text = ""
+        context = get_novel_role_context()
+        result = get_novel_role_runtime().run(
+            NovelPiRoleTask(
+                role="continuity_checker",
+                project_id=context.project_id,
+                chapter_index=context.chapter_index,
+                revision=context.revision,
+                phase="continuity_check",
+                session_key=f"task:{uuid.uuid4().hex}",
+                task_contract=system_prompt,
+                input_payload={
+                    "prompt": user_prompt,
+                    "response_format": "continuity_json",
+                },
+            ),
+            context=context,
+        )
+        text = result.text
 
         # Parse JSON response
         try:

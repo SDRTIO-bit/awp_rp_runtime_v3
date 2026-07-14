@@ -84,7 +84,8 @@ class NovelPiRoleBridge:
             request_id = uuid.uuid4().hex
             self._active_request_id = request_id
             connection = dict(self._connection_resolver(task.role))
-            max_tokens = int(connection.pop("max_tokens", 4000))
+            configured_max_tokens = int(connection.pop("max_tokens", 4000))
+            max_tokens = task.max_tokens or configured_max_tokens
             thinking_level = str(connection.pop("thinking_level", "low"))
             payload = task.model_dump()
             payload.update({
