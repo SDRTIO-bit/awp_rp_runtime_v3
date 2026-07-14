@@ -221,6 +221,19 @@ class NovelLLMFactory:
         )
         model = self.get_model(role)
         max_tokens = self.get_max_tokens(role)
+        # Kimi reasoning models charge their visible thinking against the same
+        # completion window as the final answer.  Keep the legacy adapters
+        # untouched; expand only Pi's Kimi sessions according to the actual
+        # amount of final content each role must return.
+        if "kimi" in model.lower():
+            kimi_budget_multiplier = {
+                "director": 2,
+                "writer": 2,
+                "continuity_checker": 2,
+                "style_cleaner": 4,
+                "ledger_curator": 2,
+            }.get(role, 1)
+            max_tokens *= kimi_budget_multiplier
         if provider == "opencode":
             return NovelPiConnectionConfig(
                 provider="awp-opencode",

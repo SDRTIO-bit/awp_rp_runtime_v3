@@ -28,8 +28,11 @@ def test_pi_role_connections_are_role_specific_and_secret_free(monkeypatch):
         "ledger_curator",
     }
     assert configs["writer"].model == "kimi-k2.6"
-    assert configs["writer"].max_tokens == 4000
-    assert configs["director"].max_tokens == 8000
+    assert configs["writer"].max_tokens == 8000
+    assert configs["ledger_curator"].max_tokens == 8000
+    assert configs["director"].max_tokens == 16000
+    assert configs["continuity_checker"].max_tokens == 8000
+    assert configs["style_cleaner"].max_tokens == 8000
     assert configs["architect"].thinking_level == "off"
     assert configs["director"].thinking_level == "high"
     assert all(config.api_key is None for config in configs.values())

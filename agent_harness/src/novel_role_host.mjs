@@ -38,6 +38,7 @@ function normalizeThinkingLevel(value) {
 function buildRolePrompt(task) {
   return [
     "请执行下面的小说角色任务。你可以自主决定是否调用已授权的只读工具。",
+    "先完成任务，再做一次整体检查；不要逐条复述契约，不要为缺失的非关键背景反复推断。若信息不足，采用最小合理假设继续。",
     "",
     `角色：${task.role}`,
     `阶段：${task.phase ?? ""}`,
