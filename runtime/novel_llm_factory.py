@@ -44,6 +44,7 @@ class NovelPiConnectionConfig:
     base_url: str
     api_key_env: str
     thinking_level: str = "low"
+    max_tokens: int = 4000
     api_key: None = None
 
 
@@ -205,31 +206,96 @@ class NovelLLMFactory:
     def get_pi_agent_connection(self) -> NovelPiConnectionConfig:
         """Resolve model connection metadata without reading or returning a key."""
 
-        provider = self._provider_choice()
+        return self.get_pi_role_connection("brain")
+
+    def get_pi_role_connection(self, role: str) -> NovelPiConnectionConfig:
+        """Resolve one role's non-secret Pi provider and generation settings."""
+
+        provider = self._provider_choice(role)
+        role_suffix = role.upper()
+        thinking = self.get_thinking_config(role).get("thinking", {})
+        thinking_level = (
+            "off"
+            if thinking.get("type") == "disabled"
+            else str(thinking.get("reasoning_effort", "low"))
+        )
+        model = self.get_model(role)
+        max_tokens = self.get_max_tokens(role)
         if provider == "opencode":
             return NovelPiConnectionConfig(
                 provider="awp-opencode",
-                model=self.get_model("brain"),
+                model=model,
                 base_url=os.environ.get(
-                    "NOVEL_LLM_BASE_URL", "https://opencode.ai/zen/go/v1"
+                    f"NOVEL_LLM_BASE_URL_{role_suffix}",
+                    os.environ.get("NOVEL_LLM_BASE_URL", "https://opencode.ai/zen/go/v1"),
                 ),
-                api_key_env=os.environ.get("NOVEL_LLM_API_KEY_ENV", "OPENCODE_API_KEY"),
+                api_key_env=os.environ.get(
+                    f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
+                    os.environ.get("NOVEL_LLM_API_KEY_ENV", "OPENCODE_API_KEY"),
+                ),
+                thinking_level=thinking_level,
+                max_tokens=max_tokens,
             )
         if provider == "mimo":
             return NovelPiConnectionConfig(
                 provider="awp-mimo",
-                model=self.get_model("brain"),
+                model=model,
                 base_url=os.environ.get(
-                    "NOVEL_LLM_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"
+                    f"NOVEL_LLM_BASE_URL_{role_suffix}",
+                    os.environ.get(
+                        "NOVEL_LLM_BASE_URL",
+                        "https://token-plan-cn.xiaomimimo.com/v1",
+                    ),
                 ),
-                api_key_env=os.environ.get("NOVEL_LLM_API_KEY_ENV", "MIMO_API_KEY"),
+                api_key_env=os.environ.get(
+                    f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
+                    os.environ.get("NOVEL_LLM_API_KEY_ENV", "MIMO_API_KEY"),
+                ),
+                thinking_level=thinking_level,
+                max_tokens=max_tokens,
+            )
+        if provider == "siliconflow":
+            return NovelPiConnectionConfig(
+                provider="awp-siliconflow",
+                model=model,
+                base_url=os.environ.get(
+                    f"NOVEL_LLM_BASE_URL_{role_suffix}",
+                    os.environ.get("NOVEL_LLM_BASE_URL", "https://api.siliconflow.cn/v1"),
+                ),
+                api_key_env=os.environ.get(
+                    f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
+                    os.environ.get("NOVEL_LLM_API_KEY_ENV", "SILICONFLOW_API_KEY"),
+                ),
+                thinking_level=thinking_level,
+                max_tokens=max_tokens,
             )
         return NovelPiConnectionConfig(
             provider="awp-deepseek",
-            model=self.get_model("brain"),
-            base_url=os.environ.get("NOVEL_LLM_BASE_URL", "https://api.deepseek.com/v1"),
-            api_key_env=os.environ.get("NOVEL_LLM_API_KEY_ENV", "DEEPSEEK_API_KEY"),
+            model=model,
+            base_url=os.environ.get(
+                f"NOVEL_LLM_BASE_URL_{role_suffix}",
+                os.environ.get("NOVEL_LLM_BASE_URL", "https://api.deepseek.com/v1"),
+            ),
+            api_key_env=os.environ.get(
+                f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
+                os.environ.get("NOVEL_LLM_API_KEY_ENV", "DEEPSEEK_API_KEY"),
+            ),
+            thinking_level=thinking_level,
+            max_tokens=max_tokens,
         )
+
+    def get_pi_role_connections(self) -> dict[str, NovelPiConnectionConfig]:
+        """Return non-secret Pi settings for every automated novel role."""
+
+        roles = (
+            "architect",
+            "director",
+            "writer",
+            "continuity_checker",
+            "style_cleaner",
+            "ledger_curator",
+        )
+        return {role: self.get_pi_role_connection(role) for role in roles}
 
     def get_thinking_config(self, role: str) -> dict[str, Any]:
         config = self._role_config(role)

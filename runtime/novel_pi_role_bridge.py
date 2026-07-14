@@ -27,20 +27,10 @@ class NovelPiRoleBridgeError(RuntimeError):
     """Raised when Pi cannot execute a role task; no legacy fallback occurs."""
 
 
-def _thinking_level(factory: NovelLLMFactory, role: str) -> str:
-    thinking = factory.get_thinking_config(role).get("thinking", {})
-    if thinking.get("type") == "disabled":
-        return "off"
-    return str(thinking.get("reasoning_effort", "low"))
-
-
 def _default_connection_resolver(role: str) -> dict[str, Any]:
     factory = NovelLLMFactory()
-    connection = asdict(factory.get_pi_agent_connection())
+    connection = asdict(factory.get_pi_role_connection(role))
     connection.pop("api_key", None)
-    connection["model"] = factory.get_model(role)
-    connection["thinking_level"] = _thinking_level(factory, role)
-    connection["max_tokens"] = factory.get_max_tokens(role)
     return connection
 
 
