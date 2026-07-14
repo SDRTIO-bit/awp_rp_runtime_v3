@@ -33,7 +33,8 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Input
 from textual import events
 
-from awp_rp_runtime_v3.runtime.novel_brain import NovelBrain, BrainCallbacks
+from awp_rp_runtime_v3.runtime.novel_brain import BrainCallbacks
+from awp_rp_runtime_v3.runtime.novel_agent_runtime import create_novel_agent_runtime
 from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from awp_rp_runtime_v3.storage.sqlite.database import Database
 
@@ -183,6 +184,7 @@ class NovelTui(App):
         Binding("ctrl+l", "clear_chat", "Clear"),
         Binding("ctrl+r", "reset_brain", "Reset"),
         Binding("ctrl+s", "toggle_search", "Search"),
+        Binding("ctrl+x", "cancel_agent", "Cancel"),
     ]
 
     def __init__(self, novel_dir: str | None = None):
@@ -191,7 +193,7 @@ class NovelTui(App):
         self._novel_dir: Path | None = None
         self._state: dict | None = None
         self._store_registry: SessionRuntimeStoreRegistry | None = None
-        self._brain: NovelBrain | None = None
+        self._brain: Any | None = None
         self._brain_callbacks: BrainCallbacks | None = None
         self._phase_data: dict[str, dict[str, str]] = {}
         self._writer_lines: list[str] = []
@@ -268,20 +270,20 @@ class NovelTui(App):
         self._store_registry = SessionRuntimeStoreRegistry(db)
 
     def _init_brain(self) -> None:
-        novels_root = str(PROJECT_ROOT / "novels")
-        dl_output_dir = str(PROJECT_ROOT / "downloads")
+        if not self._store_registry or not self._state or not self._novel_dir:
+            self._brain = None
+            return
         self._brain_callbacks = BrainCallbacks(
             on_phase=self._make_phase_callback(),
             on_beat=self._make_beat_callback(),
             on_chunk=self._make_chunk_callback(),
             on_error=self._make_error_callback(),
         )
-        self._brain = NovelBrain(
+        self._brain = create_novel_agent_runtime(
             self._store_registry,
-            callbacks=self._brain_callbacks,
-            db_path=self._state.get("db_path", "") if self._state else "",
-            novels_root=novels_root,
-            dl_output_dir=dl_output_dir,
+            self._brain_callbacks,
+            self._novel_dir,
+            self._state["project_id"],
         )
 
     def _render_project_header(self) -> None:
@@ -291,11 +293,9 @@ class NovelTui(App):
             mode_text = ""
         else:
             id_text = self._state.get("project_id", "?")
-            mode_text = f"| 模式: [bold cyan]{self._brain.mode if self._brain else '?'}[/]"
-
-        search_icon = "🔍" if (self._brain and self._brain.web_search_enabled) else "🚫"
+            mode_text = f"| Agent: [bold cyan]{self._brain.runtime_name if self._brain else '?'}[/]"
         header.update(
-            f"[b]Project:[/b] {id_text}  {mode_text}  {search_icon}联网"
+            f"[b]Project:[/b] {id_text}  {mode_text}"
         )
 
     # ── Callback factories (thread-safe) ──
@@ -423,11 +423,20 @@ class NovelTui(App):
     def action_toggle_search(self) -> None:
         if not self._brain:
             return
+        if not self._brain.supports_legacy_commands:
+            self.query_one("#chat-history", RichLog).write("[dim]受限 Pi 小说 Agent 不提供此命令。[/]")
+            return
         state = self._brain.toggle_web_search()
         icon = "🔍 开" if state else "🚫 关"
         self._render_project_header()
         chat = self.query_one("#chat-history", RichLog)
         chat.write(f"[dim]Ctrl+S: 网络搜索 → {icon}[/]")
+
+    def action_cancel_agent(self) -> None:
+        if not self._brain or not self._busy:
+            return
+        asyncio.create_task(asyncio.to_thread(self._brain.abort))
+        self.query_one("#chat-history", RichLog).write("[dim]正在请求取消当前 Agent 任务...[/]")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         msg = event.value.strip()
@@ -451,6 +460,14 @@ class NovelTui(App):
         parts = msg.split(maxsplit=1)
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
+
+        legacy_only = {
+            "/search", "/compress", "/mode", "/dl-server", "/dl-search",
+            "/downloads", "/dl-dir",
+        }
+        if cmd in legacy_only and self._brain and not self._brain.supports_legacy_commands:
+            chat.write("[dim]受限 Pi 小说 Agent 不提供此命令。[/]")
+            return
 
         if cmd == "/open":
             nd = PROJECT_ROOT / "novels" / arg
@@ -780,7 +797,7 @@ class NovelTui(App):
         self._init_brain()
 
         # Restore settings
-        if self._brain:
+        if self._brain and self._brain.supports_legacy_commands:
             mode = data.get("mode", "auto")
             if mode != "auto":
                 self._brain.set_mode(mode)
@@ -825,7 +842,7 @@ class NovelTui(App):
                     self._refresh_phases()
                     chat.write(f"[bold green]✓ 已连接: {data.get('project_id', '?')}[/]")
 
-        if self._brain:
+        if self._brain and self._brain.supports_legacy_commands:
             mode = data.get("mode", "auto")
             if mode != "auto":
                 self._brain.set_mode(mode)
@@ -869,6 +886,8 @@ class NovelTui(App):
 
     def on_unmount(self) -> None:
         self._auto_save()
+        if self._brain:
+            self._brain.close()
 
 
 # ── CLI entry ──
