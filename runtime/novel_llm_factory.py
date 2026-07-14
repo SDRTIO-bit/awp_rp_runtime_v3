@@ -221,6 +221,11 @@ class NovelLLMFactory:
         )
         model = self.get_model(role)
         max_tokens = self.get_max_tokens(role)
+        # OpenCode's Qwen 3.7 Plus route reserves a fixed 32K thinking budget.
+        # A 2K-character Writer has a 4K completion cap, so leaving thinking
+        # on makes Alibaba reject the request before prose generation.
+        if role == "writer" and "qwen3.7-plus" in model.lower():
+            thinking_level = "off"
         # Kimi reasoning models charge their visible thinking against the same
         # completion window as the final answer.  Keep the legacy adapters
         # untouched; expand only Pi's Kimi sessions according to the actual

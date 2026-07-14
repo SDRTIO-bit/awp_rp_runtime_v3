@@ -37,10 +37,10 @@ class RecordingRealPiBridge(NovelPiRoleBridge):
         return super().run(task, context=context, on_chunk=on_chunk)
 
 
-def test_real_kimi_plan_write_audit_export_uses_pi_sessions(tmp_path):
+def test_real_qwen_plan_write_audit_export_uses_pi_sessions(tmp_path):
     connection = NovelLLMFactory().get_pi_role_connection("writer")
-    if "kimi" not in connection.model.lower():
-        pytest.skip("configure NOVEL_LLM_MODEL=kimi-k2.6 for this acceptance")
+    if connection.model.lower() != "qwen3.7-plus":
+        pytest.skip("configure NOVEL_LLM_MODEL=qwen3.7-plus for this acceptance")
     if not os.environ.get(connection.api_key_env):
         pytest.skip(f"missing external model key: {connection.api_key_env}")
 

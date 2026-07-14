@@ -180,3 +180,96 @@ test("host rejects a task for a different bound project", async () => {
 
   assert.ok(frames.some((frame) => frame.kind === "error" && /different project/.test(frame.payload.message)));
 });
+
+test("qwen3.7-plus writer registers Qwen thinking compat even when thinking is off", async () => {
+  let captured;
+  await createNovelRoleSession(
+    task({
+      connection: {
+        provider: "awp-opencode",
+        model: "qwen3.7-plus",
+        base_url: "https://opencode.example/v1",
+        api_key_env: "TEST_API_KEY",
+      },
+      thinking_level: "off",
+    }),
+    {
+      project_root: process.cwd(),
+      session_dir: `${process.cwd()}/.role-test-session-qwen`,
+    },
+    async () => ({ content: "ok" }),
+    resourcesRoot,
+    {
+      createSession: async (options) => {
+        captured = options;
+        return { session: fakeSession() };
+      },
+    },
+  );
+
+  assert.equal(captured.model.id, "qwen3.7-plus");
+  assert.equal(captured.model.reasoning, true, "model must stay reasoning=true so Pi maps off -> enable_thinking=false");
+  assert.equal(captured.model.compat?.thinkingFormat, "qwen");
+  assert.equal(captured.model.compat?.supportsReasoningEffort, false);
+});
+
+test("non-writer qwen3.7-plus keeps default reasoning when thinking is off", async () => {
+  let captured;
+  await createNovelRoleSession(
+    task({
+      role: "director",
+      connection: {
+        provider: "awp-opencode",
+        model: "qwen3.7-plus",
+        base_url: "https://opencode.example/v1",
+        api_key_env: "TEST_API_KEY",
+      },
+      thinking_level: "off",
+    }),
+    {
+      project_root: process.cwd(),
+      session_dir: `${process.cwd()}/.role-test-session-director`,
+    },
+    async () => ({ content: "ok" }),
+    resourcesRoot,
+    {
+      createSession: async (options) => {
+        captured = options;
+        return { session: fakeSession() };
+      },
+    },
+  );
+
+  assert.equal(captured.model.reasoning, false);
+  assert.equal(captured.model.compat, undefined);
+});
+
+test("non-qwen model disables reasoning when thinking is off", async () => {
+  let captured;
+  await createNovelRoleSession(
+    task({
+      connection: {
+        provider: "test-provider",
+        model: "some-model",
+        base_url: "https://example.invalid/v1",
+        api_key_env: "TEST_API_KEY",
+      },
+      thinking_level: "off",
+    }),
+    {
+      project_root: process.cwd(),
+      session_dir: `${process.cwd()}/.role-test-session-generic`,
+    },
+    async () => ({ content: "ok" }),
+    resourcesRoot,
+    {
+      createSession: async (options) => {
+        captured = options;
+        return { session: fakeSession() };
+      },
+    },
+  );
+
+  assert.equal(captured.model.reasoning, false);
+  assert.equal(captured.model.compat, undefined);
+});

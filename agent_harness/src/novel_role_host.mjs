@@ -35,6 +35,10 @@ function normalizeThinkingLevel(value) {
   return "low";
 }
 
+function isQwen37Plus(modelId) {
+  return typeof modelId === "string" && modelId.toLowerCase().includes("qwen3.7-plus");
+}
+
 function buildRolePrompt(task) {
   return [
     "请执行下面的小说角色任务。你可以自主决定是否调用已授权的只读工具。",
@@ -91,6 +95,12 @@ export async function createNovelRoleSession(
   const authStorage = AuthStorage.inMemory();
   const modelRegistry = ModelRegistry.inMemory(authStorage);
   const thinkingLevel = normalizeThinkingLevel(task.thinking_level);
+  // Qwen 3.7 Plus uses a fixed 32K thinking budget. For the Writer we must
+  // explicitly disable thinking via enable_thinking=false, otherwise the model
+  // consumes the whole 4K completion window with internal reasoning and returns
+  // no prose. Only apply this mapping to the Writer role; other roles keep Pi's
+  // default behaviour to avoid degrading instruction following.
+  const qwen37PlusWriter = role === "writer" && isQwen37Plus(modelId);
   modelRegistry.registerProvider(provider, {
     name: provider,
     baseUrl: requireString(connection.base_url, "connection.base_url"),
@@ -100,11 +110,12 @@ export async function createNovelRoleSession(
     models: [{
       id: modelId,
       name: modelId,
-      reasoning: thinkingLevel !== "off",
+      reasoning: qwen37PlusWriter ? true : thinkingLevel !== "off",
       input: ["text"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: Number(connection.context_window ?? 131072),
       maxTokens: Number(task.max_tokens ?? 4000),
+      ...(qwen37PlusWriter ? { compat: { thinkingFormat: "qwen", supportsReasoningEffort: false } } : {}),
     }],
   });
   const model = modelRegistry.find(provider, modelId);
