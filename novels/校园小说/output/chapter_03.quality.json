@@ -1,0 +1,40 @@
+{
+  "draft_id": "draft-3-r1",
+  "chapter_id": 3,
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-3-d2dbbbf2",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_patterns",
+      "category": "style",
+      "severity": "warning",
+      "description": "禁用句式: 他看见.{1,20}然后.{1,20}[。！]，匹配: ['他看见陈默，脚步顿了一下，然后继续往前走。']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "拆短句或换动作"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "drumbeat",
+      "category": "style",
+      "severity": "warning",
+      "description": "短句密度过高: 186/299 句 ≤12字 (比例 62%)，AI鼓点综合征",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

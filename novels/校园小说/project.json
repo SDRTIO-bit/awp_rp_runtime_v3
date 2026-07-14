@@ -1,0 +1,106 @@
+{
+  "project": {
+    "id": "lost-scene-aftermath",
+    "title": "失恋现场请交给我收拾",
+    "genre": "现实校园、多女主恋爱喜剧、轻小说式长篇",
+    "core_emotion": "好笑的尴尬→共同保密→各自重新站稳→开始认真参与",
+    "one_sentence_pitch": "校广播站杂务生陈默意外目击体委赵小麦告白失败；体育老师误把两人派进运动会宣传组，他也开始替七个输过一次的女孩处理她们不愿公开的残局。",
+    "target_reader": "16—28岁校园恋爱喜剧读者",
+    "target_platform": "番茄长篇",
+    "ending_policy": "最终单选；第一卷不告白、不选择",
+    "core_fantasy": "男主不是万人迷救世主，而是意外知道每个女孩最狼狈一次、却不把它当笑话的人；每段关系都由一份现实任务持续推动。",
+    "hard_limits": [
+      "禁止系统、异能、重生、穿越与悬疑调查主线",
+      "禁止所有女主一出场就喜欢陈默",
+      "禁止让陈默录制、保存或以任何形式持有女孩的私人失败证据",
+      "禁止反复用哭诉、医务室、天台、淋雨和肢体暧昧推进感情",
+      "陈默能误判好感，但不能愚蠢或逃避基本责任",
+      "竞争者不得工具化为恶人；失败可以没有反派"
+    ],
+    "config": {
+      "writer_prompt": "writer",
+      "architect_prompt": "architect_romcom",
+      "story_bible": "story_bible.md",
+      "canon_priority": [
+        "本project.json",
+        "story_bible.md",
+        "world.md",
+        "outline.md",
+        "经用户确认的新设定"
+      ],
+      "runtime_state_policy": "重启版本从第1章重新建立账本；archive/pre_reboot_20260713 只供人工回看，不注入管线。"
+    }
+  },
+  "volume": {
+    "index": 1,
+    "title": "第一卷：没播出去的七段声音",
+    "chapter_start": 1,
+    "chapter_end": 50,
+    "objective": "建立陈默作为善后者的局限，让七名女孩各自以失败和现实契约进入，并在两校广播节中从私下信任变成共同站队。",
+    "key_results": [
+      "赵小麦与陈默形成你跑我计时的暗号",
+      "七名女孩均拥有不同的失败类型与关系契约",
+      "陈默学会不替人作答，也不再把自己排除在关系外",
+      "校园广播节将多线关系集中碰撞但不完成恋爱选择"
+    ],
+    "core_conflict": "陈默以善后者自居，认为收好别人难堪就不必面对自己的认真；女孩们各自想保住体面或旧关系，却必须在现实任务里作出新选择。",
+    "emotional_arc": "事故喜剧→共同保密→多线碰撞→公开信任→未完成的认真",
+    "major_payoffs": [
+      "赵小麦公开选择陈默的第三棒",
+      "沈溪提出边界而非继续补位",
+      "夏染重新写歌并自己导出成片",
+      "姜晚念出自己的名字",
+      "陆星辰放弃完美会长人设",
+      "叶知秋让未完成的画结束",
+      "苏念交回没寄出的信，陈默自己拆开"
+    ]
+  },
+  "characters": [
+    {
+      "character_id": "char-chenmo", "name": "陈默", "aliases": ["默哥", "陈小默（仅苏念）"], "role": "protagonist", "pov_eligible": true, "first_appearance": 1,
+      "personality": "校广播站杂务生，嘴快、观察细、行动可靠。荒唐话用来给人留体面，认真时反而说得很短。", "voice_style": "吐槽有具体荒唐逻辑；关键时刻不说教，直接处理眼前麻烦。", "core_motivation": "完成一段真正认真、能参赛的声音短片，同时不再只做旁观的善后人。", "weakness": "用玩笑和帮忙把自己放在关系外，害怕说出会被拒绝的认真话。", "current_state": {"location": "江城一中广播站", "emotion": "只想混过招新考核"}, "arc_phase": "setup",
+      "relationships": [{"target_character_id": "char-zhaoxiaomai", "target_name": "赵小麦", "relation_type": "告白失败的目击者→运动会宣传搭档", "description": "两人被体育老师误派为宣传搭档。"}]
+    },
+    {
+      "character_id": "char-zhaoxiaomai", "name": "赵小麦", "aliases": ["小麦", "体委"], "role": "heroine", "pov_eligible": false, "first_appearance": 1,
+      "personality": "高二（三）班体委，跑得快、说话直、责任感过强。越难过越把任务办得像标准流程。", "voice_style": "短句、直接命令，急时先报安排再承认情绪。", "core_motivation": "让队伍跑完，也证明自己不是只能配合别人安排的人。", "weakness": "把被需要当成被选择，容易用更努力遮住失落。", "current_state": {"location": "操场", "emotion": "准备向江越告白"}, "arc_phase": "setup",
+      "relationships": [{"target_character_id": "char-chenmo", "target_name": "陈默", "relation_type": "目击者→被迫合作人→队友", "description": "陈默是唯一目击她失败现场、却没有追问的人。"}]
+    },
+    {
+      "character_id": "char-wanglei", "name": "王磊", "aliases": [], "role": "supporting", "pov_eligible": false, "first_appearance": 1,
+      "personality": "陈默同桌、广播站主持，爱热闹但知道什么时候该闭嘴。", "voice_style": "大嗓门、接梗快。", "core_motivation": "让朋友的高中生活别太闷。", "weakness": "恋爱雷达开得太早。", "current_state": {"location": "广播站", "emotion": "等招新"}, "arc_phase": "setup", "relationships": []
+    },
+    {
+      "character_id": "char-jiangyue", "name": "江越", "aliases": [], "role": "supporting", "pov_eligible": false, "first_appearance": 1,
+      "personality": "田径队长，坦诚但不擅长察觉赵小麦的失落。", "voice_style": "简洁、实事求是。", "core_motivation": "带队拿下运动会。", "weakness": "把可靠的人当作永远不会离开的搭档。", "current_state": {"location": "操场", "emotion": "想向许栀表明心意"}, "arc_phase": "setup", "relationships": []
+    },
+    {
+      "character_id": "char-shenxi", "name": "沈溪", "aliases": ["班长"], "role": "heroine", "pov_eligible": false, "first_appearance": 8,
+      "personality": "班长、优等生，规则感强，习惯替所有人补位。", "voice_style": "正式、条理清楚，窘迫时更爱讲规则。", "core_motivation": "把班级项目做好，也学习把自己的需要算进去。", "weakness": "把被依赖误解成被选择，不会拒绝。", "current_state": {"location": "高二（三）班", "emotion": "准备广播节报名"}, "arc_phase": "pre_entry", "relationships": []
+    },
+    {
+      "character_id": "char-guyuan", "name": "顾远", "aliases": [], "role": "supporting", "pov_eligible": false, "first_appearance": 8,
+      "personality": "学习委员，理性、精准，不故意伤人却常在关系里迟钝。", "voice_style": "短句、结论先行。", "core_motivation": "把事情做正确。", "weakness": "太晚才承认别人的付出。", "current_state": {"location": "高二（三）班", "emotion": "准备竞赛节目"}, "arc_phase": "pre_entry", "relationships": []
+    },
+    {
+      "character_id": "char-xiaran", "name": "夏染", "aliases": [], "role": "heroine", "pov_eligible": false, "first_appearance": 15,
+      "personality": "短发吉他手，嘴硬、自尊强，讨厌被同情。", "voice_style": "短句带刺，接受好意时会先否认。", "core_motivation": "拿回自己声音和作品的署名权。", "weakness": "把接受帮助当成丢脸。", "current_state": {"location": "音乐教室", "emotion": "原始Demo被前搭档带走"}, "arc_phase": "pre_entry", "relationships": []
+    },
+    {
+      "character_id": "char-jiangwan", "name": "姜晚", "aliases": [], "role": "heroine", "pov_eligible": false, "first_appearance": 21,
+      "personality": "低反应、冷幽默，维护匿名读书点播。", "voice_style": "短句、少字、精准。", "core_motivation": "在不被迫改变的前提下，被真正听见。", "weakness": "不擅长表达需要。", "current_state": {"location": "图书角", "emotion": "准备停掉共读计划"}, "arc_phase": "pre_entry", "relationships": []
+    },
+    {
+      "character_id": "char-luxingchen", "name": "陆星辰", "aliases": ["陆会长"], "role": "heroine", "pov_eligible": false, "first_appearance": 25,
+      "personality": "学生会长，体面、自律、流程意识强，私下很怕自己不够好。", "voice_style": "公开正式，私下会直白吐槽。", "core_motivation": "允许自己不是所有人期待的完美会长。", "weakness": "把控制流程当成控制感情。", "current_state": {"location": "学生会办公室", "emotion": "筹备校庆直播"}, "arc_phase": "pre_entry", "relationships": []
+    },
+    {
+      "character_id": "char-yezhiqiu", "name": "叶知秋", "aliases": ["叶学姐"], "role": "heroine", "pov_eligible": false, "first_appearance": 33,
+      "personality": "高三美术生，温和敏锐，偶尔故意逗人。", "voice_style": "慢一点、留白多，但不故作高深。", "core_motivation": "在毕业前完成不逃避的作品和告别。", "weakness": "看懂别人，回避自己的舍不得。", "current_state": {"location": "美术教室", "emotion": "为毕业展收尾"}, "arc_phase": "pre_entry", "relationships": []
+    },
+    {
+      "character_id": "char-sunian", "name": "苏念", "aliases": ["念念"], "role": "heroine", "pov_eligible": false, "first_appearance": 39,
+      "personality": "市实验中学广播负责人，利落直接；面对陈默的旧事反而会犹豫。", "voice_style": "平时锋利，认真时声线变轻。", "core_motivation": "确认自己在意的是现在的陈默，而不是三年前的默认关系。", "weakness": "以为旧默契可以代替重新选择。", "current_state": {"location": "市实验中学", "emotion": "准备两校广播节"}, "arc_phase": "pre_entry", "relationships": []
+    }
+  ]
+}

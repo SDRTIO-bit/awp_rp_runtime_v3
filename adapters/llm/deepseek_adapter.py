@@ -532,19 +532,32 @@ class DeepSeekAdapter(BaseLlmAdapter):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        kwargs = dict(model=model, messages=messages, temperature=0.8, stream=True)
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        if extra_body:
-            kwargs["extra_body"] = extra_body
+        thinking_enabled = (
+            isinstance(extra_body, dict)
+            and isinstance(extra_body.get("thinking"), dict)
+            and extra_body["thinking"].get("type") == "enabled"
+        )
+        use_max_tokens = max_tokens
+        for attempt in range(2):
+            kwargs = dict(model=model, messages=messages, temperature=0.8, stream=True)
+            if use_max_tokens:
+                kwargs["max_tokens"] = use_max_tokens
+            if extra_body:
+                kwargs["extra_body"] = extra_body
 
-        stream = self._client.chat.completions.create(**kwargs)
-        accumulated = ""
-        for chunk in stream:
-            delta = chunk.choices[0].delta if chunk.choices else None
-            if delta and delta.content:
-                accumulated += delta.content
-                on_chunk(delta.content)
+            stream = self._client.chat.completions.create(**kwargs)
+            accumulated = ""
+            saw_reasoning = False
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and getattr(delta, "reasoning_content", None):
+                    saw_reasoning = True
+                if delta and delta.content:
+                    accumulated += delta.content
+                    on_chunk(delta.content)
+            if accumulated or not (thinking_enabled and saw_reasoning and attempt == 0):
+                return accumulated
+            use_max_tokens = 16000
         return accumulated
 
     def _call_openai_text(self, prompt: str, max_tokens: int, model: str,

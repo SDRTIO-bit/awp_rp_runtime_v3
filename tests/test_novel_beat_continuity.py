@@ -16,13 +16,19 @@ if _REPO_PARENT not in sys.path:
 
 import pytest
 from awp_rp_runtime_v3.runtime.novel_writer_adapter import NovelWriterAdapter
+from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.runtime.novel_style_cleaner import NovelStyleCleaner
 from awp_rp_runtime_v3.runtime.novel_quality_pipeline import NovelQualityPipeline
 from awp_rp_runtime_v3.contracts.novel_write_packet import NovelWritePacket
 from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan, BeatDetail
+from awp_rp_runtime_v3.contracts.novel_chapter import normalize_scene_beats
 from awp_rp_runtime_v3.contracts.novel_director_guidance import (
     DirectorGuidance, BeatGuidance,
 )
+from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_draft import ChapterDraft
+from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
+from awp_rp_runtime_v3.storage.sqlite.database import Database
 
 
 @pytest.fixture
@@ -57,9 +63,84 @@ def _make_plan():
     )
 
 
+class TestSceneBeatMetadata:
+    def test_normalizes_missing_ids_and_budgets_for_generation(self):
+        """旧计划缺失的 beat 元数据必须在写作前补全，不能交给逐 beat 管线。"""
+        beats = (
+            BeatDetail(description="陈默迟到闯进教室"),
+            BeatDetail(description="沈溪登记迟到并听他解释"),
+            BeatDetail(description="两人去教务处搬教材"),
+        )
+
+        normalized = normalize_scene_beats(beats, chapter_index=1, target_chars=6000)
+
+        assert [beat.beat_id for beat in normalized] == ["ch1-b1", "ch1-b2", "ch1-b3"]
+        assert [beat.budget_chars for beat in normalized] == [2000, 2000, 2000]
+
+    def test_engine_normalizes_legacy_plan_before_generation(self):
+        """已入库的旧计划也必须在 Writer 调用前变为有效 beat。"""
+        plan = ChapterPlan(
+            chapter_id="ch1", project_id="p1", chapter_index=1, target_chars=6000,
+            scene_beats=(
+                BeatDetail(description="开场"),
+                BeatDetail(description="冲突"),
+                BeatDetail(description="收束"),
+            ),
+        )
+
+        normalized = NovelEngine._normalize_plan_beats(plan)
+
+        assert [beat.beat_id for beat in normalized.scene_beats] == ["ch1-b1", "ch1-b2", "ch1-b3"]
+        assert [beat.budget_chars for beat in normalized.scene_beats] == [2000, 2000, 2000]
+
+    def test_replanning_preserves_existing_drafts(self, tmp_path):
+        """重新规划已有章节时，新的临时 plan ID 不能删除旧草稿的父计划。"""
+        db = Database(tmp_path / "novel.db")
+        db.initialize()
+        registry = SessionRuntimeStoreRegistry(db)
+        registry.novel_project_store.create(NovelProject(project_id="p1"))
+        registry.novel_chapter_plan_store.save(
+            ChapterPlan(chapter_id="ch1", project_id="p1", chapter_index=1, title="旧计划")
+        )
+        registry.novel_chapter_draft_store.save(
+            ChapterDraft(draft_id="d1", chapter_id="ch1", text="旧正文", char_count=3)
+        )
+
+        engine = NovelEngine(registry)
+        engine._call_architect = lambda *args, **kwargs: ChapterPlan(
+            chapter_id="fresh-plan-id", project_id="p1", chapter_index=1, title="新计划"
+        )
+        replanned = engine.plan_chapter(project_id="p1", chapter_index=1)
+
+        assert replanned.chapter_id == "ch1"
+        assert registry.novel_chapter_plan_store.load("ch1").title == "新计划"
+        assert registry.novel_chapter_draft_store.load("d1").text == "旧正文"
+
+
 # ── 第 1 层：PREVIOUS BEAT TAIL 注入 ────────────────────────────────
 
 class TestPreviousBeatTail:
+    def test_detects_when_a_beat_writes_the_next_beat_anchor(self, writer):
+        """当前 beat 复述下一 beat 的开场动作时，必须判为边界越界。"""
+        current_text = "沈溪合上记录本。她没有写任何东西。陈默回到了座位。"
+        next_description = "【沈溪的犹豫】沈溪合上记录本，没有写任何东西。"
+
+        assert writer._crosses_next_beat_boundary(current_text, next_description)
+
+    def test_beat_prompt_forbids_advancing_to_a_later_beat(self, writer):
+        """单 beat 生成必须在当前 beat 收束，不能抢写后续事件。"""
+        beat = BeatDetail(beat_id="b1", description="陈默迟到闯进教室",
+                          function_tag="opening", density="normal", budget_chars=2000)
+        packet = NovelWritePacket(
+            packet_id="pkt0", project_id="p1", chapter_id="ch1",
+            chapter_plan=_make_plan(), current_scene_beat=beat,
+        )
+
+        _, user_prompt = writer._build_beat_prompt(packet)
+
+        assert "不得提前写后续 beat" in user_prompt
+        assert "下一 beat 的起点" in user_prompt
+
     def test_non_first_beat_includes_tail(self, writer):
         """非首 beat 的 prompt 必须含 PREVIOUS BEAT TAIL 段与强制接续指令。"""
         beat = BeatDetail(beat_id="b2", description="搬教材",

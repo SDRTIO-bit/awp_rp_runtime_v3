@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -148,6 +149,27 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
+def _write_quality_report(output_dir: Path, chapter: int, draft) -> Path:
+    """Persist non-blocking quality annotations beside a generated chapter."""
+    report_file = output_dir / f"chapter_{chapter:02d}.quality.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "draft_id": draft.draft_id,
+                "chapter_id": draft.chapter_id,
+                "revision": draft.revision,
+                "status": draft.status,
+                "quality_decision_id": draft.quality_decision_id,
+                "annotations": list(draft.quality_annotations),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return report_file
+
+
 def _read_json(path: Path) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"文件不存在: {path}")
@@ -160,8 +182,8 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _load_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
-    """加载故事圣经、章节微调和 CLI 引导，并以此约束规划与写作。"""
+def _load_plan_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
+    """Load broad project guidance for the context-heavy Plan Agent."""
     parts = []
     story_bible = _read_text(novel_dir / "story_bible.md")
     if story_bible:
@@ -173,6 +195,22 @@ def _load_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str
     if cli_guidance:
         parts.append(cli_guidance.strip())
     return "\n\n".join(parts)
+
+
+def _load_writer_guidance(novel_dir: Path, chapter: int, cli_guidance: str = "") -> str:
+    """Load only chapter-local guidance for the context-light Writer Agent."""
+    parts = []
+    guidance_file = novel_dir / "guidance" / f"chapter_{chapter:02d}.md"
+    file_content = _read_text(guidance_file)
+    if file_content:
+        parts.append(file_content.strip())
+    if cli_guidance:
+        parts.append(cli_guidance.strip())
+    return "\n\n".join(parts)
+
+
+# Backward-compatible alias for integrations that imported the old helper.
+_load_guidance = _load_plan_guidance
 
 
 def _parse_outline(md_text: str) -> list[dict]:
@@ -409,6 +447,8 @@ def cmd_seed(args: argparse.Namespace) -> None:
     engine = _get_engine(db_path)
     project = meta["project"]
     pid = project["id"]
+    project_config = dict(project.get("config", {}) or {})
+    project_config["novel_dir"] = str(novel_dir)
 
     # 1. Create project
     engine._registry.novel_project_store.create(NovelProject(
@@ -419,7 +459,7 @@ def cmd_seed(args: argparse.Namespace) -> None:
         one_sentence_pitch=project.get("one_sentence_pitch", ""),
         target_reader=project.get("target_reader", ""),
         target_platform=project.get("target_platform", ""),
-        config=project.get("config", {}),
+        config=project_config,
         status="writing",
     ))
     print(f"{GREEN}项目: {project['title']} ({pid}){RESET}")
@@ -519,9 +559,38 @@ def _load_state(novel_dir: Path) -> dict:
     return json.loads(state_file.read_text(encoding="utf-8"))
 
 
+def _sync_project_runtime_config(novel_dir: Path, state: dict) -> None:
+    """Keep the DB runtime prompt config aligned with project.json.
+
+    Existing projects may have been seeded before prompt overrides or the
+    project directory were added. Plan/write commands repair that drift
+    without rebuilding story state.
+    """
+    meta_path = novel_dir / "project.json"
+    if not meta_path.exists():
+        return
+    meta = _read_json(meta_path)
+    file_project = meta.get("project", {})
+    project_id = state.get("project_id") or file_project.get("id", "")
+    if not project_id:
+        return
+    engine = _get_engine(state["db_path"])
+    stored = engine._registry.novel_project_store.load(project_id)
+    if stored is None:
+        return
+    merged = dict(getattr(stored, "config", {}) or {})
+    merged.update(dict(file_project.get("config", {}) or {}))
+    merged["novel_dir"] = str(novel_dir.resolve())
+    if merged != stored.config:
+        engine._registry.novel_project_store.update(
+            replace(stored, config=merged)
+        )
+
+
 def cmd_plan(args: argparse.Namespace) -> None:
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
+    _sync_project_runtime_config(novel_dir, state)
     engine = _get_engine(state["db_path"])
     pid = state["project_id"]
     chapter = int(args.chapter)
@@ -529,7 +598,7 @@ def cmd_plan(args: argparse.Namespace) -> None:
     outline = _read_text(novel_dir / "outline.md")
     chapters = _parse_outline(outline)
     task = getattr(args, "task", "") or ""
-    guidance = _load_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
+    guidance = _load_plan_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
 
     # Try to find task_description from outline
     outline_task = ""
@@ -572,10 +641,11 @@ def cmd_plan(args: argparse.Namespace) -> None:
 def cmd_write(args: argparse.Namespace) -> None:
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
+    _sync_project_runtime_config(novel_dir, state)
     pid = state["project_id"]
     chapter = int(args.chapter)
     use_stream = getattr(args, "stream", False)
-    guidance = _load_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
+    guidance = _load_writer_guidance(novel_dir, chapter, getattr(args, "guidance", ""))
 
     if guidance:
         print(f"{DIM}微调引导: {guidance[:100]}...{RESET}" if len(guidance) > 100 else f"{DIM}微调引导: {guidance}{RESET}")
@@ -594,6 +664,7 @@ def cmd_write(args: argparse.Namespace) -> None:
         out_file = output_dir / f"chapter_{chapter:02d}.md"
         out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
         print(f"{DIM}已保存: {out_file}{RESET}")
+        print(f"{DIM}质检标注: {_write_quality_report(output_dir, chapter, draft)}{RESET}")
     else:
         engine = _get_engine(state["db_path"])
 
@@ -609,6 +680,7 @@ def cmd_write(args: argparse.Namespace) -> None:
         out_file = output_dir / f"chapter_{chapter:02d}.md"
         out_file.write_text(f"# 第{chapter}章\n\n{draft.text}", encoding="utf-8")
         print(f"\n{DIM}已保存: {out_file}{RESET}")
+        print(f"{DIM}质检标注: {_write_quality_report(output_dir, chapter, draft)}{RESET}")
 
 
 def cmd_batch(args: argparse.Namespace) -> None:

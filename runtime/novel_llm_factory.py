@@ -66,9 +66,19 @@ class NovelLLMFactory:
         return cls._instance
 
     @staticmethod
-    def _provider_choice() -> str:
+    def _provider_choice(role: str = "") -> str:
+        """Return provider for role, falling back to global NOVEL_LLM_PROVIDER."""
         import os
+        if role:
+            per_role = os.environ.get(f"NOVEL_LLM_PROVIDER_{role.upper()}")
+            if per_role:
+                return per_role.lower()
         return (os.environ.get("NOVEL_LLM_PROVIDER") or "deepseek").lower()
+
+    @staticmethod
+    def _is_siliconflow() -> bool:
+        import os
+        return (os.environ.get("NOVEL_LLM_PROVIDER") or "").lower() == "siliconflow"
 
     def get_adapter(self, role: str):
         """Get or create an adapter for the given role.
@@ -78,7 +88,7 @@ class NovelLLMFactory:
         """
         if role not in self._adapters:
             config = self._role_config(role)
-            provider = self._provider_choice()
+            provider = self._provider_choice(role)
 
             if provider == "mimo":
                 from ..adapters.llm.openai_compatible import OpenAICompatibleAdapter
@@ -93,6 +103,23 @@ class NovelLLMFactory:
                     ),
                     default_max_tokens=config["max_tokens"],
                     timeout_seconds=180,
+                    max_retries=2,
+                )
+            elif provider == "siliconflow":
+                from ..adapters.llm.openai_compatible import OpenAICompatibleAdapter
+                import os, sys
+                default_model = os.environ.get("NOVEL_LLM_MODEL", "Pro/deepseek-ai/DeepSeek-R1")
+                self._adapters[role] = OpenAICompatibleAdapter(
+                    model=default_model,
+                    base_url=os.environ.get(
+                        "NOVEL_LLM_BASE_URL",
+                        "https://api.siliconflow.cn/v1",
+                    ),
+                    api_key_env=os.environ.get(
+                        "NOVEL_LLM_API_KEY_ENV", "SILICONFLOW_API_KEY",
+                    ),
+                    default_max_tokens=config["max_tokens"],
+                    timeout_seconds=120,
                     max_retries=2,
                 )
             elif provider == "opencode":
@@ -125,10 +152,10 @@ class NovelLLMFactory:
         unchanged so all existing tests pass.
         """
         base = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
-        if self._provider_choice() not in ("opencode", "mimo"):
+        if self._provider_choice(role) not in ("opencode", "mimo", "siliconflow"):
             return base
 
-        provider = self._provider_choice()
+        provider = self._provider_choice(role)
         if provider == "mimo":
             default_map = {
                 "director":           "mimo-v2.5-pro",
@@ -143,7 +170,9 @@ class NovelLLMFactory:
                 or os.environ.get("NOVEL_LLM_MODEL")
                 or default_map.get(role, "mimo-v2.5-pro")
             )
-            return {**base, "model": model_id}
+            config = {**base, "model": model_id}
+            self._adjust_for_thinking_models(config, model_id)
+            return config
 
         # Override model names with OpenCode-available ids.
         # 2026-07-05: max 长程一致性暴露问题（8K 输出窗内同句重复、48h→72h 自相矛盾），
@@ -162,7 +191,16 @@ class NovelLLMFactory:
             or os.environ.get("NOVEL_LLM_MODEL")
             or default_map.get(role, "qwen3.7-max")
         )
-        return {**base, "model": model_id}
+        config = {**base, "model": model_id}
+        self._adjust_for_thinking_models(config, model_id)
+        return config
+
+    @staticmethod
+    def _adjust_for_thinking_models(config: dict[str, Any], model_id: str) -> None:
+        """GLM 等内置思考模型会吃掉约 90% 的 max_tokens 做 internal reasoning。
+        放大 max_tokens 以避免 content 部分被挤压为 0。"""
+        if "glm" in model_id.lower():
+            config["max_tokens"] = config["max_tokens"] * 4
 
     def get_pi_agent_connection(self) -> NovelPiConnectionConfig:
         """Resolve model connection metadata without reading or returning a key."""

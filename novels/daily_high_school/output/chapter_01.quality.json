@@ -1,0 +1,52 @@
+{
+  "draft_id": "draft-ch-daily-high-school-01-r1",
+  "chapter_id": "ch-daily-high-school-01",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-ch-daily-high-school-01-70d31e6c",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '微微' 出现 1 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '一丝' 出现 1 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '轻轻' 出现 2 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

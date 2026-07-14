@@ -5,7 +5,7 @@ schemaId: awp.novel.chapter-draft.v1
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 SCHEMA_ID = "awp.novel.chapter-draft.v1"
@@ -26,6 +26,7 @@ class ChapterDraft:
     char_count: int = 0
     status: str = "draft"       # draft / accepted / rejected / superseded
     quality_decision_id: str = ""
+    quality_annotations: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     created_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -40,6 +41,7 @@ class ChapterDraft:
             "char_count": self.char_count,
             "status": self.status,
             "quality_decision_id": self.quality_decision_id,
+            "quality_annotations": list(self.quality_annotations),
             "created_at": self.created_at,
         }
 
@@ -56,5 +58,6 @@ class ChapterDraft:
             char_count=data.get("char_count", 0),
             status=data.get("status", "draft"),
             quality_decision_id=data.get("quality_decision_id", ""),
+            quality_annotations=tuple(data.get("quality_annotations", []) or []),
             created_at=data.get("created_at", ""),
         )

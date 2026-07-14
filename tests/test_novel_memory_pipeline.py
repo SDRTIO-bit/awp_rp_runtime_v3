@@ -44,7 +44,7 @@ class CapturingNovelEngine(NovelEngine):
             ),
         )
 
-    def _call_writer(self, packet: NovelWritePacket) -> str:
+    def _call_writer(self, packet: NovelWritePacket, **_kwargs) -> str:
         self.captured_packet = packet
         return self.chapter_text
 
@@ -57,6 +57,7 @@ def test_write_chapter_commits_novel_active_rag_ledger_and_character_state(tmp_p
             character_id="char-lin",
             project_id="p1",
             name="林舟",
+            first_appearance=1,
             current_state={"location": "403室"},
         )
     )
@@ -153,8 +154,8 @@ def test_write_chapter_recalls_memory_into_writer_packet_and_prompt(tmp_path):
     assert any("银钥匙" in m["content"] for m in packet.memory_recall)
     assert any("承诺" in m["content"] for m in packet.active_memory_context)
 
+    # Raw memory stays available to deterministic runtimes but is not dumped
+    # into the context-light Writer prompt without a tested selection policy.
     _, prompt = NovelWriterAdapter(reg)._build_prompt(packet)
-    assert "=== MEMORY RECALL ===" in prompt
-    assert "银钥匙" in prompt
-    assert "=== ACTIVE MEMORY ===" in prompt
-    assert "承诺" in prompt
+    assert "=== MEMORY RECALL ===" not in prompt
+    assert "=== ACTIVE MEMORY ===" not in prompt

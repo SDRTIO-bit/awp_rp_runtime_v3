@@ -5,6 +5,7 @@ schemaId: awp.novel.chapter-plan.v1
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -139,6 +140,43 @@ class BeatDetail:
         )
 
 
+def normalize_scene_beats(
+    beats: tuple[BeatDetail, ...] | list[BeatDetail],
+    *,
+    chapter_index: int,
+    target_chars: int,
+) -> tuple[BeatDetail, ...]:
+    """Fill metadata required by the beat-by-beat writer for legacy/LLM plans."""
+    items = tuple(beats)
+    if not items:
+        return items
+
+    fallback_budget = max(1, target_chars // len(items))
+    remainder = max(0, target_chars - fallback_budget * len(items))
+    seen_ids: set[str] = set()
+    normalized: list[BeatDetail] = []
+    for index, beat in enumerate(items, start=1):
+        beat_id = beat.beat_id.strip()
+        if not beat_id or beat_id in seen_ids:
+            beat_id = f"ch{chapter_index}-b{index}"
+        seen_ids.add(beat_id)
+
+        budget = beat.budget_chars
+        if budget <= 0:
+            budget = fallback_budget + (remainder if index == len(items) else 0)
+
+        normalized.append(
+            BeatDetail(
+                beat_id=beat_id,
+                description=beat.description,
+                function_tag=beat.function_tag,
+                density=beat.density,
+                budget_chars=budget,
+            )
+        )
+    return tuple(normalized)
+
+
 @dataclass(frozen=True)
 class EndingDesign:
     """结尾设定和钩子。"""
@@ -241,6 +279,7 @@ class ChapterPlan:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ChapterPlan:
         import json as _json
+        import re
 
         data = data if isinstance(data, dict) else {}
 
@@ -269,6 +308,18 @@ class ChapterPlan:
                 return {}
             return {}
 
+        def _as_target_chars(value: Any) -> int:
+            """Accept common LLM forms such as ``2200-2500`` for a target."""
+            try:
+                return int(value or 3000)
+            except (TypeError, ValueError):
+                numbers = [int(item) for item in re.findall(r"\d+", str(value or ""))]
+                if len(numbers) >= 2:
+                    return sum(numbers[:2]) // 2
+                if numbers:
+                    return numbers[0]
+                return 3000
+
         content_summary_raw = _as_dict(data.get("content_summary"))
         plot_arrangement_raw = _as_dict(data.get("plot_arrangement"))
         # character_appearance 经常被 LLM 误回成 list（如 ["林舟","白晚晚"]）
@@ -288,7 +339,7 @@ class ChapterPlan:
             volume_id=data.get("volume_id", ""),
             chapter_index=int(data.get("chapter_index", 0) or 0),
             title=data.get("title", ""),
-            target_chars=int(data.get("target_chars", 3000) or 3000),
+            target_chars=_as_target_chars(data.get("target_chars", 3000)),
             chapter_position=cls._stringify_chapter_position(data.get("chapter_position", "")),
             target_emotion=data.get("target_emotion", ""),
             opening_hook=data.get("opening_hook", ""),

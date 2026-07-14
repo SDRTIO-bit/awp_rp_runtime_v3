@@ -11,6 +11,7 @@ from ..contracts.novel_write_packet import NovelWritePacket
 from ..contracts.novel_chapter import ChapterPlan
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
+from .novel_writer_context import NovelWriterContextCompiler
 
 
 class NovelWritePacketBuilder:
@@ -18,6 +19,7 @@ class NovelWritePacketBuilder:
 
     def __init__(self, registry):
         self._registry = registry
+        self._context_compiler = NovelWriterContextCompiler()
 
     def build(
         self,
@@ -37,16 +39,14 @@ class NovelWritePacketBuilder:
         Step 2: 模块召回 — 从对标书找情绪/节奏/文风参考
         Step 3: 意图确认 — 一句话概括本章写作目标
         """
-        # Step 1: 状态筛选
-        relevant_items = self._filter_relevant_ledger(chapter_plan, ledger_items)
-        relevant_characters = self._filter_relevant_characters(chapter_plan, character_states)
-        foreshadowing_items = [
-            i.to_dict() for i in relevant_items if i.section == "foreshadowing"
-        ]
-        # Extract world constraints from ledger world_rules
-        world_constraints = [
-            i.content for i in ledger_items if i.section == "world_rules"
-        ]
+        project_root = ""
+        if self._registry is not None:
+            try:
+                project = self._registry.novel_project_store.load(chapter_plan.project_id)
+                config = getattr(project, "config", {}) or {}
+                project_root = str(config.get("novel_dir", "") or "")
+            except (AttributeError, TypeError):
+                project_root = ""
 
         # Step 2: 模块召回
         ref_books = reference_books or []
@@ -59,25 +59,22 @@ class NovelWritePacketBuilder:
             chapter_plan, emotion_module, rhythm_reference, director_guidance
         )
 
-        return NovelWritePacket(
-            packet_id=f"pkt-{chapter_plan.chapter_id}",
-            project_id=chapter_plan.project_id,
-            chapter_id=chapter_plan.chapter_id,
+        packet = self._context_compiler.compile(
             chapter_plan=chapter_plan,
+            ledger_items=ledger_items,
             prev_chapter_ending=prev_chapter_ending,
             global_summaries=global_summaries,
-            relevant_ledger_items=relevant_items,
-            character_states=relevant_characters,
-            active_memory_context=list(active_memory_context or []),
-            memory_recall=list(memory_recall or []),
-            foreshadowing_items=foreshadowing_items,
-            world_constraints=world_constraints,
+            character_states=character_states,
             director_guidance=director_guidance,
-            writing_intent=writing_intent,
-            emotion_module=emotion_module,
-            rhythm_reference=rhythm_reference,
-            style_profile=style_profile,
+            project_root=project_root,
+            active_memory_context=active_memory_context,
+            memory_recall=memory_recall,
         )
+        packet.writing_intent = writing_intent
+        packet.emotion_module = emotion_module
+        packet.rhythm_reference = rhythm_reference
+        packet.style_profile = style_profile
+        return packet
 
     def build_beat_packet(
         self,
@@ -91,7 +88,10 @@ class NovelWritePacketBuilder:
         sibling_outlines: list[str] | None = None,
     ) -> NovelWritePacket:
         """Build a packet for a single beat."""
-        relevant_items = self._filter_relevant_ledger(chapter_plan, ledger_items)
+        relevant_items = self._filter_relevant_ledger(
+            chapter_plan, ledger_items, beat=beat,
+            chapter_index=getattr(chapter_plan, 'chapter_index', 0),
+        )
         foreshadowing_items = [
             i.to_dict() for i in relevant_items if i.section == "foreshadowing"
         ]
@@ -116,16 +116,57 @@ class NovelWritePacketBuilder:
         )
 
     def _filter_relevant_ledger(
-        self, plan: ChapterPlan, items: list[LedgerItem]
+        self, plan: ChapterPlan, items: list[LedgerItem],
+        beat: Any = None,
+        chapter_index: int = 0,
     ) -> list[LedgerItem]:
-        """只保留本章涉及的 ledger 条目。"""
-        relevant = []
+        """按需加载：用相关性评分替代硬截断。
+
+        Args:
+            plan: 当前章节计划
+            items: 全部账本条项
+            beat: 若提供则做 beat 级细粒度过滤（阈值更高）
+            chapter_index: 当前章节编号，用于优先级排序
+        """
         plan_text = f"{plan.content_summary.cause} {plan.content_summary.development}"
+        beat_text = ""
+        if beat is not None:
+            beat_text = f"{getattr(beat, 'description', '')} {getattr(beat, 'function_tag', '')}"
+
+        scored: list[tuple[int, LedgerItem]] = []
         for item in items:
-            # Include if entity mentioned in plan or status is active
-            if item.entity in plan_text or item.status == "active":
-                relevant.append(item)
-        return relevant
+            entity = item.entity
+            score = 0
+
+            # 实体命中当前 beat 描述 → 最高权重
+            if beat_text and entity and entity in beat_text:
+                score += 10
+            # 实体命中章节计划文本
+            elif entity and entity in plan_text:
+                score += 5
+            # 状态加成
+            if item.status == "active":
+                score += 3
+            elif item.status in ("resolved", "stale"):
+                score -= 2  # 仍需出现但下调优先级
+            else:
+                score += 1  # open, pending 等中间状态
+
+            # 章节距离加成：距当前章节越近优先级越高
+            if chapter_index and item.source_chapter:
+                distance = chapter_index - item.source_chapter
+                if distance <= 1:
+                    score += 2
+                elif distance <= 3:
+                    score += 1
+
+            # beat 级阈值更高（>=5），章节级放宽（>=3）
+            threshold = 5 if beat is not None else 3
+            if score >= threshold:
+                scored.append((-score, item))  # 负号用于降序排列
+
+        scored.sort(key=lambda x: x[0])
+        return [item for _, item in scored]
 
     def _filter_relevant_characters(
         self, plan: ChapterPlan, character_states: dict[str, Any]
@@ -184,10 +225,11 @@ class NovelWritePacketBuilder:
         """一句话写作意图。"""
         parts = []
         parts.append(f"目标情绪: {plan.target_emotion}")
-        if guidance.timeline_anchor:
+        if getattr(guidance, 'timeline_anchor', None):
             parts.append(f"时间: {guidance.timeline_anchor}")
-        if guidance.beat_details:
-            beats_summary = " → ".join(bd.emotion_shift for bd in guidance.beat_details if bd.emotion_shift)
+        beat_details = getattr(guidance, 'beat_details', None) or ()
+        if beat_details:
+            beats_summary = " → ".join(bd.emotion_shift for bd in beat_details if getattr(bd, 'emotion_shift', ''))
             if beats_summary:
                 parts.append(f"情绪弧线: {beats_summary}")
         if emotion_module:

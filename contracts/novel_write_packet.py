@@ -25,6 +25,7 @@ class NovelWritePacket:
     packet_id: str = ""
     project_id: str = ""
     chapter_id: str = ""
+    project_root: str = ""
     chapter_plan: ChapterPlan = field(default_factory=ChapterPlan)
     prev_chapter_ending: str = ""          # last 300 chars, hook continuity only
     global_summaries: str = ""             # all-chapter lightweight summaries
@@ -48,6 +49,11 @@ class NovelWritePacket:
     emotion_module: dict[str, Any] = field(default_factory=dict)
     rhythm_reference: dict[str, Any] = field(default_factory=dict)
 
+    # Deterministically compiled Writer-facing context.
+    allowed_cast: tuple[str, ...] = ()
+    chapter_contract: str = ""
+    history_context: str = ""
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_id": self.schema_id,
@@ -55,6 +61,7 @@ class NovelWritePacket:
             "packet_id": self.packet_id,
             "project_id": self.project_id,
             "chapter_id": self.chapter_id,
+            "project_root": self.project_root,
             "chapter_plan": self.chapter_plan.to_dict(),
             "prev_chapter_ending": self.prev_chapter_ending,
             "global_summaries": self.global_summaries,
@@ -73,6 +80,9 @@ class NovelWritePacket:
             "writing_intent": self.writing_intent,
             "emotion_module": self.emotion_module,
             "rhythm_reference": self.rhythm_reference,
+            "allowed_cast": list(self.allowed_cast),
+            "chapter_contract": self.chapter_contract,
+            "history_context": self.history_context,
         }
 
     @classmethod
@@ -83,6 +93,7 @@ class NovelWritePacket:
             packet_id=data.get("packet_id", ""),
             project_id=data.get("project_id", ""),
             chapter_id=data.get("chapter_id", ""),
+            project_root=data.get("project_root", ""),
             chapter_plan=ChapterPlan.from_dict(data.get("chapter_plan", {})),
             prev_chapter_ending=data.get("prev_chapter_ending", ""),
             global_summaries=data.get("global_summaries", ""),
@@ -101,4 +112,7 @@ class NovelWritePacket:
             writing_intent=data.get("writing_intent", ""),
             emotion_module=dict(data.get("emotion_module", {})),
             rhythm_reference=dict(data.get("rhythm_reference", {})),
+            allowed_cast=tuple(data.get("allowed_cast", [])),
+            chapter_contract=data.get("chapter_contract", ""),
+            history_context=data.get("history_context", ""),
         )

@@ -1,0 +1,40 @@
+{
+  "draft_id": "draft-ch2-r1",
+  "chapter_id": "ch2",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-ch2-1edcb66f",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_words",
+      "category": "style",
+      "severity": "warning",
+      "description": "一级禁用词 '微微' 出现 1 次",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "替换为更具体的描写"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "word_count",
+      "category": "length",
+      "severity": "warning",
+      "description": "字数偏少: 2029 < 目标 2300 的 90%",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "可适当展开"
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

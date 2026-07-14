@@ -6,11 +6,12 @@ Independent from PersistentTurnEngine, shares infrastructure (LLM adapters, stor
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any, Callable
 
 from ..contracts.novel_project import NovelProject
 from ..contracts.novel_volume import VolumePlan
-from ..contracts.novel_chapter import ChapterPlan, BeatDetail
+from ..contracts.novel_chapter import ChapterPlan, BeatDetail, normalize_scene_beats
 from ..contracts.novel_draft import ChapterDraft
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
@@ -19,6 +20,7 @@ from ..contracts.memory_recall_request import MemoryRecallRequest
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_write_packet_builder import NovelWritePacketBuilder
 from .novel_quality_pipeline import NovelQualityPipeline
+from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
@@ -48,6 +50,18 @@ class NovelEngine:
     - SubAgentLLMRunner（RP 的 thinking 被硬编码禁用）
     """
 
+    @staticmethod
+    def _normalize_plan_beats(plan: ChapterPlan) -> ChapterPlan:
+        """Ensure both fresh and legacy plans satisfy beat-writer invariants."""
+        beats = normalize_scene_beats(
+            plan.scene_beats,
+            chapter_index=plan.chapter_index,
+            target_chars=plan.target_chars,
+        )
+        if beats == plan.scene_beats:
+            return plan
+        return replace(plan, scene_beats=beats)
+
     def __init__(self, registry: SessionRuntimeStoreRegistry, profile: str = "production",
                  callbacks: NovelStreamCallbacks | None = None):
         self._registry = registry
@@ -67,6 +81,45 @@ class NovelEngine:
 
     def _safe_on_error(self, phase: str, message: str) -> None:
         safe_on_error(self._callbacks.on_error, phase, message)
+
+    @staticmethod
+    def _characters_available_for_chapter(characters: list, chapter_index: int) -> list:
+        """Return characters scheduled to have appeared by this chapter.
+
+        ``first_appearance <= 0`` means the appearance has not been scheduled.
+        """
+        return [
+            character for character in characters
+            if 0 < character.first_appearance <= chapter_index
+        ]
+
+    @staticmethod
+    def _merge_plan_adherence(
+        *,
+        decision: QualityDecision,
+        plan: ChapterPlan,
+        text: str,
+        known_character_names: set[str],
+    ) -> None:
+        """Merge deterministic Plan-contract checks into the quality decision."""
+        from .novel_plan_adherence import NovelPlanAdherenceChecker
+
+        result = NovelPlanAdherenceChecker().check(
+            plan=plan,
+            text=text,
+            known_character_names=known_character_names,
+        )
+        decision.blocking_reasons.extend(result.blocking_reasons)
+        decision.warnings.extend(result.warnings)
+        decision.checks.append({
+            "gate_name": "plan_adherence",
+            "category": "structure",
+            "blocking_reasons": list(result.blocking_reasons),
+            "warnings": list(result.warnings),
+            "coverage": result.coverage,
+        })
+        if result.blocking_reasons:
+            decision.verdict = QualityVerdict.REVISE
 
     def plan_chapter(
         self,
@@ -108,19 +161,41 @@ class NovelEngine:
 
         # Load character states — only characters that have appeared
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
-        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        characters = self._characters_available_for_chapter(all_characters, chapter_index)
         character_states = self._build_character_context(characters)
+
+        # Load previous chapter's ending text (hook handoff)
+        prev_chapter_ending = ""
+        prev_ending_design = None
+        if chapter_index > 1:
+            prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
+            if prev_plan:
+                prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
+                if prev_draft:
+                    prev_chapter_ending = prev_draft.text[-600:]
+                prev_ending_design = getattr(prev_plan, "ending_design", None) or getattr(prev_plan, "ending_hook", None)
 
         # Call Architect
         plan = self._call_architect(
             project_id, chapter_index, volume_plan,
             completed_chapters, ledger_items, character_states,
             task_description, architect_prompt_name=architect_prompt_name,
+            prev_chapter_ending=prev_chapter_ending,
+            prev_ending_design=prev_ending_design,
         )
 
         # Clean drumbeat patterns from plan text before storing
         from .novel_style_cleaner import NovelStyleCleaner
         plan = NovelStyleCleaner.clean_plan(plan)
+
+        # Replanning must retain the existing primary key: replacing it would
+        # delete the parent row and violate the foreign key held by old drafts.
+        existing_plan = self._registry.novel_chapter_plan_store.load_by_index(
+            project_id, chapter_index
+        )
+        if existing_plan:
+            plan = replace(plan, chapter_id=existing_plan.chapter_id)
+        plan = self._normalize_plan_beats(plan)
 
         # Persist
         self._registry.novel_chapter_plan_store.save(plan)
@@ -152,6 +227,10 @@ class NovelEngine:
         plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index)
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
+        normalized_plan = self._normalize_plan_beats(plan)
+        if normalized_plan != plan:
+            plan = normalized_plan
+            self._registry.novel_chapter_plan_store.save(plan)
 
         # Load project config for writer_prompt / genre overrides
         project = self._registry.novel_project_store.load(project_id)
@@ -162,7 +241,7 @@ class NovelEngine:
         # Load context
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
-        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        characters = self._characters_available_for_chapter(all_characters, chapter_index)
         character_states = self._build_character_context(characters)
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id,
@@ -181,27 +260,10 @@ class NovelEngine:
         # Build global chapter summaries (lightweight, no plan detail)
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Build completed-chapters summary + foreshadowing + subplot for Director's
-        # global view. Previously these were all empty, so Director's "全局优化"
-        # role was a no-op that still burned thinking tokens.
-        completed_chapters_summary = self._build_completed_chapters_summary(project_id, chapter_index)
-        foreshadowing_list = [
-            i for i in ledger_items if i.section == "foreshadowing"
-        ]
-        subplot_status = [
-            i for i in ledger_items if i.section == "open_threads"
-        ]
-
-        # Call Director (placeholder)
-        director_guidance = self._call_director(
-            project_id, plan, ledger_items, character_states,
-            prev_chapter_ending,
-            completed_chapters_summary=completed_chapters_summary,
-            foreshadowing_list=foreshadowing_list,
-            subplot_status=subplot_status,
+        # Build packet (Director 层已砍，传最小占位符)
+        director_guidance = DirectorGuidance(
+            guidance_id=f"dg-{plan.chapter_id}-skip",
         )
-
-        # Build packet
         packet = self._packet_builder.build(
             chapter_plan=plan,
             ledger_items=ledger_items,
@@ -213,7 +275,7 @@ class NovelEngine:
             director_guidance=director_guidance,
         )
 
-        # Generate with beat-by-beat approach
+        # Single-pass 生成（不再分 beat）
         text = self._generate_with_beats(
             plan,
             packet,
@@ -223,6 +285,7 @@ class NovelEngine:
             memory_recall=memory_recall,
             writer_prompt_name=writer_prompt_name,
             write_guidance=write_guidance,
+            single_pass=True,
         )
         if not text or not text.strip():
             raise RuntimeError("Writer returned empty output")
@@ -243,6 +306,14 @@ class NovelEngine:
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
 
+        self._merge_plan_adherence(
+            decision=quality_decision,
+            plan=plan,
+            text=text,
+            known_character_names={c.name for c in all_characters if c.name},
+        )
+        self._quality_pipeline.annotate_only(quality_decision)
+
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
         # status 仍如实标记，便于事后筛选。
         verdict_value = quality_decision.verdict.value
@@ -261,6 +332,7 @@ class NovelEngine:
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
+            quality_annotations=tuple(quality_decision.checks),
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
@@ -281,17 +353,24 @@ class NovelEngine:
         *,
         writer_prompt_name: str = "writer",
         write_guidance: str = "",
+        single_pass: bool = False,
     ) -> str:
-        """Generate chapter text beat by beat (sequential, 3 beats)."""
-        if not plan.scene_beats:
+        """Generate chapter text beat by beat (sequential, 3 beats).
+        
+        single_pass=True: 不分 beat，整章一次 LLM 调用。
+        """
+        if single_pass or not plan.scene_beats:
             try:
                 return self._call_writer(packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
-            except RuntimeError:
+            except RuntimeError as e:
+                import sys
+                print(f"[DEBUG _gen_beats] RuntimeError: {e}", file=sys.stderr)
                 return ""
 
         accumulated_text = ""
-        for beat in plan.scene_beats:
+        for beat_index, beat in enumerate(plan.scene_beats):
             beat_text = ""
+            attempt_guidance = write_guidance
             for attempt in range(3):
                 beat_packet = self._packet_builder.build_beat_packet(
                     beat=beat,
@@ -303,7 +382,17 @@ class NovelEngine:
                     memory_recall=memory_recall,
                 )
                 try:
-                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
+                    beat_text = self._call_writer_beat(beat_packet, writer_prompt_name=writer_prompt_name, write_guidance=attempt_guidance)
+                    if beat_index + 1 < len(plan.scene_beats):
+                        from .novel_writer_adapter import NovelWriterAdapter
+                        next_description = plan.scene_beats[beat_index + 1].description
+                        if NovelWriterAdapter._crosses_next_beat_boundary(beat_text, next_description):
+                            attempt_guidance = (
+                                f"{write_guidance}\n上一尝试已经写入下一 beat 的开场动作；"
+                                "必须删去该动作，并在当前 beat 的事件完成处立即收束。"
+                            ).strip()
+                            beat_text = ""
+                            continue
                     if beat_text and beat_text.strip():
                         break
                 except RuntimeError:
@@ -317,6 +406,7 @@ class NovelEngine:
         self, project_id, chapter_index, volume_plan,
         completed_chapters, ledger_items, character_states,
         task_description, architect_prompt_name="architect",
+        prev_chapter_ending="", prev_ending_design=None,
     ) -> ChapterPlan:
         """Call Architect agent."""
         from .novel_architect_adapter import NovelArchitectAdapter
@@ -329,6 +419,8 @@ class NovelEngine:
             ledger_items=ledger_items,
             character_states=character_states,
             task_description=task_description,
+            prev_chapter_ending=prev_chapter_ending,
+            prev_ending_design=prev_ending_design,
         )
 
     def _call_director(
@@ -498,11 +590,11 @@ class NovelEngine:
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
         return adapter.generate_beat(packet, write_guidance=write_guidance)
 
-    def _call_writer_beat_stream(self, packet: NovelWritePacket, on_chunk, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
-        """Call Writer for a single beat with streaming callback."""
+    def _call_writer_stream(self, packet: NovelWritePacket, on_chunk, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
+        """Call Writer for full chapter with streaming callback."""
         from .novel_writer_adapter import NovelWriterAdapter
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
-        return adapter.generate_beat_stream(packet, on_chunk, write_guidance=write_guidance)
+        return adapter.generate_chapter_stream(packet, on_chunk, write_guidance=write_guidance)
 
     def _generate_with_beats_stream(
         self,
@@ -515,13 +607,19 @@ class NovelEngine:
         *,
         writer_prompt_name: str = "writer",
         write_guidance: str = "",
+        single_pass: bool = False,
     ) -> str:
-        """Generate chapter text beat by beat with streaming callbacks."""
-        if not plan.scene_beats:
+        """Generate chapter text beat by beat with streaming callbacks.
+        
+        single_pass=True: 不分 beat，整章一次 LLM 流式调用。
+        """
+        if single_pass or not plan.scene_beats:
             try:
-                text = self._call_writer(packet, writer_prompt_name=writer_prompt_name, write_guidance=write_guidance)
-                self._safe_on_chunk(text)
-                return text
+                return self._call_writer_stream(
+                    packet, self._safe_on_chunk,
+                    writer_prompt_name=writer_prompt_name,
+                    write_guidance=write_guidance,
+                )
             except RuntimeError:
                 return ""
 
@@ -537,6 +635,7 @@ class NovelEngine:
             })
 
             beat_text = ""
+            attempt_guidance = write_guidance
             for attempt in range(3):
                 beat_packet = self._packet_builder.build_beat_packet(
                     beat=beat,
@@ -552,9 +651,19 @@ class NovelEngine:
                     beat_text = self._call_writer_beat_stream(
                         beat_packet, self._safe_on_chunk,
                         writer_prompt_name=writer_prompt_name,
-                        write_guidance=write_guidance,
+                        write_guidance=attempt_guidance,
                     )
                     duration_ms = int((time.time() - t_start) * 1000)
+                    if i + 1 < len(plan.scene_beats):
+                        from .novel_writer_adapter import NovelWriterAdapter
+                        next_description = plan.scene_beats[i + 1].description
+                        if NovelWriterAdapter._crosses_next_beat_boundary(beat_text, next_description):
+                            attempt_guidance = (
+                                f"{write_guidance}\n上一尝试已经写入下一 beat 的开场动作；"
+                                "必须删去该动作，并在当前 beat 的事件完成处立即收束。"
+                            ).strip()
+                            beat_text = ""
+                            continue
                     if beat_text and beat_text.strip():
                         self._safe_on_beat("end", beat_idx, {
                             "duration_ms": duration_ms,
@@ -591,6 +700,10 @@ class NovelEngine:
         plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index)
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
+        normalized_plan = self._normalize_plan_beats(plan)
+        if normalized_plan != plan:
+            plan = normalized_plan
+            self._registry.novel_chapter_plan_store.save(plan)
 
         project = self._registry.novel_project_store.load(project_id)
         project_config = getattr(project, "config", {}) or {}
@@ -598,7 +711,7 @@ class NovelEngine:
 
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
         all_characters = self._registry.novel_character_store.list_by_project(project_id)
-        characters = [c for c in all_characters if c.first_appearance <= chapter_index]
+        characters = self._characters_available_for_chapter(all_characters, chapter_index)
         character_states = self._build_character_context(characters)
         active_memory_context, memory_recall = self._recall_novel_memory(
             project_id=project_id, plan=plan, characters=characters,
@@ -612,27 +725,11 @@ class NovelEngine:
                 prev_chapter_ending = prev_draft.text[-500:]
 
         global_summaries = self._build_global_summaries(project_id, chapter_index)
-        completed_chapters_summary = self._build_completed_chapters_summary(project_id, chapter_index)
-        foreshadowing_list = [i for i in ledger_items if i.section == "foreshadowing"]
-        subplot_status = [i for i in ledger_items if i.section == "open_threads"]
 
-        # Phase: director
-        self._safe_on_phase("start", "director", {"ch": chapter_index, "thinking": "high"})
-        t = time.time()
-        director_guidance = self._call_director(
-            project_id, plan, ledger_items, character_states,
-            prev_chapter_ending,
-            completed_chapters_summary=completed_chapters_summary,
-            foreshadowing_list=foreshadowing_list,
-            subplot_status=subplot_status,
+        # Phase: writer (Director 层已砍 — 改为占位符)
+        director_guidance = DirectorGuidance(
+            guidance_id=f"dg-{plan.chapter_id}-skip",
         )
-        self._safe_on_phase("end", "director", {
-            "ch": chapter_index,
-            "duration_ms": int((time.time() - t) * 1000),
-            "character_anchor": director_guidance.character_anchor[:200] if director_guidance.character_anchor else "",
-            "timeline_anchor": director_guidance.timeline_anchor[:200] if director_guidance.timeline_anchor else "",
-            "beat_details": [{"id": b.beat_id, "goal": b.narrative_strategy[:80] if hasattr(b, 'narrative_strategy') else b.content_outline[:80]} for b in (director_guidance.beat_details or [])],
-        })
 
         packet = self._packet_builder.build(
             chapter_plan=plan, ledger_items=ledger_items,
@@ -653,6 +750,7 @@ class NovelEngine:
             memory_recall=memory_recall,
             writer_prompt_name=writer_prompt_name,
             write_guidance=write_guidance,
+            single_pass=True,
         )
         if not text or not text.strip():
             self._safe_on_error("writer", "Writer returned empty output")
@@ -686,6 +784,13 @@ class NovelEngine:
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
+        self._merge_plan_adherence(
+            decision=quality_decision,
+            plan=plan,
+            text=text,
+            known_character_names={c.name for c in all_characters if c.name},
+        )
+        self._quality_pipeline.annotate_only(quality_decision)
         self._safe_on_phase("end", "continuity", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),
@@ -704,6 +809,7 @@ class NovelEngine:
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
+            quality_annotations=tuple(quality_decision.checks),
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
@@ -923,6 +1029,7 @@ class NovelEngine:
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
+            quality_annotations=tuple(quality_decision.checks),
         )
         self._registry.novel_chapter_draft_store.save(draft)
 
