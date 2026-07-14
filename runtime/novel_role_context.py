@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 
@@ -19,6 +19,7 @@ class NovelRoleContext:
     chapter_index: int
     revision: int = 1
     phase: str = ""
+    artifacts: dict[str, Any] = field(default_factory=dict)
 
 
 _CURRENT_CONTEXT: ContextVar[NovelRoleContext | None] = ContextVar(
@@ -35,6 +36,7 @@ def novel_role_scope(
     chapter_index: int,
     revision: int = 1,
     phase: str = "",
+    artifacts: dict[str, Any] | None = None,
 ) -> Iterator[NovelRoleContext]:
     """Bind one engine task to role agents and restore any outer scope."""
 
@@ -44,6 +46,7 @@ def novel_role_scope(
         chapter_index=chapter_index,
         revision=revision,
         phase=phase,
+        artifacts=dict(artifacts or {}),
     )
     token = _CURRENT_CONTEXT.set(context)
     try:
@@ -59,4 +62,3 @@ def get_novel_role_context() -> NovelRoleContext:
     if context is None:
         raise NovelRoleContextError("Pi novel role context is not active")
     return context
-
