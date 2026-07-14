@@ -361,3 +361,27 @@ Role Host 必须保证：
 7. 流式正文、质量门和账本行为保持兼容。
 8. 单元、集成和真实 Kimi 单章验收均通过。
 
+## 17. 实施与验收状态（2026-07-14）
+
+已实现：
+
+- 顶层交互 Pi Host 与底层 Pi Role Host 分进程运行。
+- Architect、Director、Writer、Continuity Checker、Style Cleaner、Ledger Curator 均通过 `NovelPiRoleTask` 进入真实 Pi Agent Session。
+- Writer 以 `project + chapter + revision` 复用章节 Session，其余角色使用任务 Session。
+- 角色只获得白名单只读工具；Style Cleaner 无工具；Python 保持唯一写状态方。
+- CLI `plan/write/batch/run` 默认检查 Pi 依赖并显示 Agent Runtime 与 provider/model；只允许显式 `NOVEL_AGENT_RUNTIME=legacy` 回退。
+
+本地验证：
+
+- `npm test`（`agent_harness`）：14 passed。
+- `python -m pytest tests -q`：1222 passed, 3 skipped。
+- 双 Host 集成：顶层 fake Pi 依次触发 Architect → Director → Writer → Continuity → Ledger，独立 Role Host 完成并落库，无死锁。
+
+真实 Kimi 2.6 验收：
+
+- 配置：`NOVEL_AGENT_RUNTIME=pi`、`NOVEL_LLM_PROVIDER=opencode`、`NOVEL_LLM_MODEL=kimi-k2.6`。
+- Architect 真实 Pi Session 正常 `stop`，曾调用 4 个只读工具；最终正文 2810 字符，usage output 4460 tokens。
+- Director 真实 Pi Session 正常 `stop`，曾调用 2 个只读工具；最终正文 2834 字符，usage output 5145 tokens。
+- Writer 真实 Pi Session 已启动并完成一次只读工具调用，但整条 pytest 命令在 600 秒外层时限到达后被终止，未取得 Writer 终止帧。
+- 结论：真实 Pi/Kimi 架构、鉴权、工具回路已验证；完整单章端到端仍标记为未通过，原因是累计执行时间超过本次外层验收窗口。不得把该结果表述为完整 E2E 通过。
+

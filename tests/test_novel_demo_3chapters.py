@@ -20,7 +20,7 @@ def engine(reg):
     return NovelEngine(reg)
 
 
-def test_write_3_chapters(reg, engine, capsys):
+def test_write_3_chapters(reg, engine, capsys, fake_novel_role_runtime):
     """Write first 3 chapters of a novel."""
 
     # === 1. 创建项目 ===

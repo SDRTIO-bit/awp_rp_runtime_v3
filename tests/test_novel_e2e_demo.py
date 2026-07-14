@@ -19,7 +19,7 @@ def engine(reg):
     return NovelEngine(reg)
 
 
-def test_novel_e2e_demo(reg, engine, capsys):
+def test_novel_e2e_demo(reg, engine, capsys, fake_novel_role_runtime):
     """Full novel mode end-to-end demo."""
 
     # 1. 创建项目

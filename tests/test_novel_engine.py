@@ -28,7 +28,7 @@ def engine(reg):
 
 
 class TestNovelEngine:
-    def test_plan_chapter(self, reg, engine):
+    def test_plan_chapter(self, reg, engine, fake_novel_role_runtime):
         reg.novel_project_store.create(NovelProject(project_id="p1", title="测试"))
         plan = engine.plan_chapter(project_id="p1", chapter_index=1)
         assert plan.chapter_index == 1
@@ -41,7 +41,7 @@ class TestNovelEngine:
         with pytest.raises(ValueError, match="Project not found"):
             engine.plan_chapter(project_id="nope", chapter_index=1)
 
-    def test_write_chapter(self, reg, engine):
+    def test_write_chapter(self, reg, engine, fake_novel_role_runtime):
         reg.novel_project_store.create(NovelProject(project_id="p1", title="测试"))
         reg.novel_chapter_plan_store.save(ChapterPlan(
             chapter_id="ch1", project_id="p1", chapter_index=1, target_chars=100
@@ -58,7 +58,9 @@ class TestNovelEngine:
         with pytest.raises(ValueError, match="Chapter plan not found"):
             engine.write_chapter(project_id="p1", chapter_index=1)
 
-    def test_streaming_blank_writer_output_raises_before_draft_save(self, reg, engine, monkeypatch):
+    def test_streaming_blank_writer_output_raises_before_draft_save(
+        self, reg, engine, monkeypatch, fake_novel_role_runtime,
+    ):
         reg.novel_project_store.create(NovelProject(project_id="p1", title="测试"))
         reg.novel_chapter_plan_store.save(ChapterPlan(
             chapter_id="ch1", project_id="p1", chapter_index=1, target_chars=100,
@@ -70,7 +72,7 @@ class TestNovelEngine:
 
         assert reg.novel_chapter_draft_store.load_latest("ch1") is None
 
-    def test_revise_chapter(self, reg, engine):
+    def test_revise_chapter(self, reg, engine, fake_novel_role_runtime):
         reg.novel_project_store.create(NovelProject(project_id="p1"))
         reg.novel_chapter_plan_store.save(ChapterPlan(
             chapter_id="ch1", project_id="p1", chapter_index=1, target_chars=100
