@@ -375,7 +375,7 @@ python -m pytest -q tests/test_novel_autonomy_runtime_wiring.py \
 
 # 附录 C：接受后议程提交闭环
 
-**日期**：2026-07-15  
+**日期**：2026-07-15
 **分支**：`codex/novel-autonomous-npc`
 
 本次补齐了运行时接线修正后遗留的三项缺口：
