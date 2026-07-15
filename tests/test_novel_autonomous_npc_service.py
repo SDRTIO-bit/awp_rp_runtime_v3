@@ -37,6 +37,7 @@ def test_expired_agenda_is_marked_stale_without_returning_active():
 
 def test_writer_profile_context_excludes_world_history_and_scene():
     context = NovelProfileCompiler().compile_for(
-        "writer", default_autonomous_profile(), world=["秘密规则"], history="秘密历史", scene="秘密场景"
+        "writer", default_autonomous_profile(),
+        world_rules=["秘密规则"], history="秘密历史", scene="秘密场景", character_context={},
     )
-    assert "world" not in context and "history" not in context and "scene" not in context
+    assert "world_rules" not in context and "history" not in context and "scene" not in context
