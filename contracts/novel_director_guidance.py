@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .novel_npc_agenda import VisibleConsequence
+
 SCHEMA_ID = "awp.novel.director-guidance.v2"
 SCHEMA_VERSION = 2
 
@@ -169,6 +171,7 @@ class DirectorGuidance:
     outline_enhancements: tuple[OutlineEnhancement, ...] = ()
     foreshadowing_schedule: tuple[ForeshadowingAction, ...] = ()
     subplot_status: tuple[SubplotStatus, ...] = ()
+    visible_consequences: tuple[VisibleConsequence, ...] = ()
     risk_flags: tuple[str, ...] = ()
     opportunities: tuple[str, ...] = ()
     reasoning: str = ""
@@ -184,6 +187,7 @@ class DirectorGuidance:
             "outline_enhancements": [e.to_dict() for e in self.outline_enhancements],
             "foreshadowing_schedule": [f.to_dict() for f in self.foreshadowing_schedule],
             "subplot_status": [s.to_dict() for s in self.subplot_status],
+            "visible_consequences": [c.model_dump(mode="json") for c in self.visible_consequences],
             "risk_flags": list(self.risk_flags),
             "opportunities": list(self.opportunities),
             "reasoning": self.reasoning,
@@ -202,6 +206,11 @@ class DirectorGuidance:
             outline_enhancements=tuple(OutlineEnhancement.from_dict(e) for e in data.get("outline_enhancements", []) if isinstance(e, dict)),
             foreshadowing_schedule=tuple(ForeshadowingAction.from_dict(f) for f in data.get("foreshadowing_schedule", []) if isinstance(f, dict)),
             subplot_status=tuple(SubplotStatus.from_dict(s) for s in data.get("subplot_status", []) if isinstance(s, dict)),
+            visible_consequences=tuple(
+                VisibleConsequence.model_validate(c)
+                for c in data.get("visible_consequences", [])
+                if isinstance(c, dict)
+            ),
             risk_flags=tuple(data.get("risk_flags", [])),
             opportunities=tuple(data.get("opportunities", [])),
             reasoning=data.get("reasoning", ""),

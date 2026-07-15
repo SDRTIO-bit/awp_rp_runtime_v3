@@ -34,6 +34,11 @@ from awp_rp_runtime_v3.contracts.novel_project import NovelProject
 from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter, CharacterRelationship
 from awp_rp_runtime_v3.contracts.novel_volume import VolumePlan
 from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
+from awp_rp_runtime_v3.contracts.novel_profile import (
+    PROFILE_CONFIG_KEY,
+    default_autonomous_profile,
+    load_autonomous_profile,
+)
 from awp_rp_runtime_v3.runtime.novel_trace import NovelStreamCallbacks
 from awp_rp_runtime_v3.runtime.novel_llm_factory import NovelLLMFactory
 from awp_rp_runtime_v3.runtime.novel_role_runtime import get_novel_role_runtime
@@ -112,7 +117,20 @@ TEMPLATE_NOVEL_JSON = """{
     "core_emotion": "压抑→怀疑→执着→释然",
     "one_sentence_pitch": "一句话简介",
     "target_reader": "22-35岁悬疑爱好者",
-    "target_platform": "番茄长篇"
+    "target_platform": "番茄长篇",
+    "config": {
+      "autonomous_profile": {
+        "schema_id": "awp.novel.writing-profile.v1",
+        "schema_version": 1,
+        "mode": "novel",
+        "name": "default-novel-autonomy",
+        "narrative": {},
+        "world": {},
+        "history": {},
+        "scene": {},
+        "agent_contracts": {}
+      }
+    }
   },
   "volume": {
     "index": 1,
@@ -493,6 +511,8 @@ def cmd_seed(args: argparse.Namespace) -> None:
     project = meta["project"]
     pid = project["id"]
     project_config = dict(project.get("config", {}) or {})
+    profile = load_autonomous_profile(project_config)
+    project_config[PROFILE_CONFIG_KEY] = profile.model_dump(mode="json")
     project_config["novel_dir"] = str(novel_dir)
 
     # 1. Create project
@@ -595,6 +615,25 @@ def cmd_seed(args: argparse.Namespace) -> None:
 
     print(f"\n{CYAN}数据已注入数据库: {db_path}{RESET}")
     print(f"{YELLOW}下一步: python scripts/novel_cli.py plan {novel_dir} 1 --task \"...\"{RESET}")
+
+
+def cmd_profile_init(args: argparse.Namespace) -> None:
+    """Explicitly add the autonomy profile required by older projects."""
+    novel_dir = Path(args.dir).resolve()
+    meta_path = novel_dir / "project.json"
+    meta = _read_json(meta_path)
+    project = meta.get("project")
+    if not isinstance(project, dict):
+        raise ValueError("project.json 必须包含 project 对象")
+    config = dict(project.get("config", {}) or {})
+    if PROFILE_CONFIG_KEY in config:
+        print(f"{YELLOW}Profile 已存在，未修改: {meta_path}{RESET}")
+        return
+    config[PROFILE_CONFIG_KEY] = default_autonomous_profile().model_dump(mode="json")
+    project["config"] = config
+    meta["project"] = project
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"{GREEN}已写入默认 Novel Profile: {meta_path}{RESET}")
 
 
 def _load_state(novel_dir: Path) -> dict:
@@ -945,6 +984,10 @@ p_init.add_argument("dir")
 p_seed = sub.add_parser("seed", help="读取文件 → 写入DB")
 p_seed.add_argument("dir")
 
+# profile-init
+p_profile_init = sub.add_parser("profile-init", help="为旧项目显式写入默认 Novel Profile")
+p_profile_init.add_argument("dir")
+
 # plan
 p_plan = sub.add_parser("plan", help="规划章节 (Architect)")
 p_plan.add_argument("dir")
@@ -989,6 +1032,8 @@ def main(argv: list[str]) -> int:
                 cmd_init(args)
             case "seed":
                 cmd_seed(args)
+            case "profile-init":
+                cmd_profile_init(args)
             case "plan":
                 cmd_plan(args)
             case "write":
