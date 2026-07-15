@@ -30,7 +30,7 @@
 def compile_for(role: str, profile: NovelWritingProfile, *, world_rules: list[str], history: str, scene: str, character_context: dict[str, object]) -> dict[str, object]: ...
 ```
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_profile_is_nonempty_and_role_layered():
@@ -43,10 +43,10 @@ def test_profile_is_nonempty_and_role_layered():
     assert "world_rules" not in writer
 ```
 
-- [ ] **Step 2: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py::test_profile_is_nonempty_and_role_layered -v`; expected FAIL.
-- [ ] **Step 3: Implement.** Default profile must include Chinese pure-text narrative rules, world/history/scene budgets, and contracts for architect/npc_planner/director/writer. Compiler gives Architect/Planner/Director narrative+world+history+scene+characters; Writer gets only narrative and writer contract.
-- [ ] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_autonomous_npc_contracts.py -v`; expected PASS.
-- [ ] **Step 5: Commit.** `git add contracts/novel_profile.py runtime/novel_profile_compiler.py tests/test_novel_autonomy_runtime_wiring.py && git commit -m "fix: compile autonomous novel profile layers"`
+- [x] **Step 2: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py::test_profile_is_nonempty_and_role_layered -v`; expected FAIL.
+- [x] **Step 3: Implement.** Default profile must include Chinese pure-text narrative rules, world/history/scene budgets, and contracts for architect/npc_planner/director/writer. Compiler gives Architect/Planner/Director narrative+world+history+scene+characters; Writer gets only narrative and writer contract.
+- [x] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_autonomous_npc_contracts.py -v`; expected PASS.
+- [x] **Step 5: Commit.** `git add contracts/novel_profile.py runtime/novel_profile_compiler.py tests/test_novel_autonomy_runtime_wiring.py && git commit -m "fix: compile autonomous novel profile layers"`
 
 ### Task 2: 在真实 Engine 中调用 Profile、规划器和 Director
 
@@ -65,7 +65,7 @@ class AutonomousNpcTurn:
 def _prepare_autonomous_npc_turn(self, project, plan, ledger_items, characters, history, previous_ending, revision) -> AutonomousNpcTurn: ...
 ```
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_real_write_path_calls_planner_and_director(monkeypatch, engine):
@@ -76,16 +76,16 @@ def test_real_write_path_calls_planner_and_director(monkeypatch, engine):
     assert calls == ["planner", "director"]
 ```
 
-- [ ] **Step 2: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py::test_real_write_path_calls_planner_and_director -v`; expected FAIL.
-- [ ] **Step 3: Implement.** Import all three runtime components in `NovelEngine`. Both `write_chapter()` and `write_chapter_stream()` call the shared method before Director. It loads Profile, obtains active/expired agendas, chooses <=5 appeared related characters, calls Pi planner, then calls Director. Architect gets active-agenda summaries before plan generation. Director JSON gains `selected_agenda_ids`; `generate_guidance()` validates IDs through `select_npc_actions()` and exposes only `visible_consequences`. Full agendas stay only in `AutonomousNpcTurn`.
-- [ ] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_pi_architect_director.py tests/test_novel_autonomous_npc_planner.py -v`; expected PASS for stream and non-stream.
-- [ ] **Step 5: Commit.** `git add contracts runtime/novel_engine.py runtime/novel_architect_adapter.py runtime/novel_director_adapter.py tests/test_novel_autonomy_runtime_wiring.py && git commit -m "fix: wire autonomous npc planning into novel engine"`
+- [x] **Step 2: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py::test_real_write_path_calls_planner_and_director -v`; expected FAIL.
+- [x] **Step 3: Implement.** Import all three runtime components in `NovelEngine`. Both `write_chapter()` and `write_chapter_stream()` call the shared method before Director. It loads Profile, obtains active/expired agendas, chooses <=5 appeared related characters, calls Pi planner, then calls Director. Architect gets active-agenda summaries before plan generation. Director JSON gains `selected_agenda_ids`; `generate_guidance()` validates IDs through `select_npc_actions()` and exposes only `visible_consequences`. Full agendas stay only in `AutonomousNpcTurn`.
+- [x] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_pi_architect_director.py tests/test_novel_autonomous_npc_planner.py -v`; expected PASS for stream and non-stream.
+- [x] **Step 5: Commit.** `git add contracts runtime/novel_engine.py runtime/novel_architect_adapter.py runtime/novel_director_adapter.py tests/test_novel_autonomy_runtime_wiring.py && git commit -m "fix: wire autonomous npc planning into novel engine"`
 
 ### Task 3: 建立 Writer 安全边界和接受后提交
 
 **Files:** Modify `runtime/novel_writer_context.py`, `runtime/novel_write_packet_builder.py`, `runtime/novel_evolution_curator.py`, `runtime/novel_ledger_curator.py`, `runtime/novel_engine.py`; Test `tests/test_novel_autonomy_runtime_wiring.py`, `tests/test_novel_writer_context.py`.
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_writer_packet_contains_only_consequence():
@@ -99,16 +99,16 @@ def test_rejected_chapter_writes_no_autonomy_items():
     assert not _ledger("npc_action") and not _ledger("npc_agenda")
 ```
 
-- [ ] **Step 2: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py -v`; expected FAIL.
-- [ ] **Step 3: Implement.** Packet builder accepts `visible_consequences`, not internal actions. Construct a Writer-safe Guidance copy with only beat fields, anchors and visible consequences. Curator returns immediately on non-accepted quality. On accepted quality only: upsert expired updates, `npc_action` for every selected agenda, and continuing `npc_agenda`; never pass raw agenda into Writer/memory.
-- [ ] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_writer_context.py tests/test_novel_evolution_curator.py -v`; expected PASS.
-- [ ] **Step 5: Commit.** `git add runtime tests && git commit -m "fix: enforce writer-safe npc consequence boundary"`
+- [x] **Step 2: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py -v`; expected FAIL.
+- [x] **Step 3: Implement.** Packet builder accepts `visible_consequences`, not internal actions. Construct a Writer-safe Guidance copy with only beat fields, anchors and visible consequences. Curator returns immediately on non-accepted quality. On accepted quality only: upsert expired updates, `npc_action` for every selected agenda, and continuing `npc_agenda`; never pass raw agenda into Writer/memory.
+- [x] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_writer_context.py tests/test_novel_evolution_curator.py -v`; expected PASS.
+- [x] **Step 5: Commit.** `git add runtime tests && git commit -m "fix: enforce writer-safe npc consequence boundary"`
 
 ### Task 4: 两章真实管线验收
 
 **Files:** Modify `tests/test_novel_autonomous_npc_e2e.py`, `docs/handoffs/2026-07-15-novel-pipeline-completion-report.md`.
 
-- [ ] **Step 1: 写失败验收测试。**
+- [x] **Step 1: 写失败验收测试。**
 
 ```python
 def test_two_chapter_chain_uses_profile_and_recovers_consequence(monkeypatch, engine):
@@ -120,10 +120,10 @@ def test_two_chapter_chain_uses_profile_and_recovers_consequence(monkeypatch, en
     assert "截走药材" in second.text and "私密目标" not in second.text
 ```
 
-- [ ] **Step 2: Run.** `pytest tests/test_novel_autonomous_npc_e2e.py::test_two_chapter_chain_uses_profile_and_recovers_consequence -v`; expected FAIL.
-- [ ] **Step 3: Implement fixture/report.** Assert exact order `architect → npc_planner → director → writer → quality → curator`. Mark real DeepSeek V4 Pro test optional only under `RUN_NOVEL_REAL_E2E=1`; lack of credentials is SKIPPED, never PASS.
-- [ ] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_autonomous_npc_e2e.py tests/test_novel_pi_*.py -v`; then `npm test` in `agent_harness`; expected PASS.
-- [ ] **Step 5: Commit.** `git add tests docs/handoffs && git commit -m "test: verify autonomous npc runtime wiring"`
+- [x] **Step 2: Run.** `pytest tests/test_novel_autonomous_npc_e2e.py::test_two_chapter_chain_uses_profile_and_recovers_consequence -v`; expected FAIL.
+- [x] **Step 3: Implement fixture/report.** Assert exact order `architect → npc_planner → director → writer → quality → curator`. Mark real DeepSeek V4 Pro test optional only under `RUN_NOVEL_REAL_E2E=1`; lack of credentials is SKIPPED, never PASS.
+- [x] **Step 4: Run.** `pytest tests/test_novel_autonomy_runtime_wiring.py tests/test_novel_autonomous_npc_e2e.py tests/test_novel_pi_*.py -v`; then `npm test` in `agent_harness`; expected PASS.
+- [x] **Step 5: Commit.** `git add tests docs/handoffs && git commit -m "test: verify autonomous npc runtime wiring"`
 
 ## Self-Review
 
