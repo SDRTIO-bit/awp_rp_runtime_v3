@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import re
+
 import pytest
 
 from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter
@@ -180,3 +182,114 @@ def test_real_stream_path_calls_planner_and_director(
 
     engine.write_chapter_stream(project_id="p1", chapter_index=1)
     assert calls == ["planner", "director"]
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Task 3: Writer-safe boundary + post-accept commit
+# ────────────────────────────────────────────────────────────────────────────
+
+_FORBIDDEN_PACKET_FIELDS = (
+    "private_goal",
+    "known_fact_ids",
+    "resources",
+    "cost",
+    "next_action",
+    "trigger",
+    "risk",
+    "deadline",
+    "thread_key",
+    "reasoning",
+)
+
+
+def _packet_after_real_selection(monkeypatch, reg, engine):
+    """Run the real write path with deterministic planner/director and capture
+    the packet the Writer actually receives."""
+    _setup_real_path_project(reg)
+
+    monkeypatch.setattr(
+        NovelNpcAgendaAdapter,
+        "propose",
+        lambda *a, **k: (_agenda(),),
+    )
+
+    def _select(self, agendas, selected_ids):
+        return (_selected(),)
+
+    monkeypatch.setattr(NovelDirectorAdapter, "select_npc_actions", _select)
+
+    captured: dict = {}
+    original_call_writer = engine._call_writer
+
+    def capture_call_writer(packet, **kwargs):
+        captured["packet"] = packet
+        return original_call_writer(packet, **kwargs)
+
+    monkeypatch.setattr(engine, "_call_writer", capture_call_writer)
+    engine.write_chapter(project_id="p1", chapter_index=1)
+    return captured["packet"]
+
+
+def test_writer_packet_contains_only_consequence(
+    monkeypatch, reg, engine, fake_novel_role_runtime,
+):
+    packet = _packet_after_real_selection(monkeypatch, reg, engine)
+    assert packet is not None
+    # The Writer must see the visible consequence text…
+    assert len(packet.visible_consequences) == 1
+    assert "截走药材" in packet.visible_consequences[0].observable_event
+
+    serialized = json.dumps(packet.to_dict(), ensure_ascii=False)
+
+    # The internal selection list (NamedReasoning + private carry) must not
+    # be serialized onto the Writer packet: the Director's reasoning and the
+    # private SelectedNpcAction records are gone entirely.
+    assert '"selected_npc_actions"' not in serialized
+
+    # Every private-agenda key that would only exist if an NpcAgenda or a
+    # raw SelectedNpcAction leaked through is absent as a JSON key.
+    for field in _FORBIDDEN_PACKET_FIELDS:
+        pattern = re.compile(r'"%s"\s*:' % re.escape(field))
+        assert not pattern.search(serialized), (
+            f"forbidden field leaked into writer packet as a JSON key: {field}"
+        )
+
+
+def test_rejected_chapter_writes_no_autonomy_items(
+    monkeypatch, reg, engine, fake_novel_role_runtime,
+):
+    _setup_real_path_project(reg)
+    monkeypatch.setattr(
+        NovelNpcAgendaAdapter,
+        "propose",
+        lambda *a, **k: (_agenda(),),
+    )
+    monkeypatch.setattr(
+        NovelDirectorAdapter,
+        "select_npc_actions",
+        lambda self, agendas, selected_ids: (_selected(),),
+    )
+    # Force rejection: quality gate returns REVISE (keeping the writer text).
+    def _reject(*args, **kwargs):
+        return _rejected_quality_decision(), args[0]
+
+    monkeypatch.setattr(engine._quality_pipeline, "run_chapter", _reject)
+
+    engine.write_chapter(project_id="p1", chapter_index=1)
+    assert reg.novel_ledger_store.list_by_project("p1", NpcAction.LEDGER_SECTION) == []
+    assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
+
+
+def _rejected_quality_decision():
+    from awp_rp_runtime_v3.contracts.quality_decision import (
+        QualityDecision,
+        QualityVerdict,
+    )
+    return QualityDecision(
+        trace_id="qd-reject",
+        source_turn_id="ch-1",
+        verdict=QualityVerdict.REVISE,
+        blocking_reasons=["forced rejection"],
+        warnings=[],
+        checks=[],
+    )

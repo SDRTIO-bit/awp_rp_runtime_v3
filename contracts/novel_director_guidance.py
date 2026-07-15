@@ -178,7 +178,10 @@ class DirectorGuidance:
     reasoning: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        # ``selected_npc_actions`` and ``reasoning`` are Director-internal:
+        # they never belong on a Writer-bound packet. Omit them when empty so
+        # the serialized guidance never carries a private-selection key.
+        result: dict[str, Any] = {
             "schema_id": self.schema_id,
             "schema_version": self.schema_version,
             "guidance_id": self.guidance_id,
@@ -189,11 +192,16 @@ class DirectorGuidance:
             "foreshadowing_schedule": [f.to_dict() for f in self.foreshadowing_schedule],
             "subplot_status": [s.to_dict() for s in self.subplot_status],
             "visible_consequences": [c.model_dump(mode="json") for c in self.visible_consequences],
-            "selected_npc_actions": [a.model_dump(mode="json") for a in self.selected_npc_actions],
-            "risk_flags": list(self.risk_flags),
-            "opportunities": list(self.opportunities),
-            "reasoning": self.reasoning,
         }
+        if self.selected_npc_actions:
+            result["selected_npc_actions"] = [
+                a.model_dump(mode="json") for a in self.selected_npc_actions
+            ]
+        result["risk_flags"] = list(self.risk_flags)
+        result["opportunities"] = list(self.opportunities)
+        if self.reasoning:
+            result["reasoning"] = self.reasoning
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DirectorGuidance:

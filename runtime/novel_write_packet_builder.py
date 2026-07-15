@@ -14,6 +14,38 @@ from ..contracts.novel_director_guidance import DirectorGuidance
 from .novel_writer_context import NovelWriterContextCompiler
 
 
+def writer_safe_guidance(guidance: DirectorGuidance) -> DirectorGuidance:
+    """Return a Writer-facing copy of the guidance with private NPC internals stripped.
+
+    The Writer only ever needs beat details, fact anchors, foreshadowing/subplot
+    scheduling and the already-selected visible consequences. The internal
+    ``selected_npc_actions`` (which carry ``reasoning``) and any Director
+    ``reasoning`` never cross the boundary. If a guidance populates only the
+    ``selected_npc_actions`` (legacy shape) the surviving visible consequences
+    are lifted onto the packet before the private actions are stripped.
+    """
+
+    visible = guidance.visible_consequences or tuple(
+        action.visible_consequence for action in guidance.selected_npc_actions
+    )
+    return DirectorGuidance(
+        schema_id=guidance.schema_id,
+        schema_version=guidance.schema_version,
+        guidance_id=guidance.guidance_id,
+        character_anchor=guidance.character_anchor,
+        timeline_anchor=guidance.timeline_anchor,
+        beat_details=guidance.beat_details,
+        outline_enhancements=guidance.outline_enhancements,
+        foreshadowing_schedule=guidance.foreshadowing_schedule,
+        subplot_status=guidance.subplot_status,
+        visible_consequences=visible,
+        selected_npc_actions=(),  # private to the Director/Curator path
+        risk_flags=guidance.risk_flags,
+        opportunities=guidance.opportunities,
+        reasoning="",
+    )
+
+
 class NovelWritePacketBuilder:
     """Build NovelWritePacket implementing oh-story's write-before-three-steps."""
 
@@ -65,7 +97,7 @@ class NovelWritePacketBuilder:
             prev_chapter_ending=prev_chapter_ending,
             global_summaries=global_summaries,
             character_states=character_states,
-            director_guidance=director_guidance,
+            director_guidance=writer_safe_guidance(director_guidance),
             project_root=project_root,
             active_memory_context=active_memory_context,
             memory_recall=memory_recall,
@@ -99,6 +131,7 @@ class NovelWritePacketBuilder:
             i.content for i in ledger_items if i.section == "world_rules"
         ]
 
+        safe_guidance = writer_safe_guidance(director_guidance)
         return NovelWritePacket(
             packet_id=f"pkt-{chapter_plan.chapter_id}-{beat.beat_id}",
             project_id=chapter_plan.project_id,
@@ -109,7 +142,8 @@ class NovelWritePacketBuilder:
             memory_recall=list(memory_recall or []),
             foreshadowing_items=foreshadowing_items,
             world_constraints=world_constraints,
-            director_guidance=director_guidance,
+            director_guidance=safe_guidance,
+            visible_consequences=safe_guidance.visible_consequences,
             current_scene_beat=beat,
             accumulated_text=accumulated_text,
             sibling_outlines=list(sibling_outlines or []),

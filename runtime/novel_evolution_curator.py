@@ -65,11 +65,17 @@ class NovelEvolutionCurator:
         quality_decision: QualityDecision | None,
         selected_npc_actions: tuple[SelectedNpcAction, ...] = (),
     ) -> dict[str, Any]:
+        # Autonomous NPC actions are committed only after a chapter the
+        # quality gate accepted. A rejected/downgrade-accepted chapter must
+        # persist no npc_action/npc_agenda side effects even if a caller passes
+        # them here directly.
+        accepted = quality_decision is None or quality_decision.is_accepted()
+        effective_npc_actions = selected_npc_actions if accepted else ()
         # Convert selected autonomous NPC actions to deterministic ledger updates
         # so later chapters recall them as visible consequences.
         npc_ledger_items = [
             self._selected_npc_action_to_ledger(action, chapter_plan)
-            for action in selected_npc_actions
+            for action in effective_npc_actions
         ]
 
         ledger_result = self._curate_ledger(

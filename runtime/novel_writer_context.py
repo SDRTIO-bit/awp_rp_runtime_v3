@@ -61,9 +61,14 @@ class NovelWriterContextCompiler:
             ],
             world_constraints=world_constraints,
             director_guidance=director_guidance,
-            visible_consequences=tuple(
-                action.visible_consequence
-                for action in director_guidance.selected_npc_actions
+            visible_consequences=(
+                director_guidance.visible_consequences
+                or tuple(
+                    action.visible_consequence
+                    for action in getattr(
+                        director_guidance, "selected_npc_actions", ()
+                    )
+                )
             ),
             allowed_cast=allowed_cast,
             chapter_contract=self._chapter_contract(chapter_plan, allowed_cast),
