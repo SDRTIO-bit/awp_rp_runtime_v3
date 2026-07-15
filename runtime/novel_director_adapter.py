@@ -13,6 +13,7 @@ from typing import Any
 from ..contracts.novel_director_guidance import (
     DirectorGuidance, BeatGuidance, ForeshadowingAction, SubplotStatus, OutlineEnhancement,
 )
+from ..contracts.novel_npc_agenda import NpcAgenda, SelectedNpcAction
 from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
 from .prompt_loader import load_prompt
 from .novel_role_context import get_novel_role_context
@@ -39,8 +40,17 @@ class NovelDirectorAdapter:
         foreshadowing_list: list,
         subplot_status: list,
         previous_chapter_ending: str,
+        *,
+        candidate_agendas: tuple[NpcAgenda, ...] = (),
     ) -> DirectorGuidance:
-        """Generate beat details for a chapter."""
+        """Generate beat details for a chapter and select NPC actions.
+
+        ``candidate_agendas`` are the private agendas the Pi planner proposed
+        for this chapter. Only the Writer-safe ``visible_consequence`` of each
+        agenda is surfaced to the LLM; the Director returns
+        ``selected_agenda_ids`` which are validated through
+        ``select_npc_actions`` before any action reaches the Writer packet.
+        """
         # 从已有数据拼锚点，不经过 LLM
         character_anchor = self._build_character_anchor(character_states)
         timeline_anchor = f"第{chapter_plan.chapter_index}章"
@@ -50,6 +60,7 @@ class NovelDirectorAdapter:
             chapter_plan, character_anchor, timeline_anchor,
             previous_chapter_ending, ledger_items,
             completed_chapters_summary, foreshadowing_list, subplot_status,
+            candidate_agendas=candidate_agendas,
         )
         beat_details = result.get("beat_details", [])
         foreshadowing_schedule = result.get("foreshadowing_schedule", [])
@@ -57,6 +68,12 @@ class NovelDirectorAdapter:
         outline_enhancements = result.get("outline_enhancements", [])
         risk_flags = result.get("risk_flags", [])
         opportunities = result.get("opportunities", [])
+
+        # Validate the Director's chosen agenda IDs through the deterministic
+        # selection rules (at most 2, no same-NPC/thread conflicts). Only the
+        # visible consequences of the survivors ever cross to the Writer.
+        selected_ids = tuple(result.get("selected_agenda_ids", []) or [])
+        selected_actions = self.select_npc_actions(candidate_agendas, selected_ids)
 
         return DirectorGuidance(
             guidance_id=f"guid-ch{chapter_plan.chapter_index}",
@@ -68,6 +85,10 @@ class NovelDirectorAdapter:
             outline_enhancements=tuple(outline_enhancements),
             risk_flags=tuple(risk_flags) if isinstance(risk_flags, (list, tuple)) else (),
             opportunities=tuple(opportunities) if isinstance(opportunities, (list, tuple)) else (),
+            selected_npc_actions=selected_actions,
+            visible_consequences=tuple(
+                a.visible_consequence for a in selected_actions
+            ),
         )
 
     def _build_character_anchor(self, character_states: dict) -> str:
@@ -99,8 +120,15 @@ class NovelDirectorAdapter:
         completed_chapters_summary="",
         foreshadowing_list=None,
         subplot_status=None,
+        *,
+        candidate_agendas: tuple[NpcAgenda, ...] = (),
     ) -> dict[str, Any]:
-        """调 LLM 生成 beat 细纲 + 全局优化。返回完整 JSON 解析结果。"""
+        """调 LLM 生成 beat 细纲 + 全局优化。返回完整 JSON 解析结果。
+
+        Autonomous NPC agendas are injected only by their Writer-safe
+        ``visible_consequence`` (agenda_id + observable event/clue). Private
+        goals, fact ids, resources and risk never cross into the Director LLM.
+        """
         # 构造 user prompt
         parts = [f"=== 角色锚点 ===\n{character_anchor}"]
         parts.append(f"=== 时间锚点 ===\n{timeline_anchor}")
@@ -126,6 +154,25 @@ class NovelDirectorAdapter:
             parts.append(f"=== 支线状态 ===\n{ss_text}")
 
         parts.append(f"=== 章节计划 ===\n{json.dumps(chapter_plan.to_dict(), ensure_ascii=False)}")
+
+        # Writer-safe NPC consequence candidates (no private agenda fields).
+        if candidate_agendas:
+            safe_cands = []
+            for agenda in candidate_agendas:
+                c = agenda.visible_consequence
+                safe_cands.append(
+                    f"- agenda_id={agenda.agenda_id}; beat_id={c.beat_id}; "
+                    f"observable_event={c.observable_event}; "
+                    f"observable_clue={c.observable_clue}; "
+                    f"affected={list(c.affected_characters)}"
+                )
+            parts.append(
+                "=== 候选 NPC 可见后果（仅这些可见后果可写入正文）===\n"
+                + "\n".join(safe_cands)
+            )
+            parts.append(
+                "在 JSON 中增加 selected_agenda_ids（至多 2 个），其余字段保持不变。"
+            )
 
         parts.append(f"\n=== 任务 ===\n把上面章节计划里的 scene_beats 展开成细纲。每个 beat 一个。共 {len(chapter_plan.scene_beats)} 个。")
 
@@ -163,6 +210,9 @@ class NovelDirectorAdapter:
                     "outline_enhancements": [],
                     "risk_flags": data.get("risk_flags", []),
                     "opportunities": data.get("opportunities", []),
+                    "selected_agenda_ids": tuple(
+                        sid for sid in data.get("selected_agenda_ids", []) if sid
+                    ),
                 }
                 if beats:
                     result["beat_details"] = [
@@ -188,6 +238,37 @@ class NovelDirectorAdapter:
                 for b in chapter_plan.scene_beats
             ],
         }
+
+    def select_npc_actions(
+        self,
+        agendas: tuple[NpcAgenda, ...],
+        selected_ids: tuple[str, ...],
+    ) -> tuple[SelectedNpcAction, ...]:
+        """Return at most two validated, non-conflicting selected NPC actions.
+
+        Rejects unknown agenda IDs, selections over the budget, or actions that
+        share the same NPC or thread key (would compete for the same screen
+        real estate in a single chapter).
+        """
+        by_id = {a.agenda_id: a for a in agendas}
+        selected: list[SelectedNpcAction] = []
+        seen_npcs: set[str] = set()
+        seen_threads: set[str] = set()
+        for agenda_id in selected_ids[:2]:
+            agenda = by_id.get(agenda_id)
+            if agenda is None:
+                continue
+            if agenda.npc in seen_npcs or agenda.thread_key in seen_threads:
+                continue
+            selected.append(SelectedNpcAction(
+                agenda_id=agenda.agenda_id,
+                character_name=agenda.npc,
+                reasoning=f"推进 {agenda.thread_key} 线",
+                visible_consequence=agenda.visible_consequence,
+            ))
+            seen_npcs.add(agenda.npc)
+            seen_threads.add(agenda.thread_key)
+        return tuple(selected)
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:

@@ -61,6 +61,15 @@ class NovelWriterContextCompiler:
             ],
             world_constraints=world_constraints,
             director_guidance=director_guidance,
+            visible_consequences=(
+                director_guidance.visible_consequences
+                or tuple(
+                    action.visible_consequence
+                    for action in getattr(
+                        director_guidance, "selected_npc_actions", ()
+                    )
+                )
+            ),
             allowed_cast=allowed_cast,
             chapter_contract=self._chapter_contract(chapter_plan, allowed_cast),
             history_context=self._bounded_history(global_summaries),
@@ -112,7 +121,8 @@ class NovelWriterContextCompiler:
         plan_text = self._plan_text(plan)
         selected = []
         for item in items:
-            if item.section in {"chapter_summary", "world_rules"}:
+            # Private NPC agendas/actions never cross the Writer boundary.
+            if item.section in {"chapter_summary", "world_rules", "npc_agenda", "npc_action"}:
                 continue
             if item.status in {"resolved", "stale", "contradicted"}:
                 continue

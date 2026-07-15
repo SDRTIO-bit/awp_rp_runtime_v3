@@ -26,6 +26,7 @@ def test_pi_role_connections_are_role_specific_and_secret_free(monkeypatch):
         "continuity_checker",
         "style_cleaner",
         "ledger_curator",
+        "npc_planner",
     }
     assert configs["writer"].model == "qwen3.7-plus"
     assert configs["writer"].max_tokens == 4000

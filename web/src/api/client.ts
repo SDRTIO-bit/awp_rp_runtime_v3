@@ -557,3 +557,40 @@ export async function listNovelLedger(projectId: string): Promise<NovelLedgerIte
 export async function getNovelOutline(projectId: string): Promise<NovelPlanResult> {
   return get<NovelPlanResult>(`/novels/${encodeURIComponent(projectId)}/outline`);
 }
+
+export interface AutonomySummary {
+  project_id: string;
+  active_agenda_count: number;
+  stale_agenda_count: number;
+  npc_action_count: number;
+  chapters: Array<{
+    chapter_index: number;
+    chapter_id: string;
+    active_agenda_count: number;
+    stale_agenda_count: number;
+    npc_action_count: number;
+  }>;
+}
+
+export interface StatePromotionResult {
+  success: boolean;
+  character_id: string;
+  promoted_from_item_id: string;
+  promoted_at: string;
+  current_state: Record<string, unknown>;
+}
+
+export async function getAutonomySummary(projectId: string): Promise<AutonomySummary> {
+  return get<AutonomySummary>(`/novels/${encodeURIComponent(projectId)}/autonomy-summary`);
+}
+
+export async function promoteCharacterState(
+  projectId: string,
+  characterId: string,
+  payload: { source_item_id: string; patch: Record<string, unknown> },
+): Promise<StatePromotionResult> {
+  return post<StatePromotionResult>(
+    `/novels/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/state-promotions`,
+    payload,
+  );
+}

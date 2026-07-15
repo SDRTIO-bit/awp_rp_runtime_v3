@@ -11,6 +11,7 @@ from typing import Any
 from .novel_chapter import ChapterPlan, BeatDetail
 from .novel_ledger import LedgerItem
 from .novel_director_guidance import DirectorGuidance
+from .novel_npc_agenda import VisibleConsequence
 
 SCHEMA_ID = "awp.novel.write-packet.v1"
 SCHEMA_VERSION = 1
@@ -38,6 +39,7 @@ class NovelWritePacket:
     style_profile: dict[str, Any] = field(default_factory=dict)
     benchmark_snippets: list[str] = field(default_factory=list)
     director_guidance: DirectorGuidance = field(default_factory=DirectorGuidance)
+    visible_consequences: tuple[VisibleConsequence, ...] = ()
 
     # 分 beat 模式
     current_scene_beat: BeatDetail | None = None
@@ -74,6 +76,7 @@ class NovelWritePacket:
             "style_profile": self.style_profile,
             "benchmark_snippets": self.benchmark_snippets,
             "director_guidance": self.director_guidance.to_dict(),
+            "visible_consequences": [c.model_dump(mode="json") for c in self.visible_consequences],
             "current_scene_beat": self.current_scene_beat.to_dict() if self.current_scene_beat else None,
             "accumulated_text": self.accumulated_text,
             "sibling_outlines": list(self.sibling_outlines),
@@ -106,6 +109,11 @@ class NovelWritePacket:
             style_profile=dict(data.get("style_profile", {})),
             benchmark_snippets=list(data.get("benchmark_snippets", [])),
             director_guidance=DirectorGuidance.from_dict(data.get("director_guidance", {})),
+            visible_consequences=tuple(
+                VisibleConsequence.model_validate(c)
+                for c in data.get("visible_consequences", [])
+                if isinstance(c, dict)
+            ),
             current_scene_beat=BeatDetail.from_dict(data["current_scene_beat"]) if data.get("current_scene_beat") is not None else None,
             accumulated_text=data.get("accumulated_text", ""),
             sibling_outlines=list(data.get("sibling_outlines", [])),

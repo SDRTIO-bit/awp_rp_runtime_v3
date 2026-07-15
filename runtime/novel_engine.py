@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 from ..contracts.novel_project import NovelProject
@@ -21,6 +21,17 @@ from ..contracts.memory_recall_request import MemoryRecallRequest
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_write_packet_builder import NovelWritePacketBuilder
 from .novel_quality_pipeline import NovelQualityPipeline
+from .novel_profile_compiler import NovelProfileCompiler
+from .novel_npc_agenda_service import NpcAgendaService
+from .novel_npc_agenda_adapter import NovelNpcAgendaAdapter
+from ..contracts.novel_profile import (
+    NovelProfileError,
+    NovelWritingProfile,
+    PROFILE_CONFIG_KEY,
+    default_autonomous_profile,
+    load_autonomous_profile,
+)
+from ..contracts.novel_npc_agenda import NpcAgenda
 from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
@@ -34,6 +45,22 @@ from .novel_trace import (
     safe_on_chunk,
     safe_on_error,
 )
+
+
+@dataclass(frozen=True)
+class AutonomousNpcTurn:
+    """One chapter's autonomous-NPC state — lives only in this turn's memory.
+
+    Keeps internal ``NpcAgenda`` objects and the Writer-safe
+    ``VisibleConsequence`` projections separated. Only the visible consequences
+    ever reach the Writer packet; full agendas only reach the Curator after
+    the chapter is accepted.
+    """
+
+    active_agendas: tuple = ()
+    selected_agendas: tuple = ()
+    visible_consequences: tuple = ()
+    agenda_updates: tuple = ()
 
 
 class NovelEngine:
@@ -72,6 +99,9 @@ class NovelEngine:
         self._packet_builder = NovelWritePacketBuilder(registry)
         self._quality_pipeline = NovelQualityPipeline(registry)
         self._callbacks = callbacks or NovelStreamCallbacks()
+        # Autonomous-NPC plumbing (profile compiler + agenda lifecycle + Pi planner).
+        self._profile_compiler = NovelProfileCompiler()
+        self._agenda_service = NpcAgendaService()
 
     def _safe_on_phase(self, event: str, name: str, payload: dict[str, Any]) -> None:
         safe_on_phase(self._callbacks.on_phase, event, name, payload)
@@ -263,6 +293,19 @@ class NovelEngine:
         # Build global chapter summaries (lightweight, no plan detail)
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
+        # Autonomous NPC pipeline (Profile → agendas → planner). Runs in turn
+        # memory only; the Pi planner proposes candidate agendas the Director
+        # then validates and exposes as Writer-safe visible consequences.
+        npc_turn = self._prepare_autonomous_npc_turn(
+            project,
+            plan,
+            ledger_items,
+            characters,
+            history=global_summaries,
+            previous_ending=prev_chapter_ending,
+            revision=revision,
+        )
+
         # Director expands the structural plan inside its own task-scoped Pi session.
         director_guidance = self._call_director(
             project_id,
@@ -278,6 +321,7 @@ class NovelEngine:
                 item for item in ledger_items if item.section == "subplot"
             ],
             revision=revision,
+            candidate_agendas=npc_turn.selected_agendas,
         )
         packet = self._packet_builder.build(
             chapter_plan=plan,
@@ -338,6 +382,11 @@ class NovelEngine:
             text=text,
             known_character_names={c.name for c in all_characters if c.name},
         )
+
+        # Autonomous NPC actions must only be committed when the chapter passed
+        # quality gates *before* the downgrade-accept policy kicks in.
+        chapter_quality_accepted = quality_decision.verdict.value == "accept"
+
         self._quality_pipeline.annotate_only(quality_decision)
 
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
@@ -365,6 +414,16 @@ class NovelEngine:
         self._update_ledger(
             project_id, plan, text, ledger_items, characters, quality_decision,
             revision=revision,
+            selected_npc_actions=(
+                director_guidance.selected_npc_actions
+                if chapter_quality_accepted
+                else ()
+            ),
+            agenda_updates=(
+                npc_turn.agenda_updates
+                if chapter_quality_accepted
+                else ()
+            ),
         )
 
         return draft
@@ -457,6 +516,102 @@ class NovelEngine:
                 prev_ending_design=prev_ending_design,
             )
 
+    def _load_autonomous_profile(self, project: NovelProject) -> "NovelWritingProfile":
+        """Return the project's autonomy profile.
+
+        Safety boundary (enforced hard-fail): a *present but incompatible*
+        profile (schema/parse error or mode != "novel") raises immediately so
+        an autonomous pipeline never silently runs on an RP/corrupt profile.
+
+        Back-compat: a project with no ``autonomous_profile`` in its config
+        silently falls back to ``default_autonomous_profile()`` — newly
+        initialized and legacy projects keep working until they explicitly
+        opt into a custom profile.
+        """
+        config = getattr(project, "config", {}) or {}
+        profile_data = config.get(PROFILE_CONFIG_KEY)
+        if profile_data is None:
+            return default_autonomous_profile()
+        try:
+            return load_autonomous_profile(config)
+        except NovelProfileError:
+            # Bad schema / version / non-novel mode: never run blind.
+            raise
+
+    def _prepare_autonomous_npc_turn(
+        self,
+        project,
+        plan,
+        ledger_items,
+        characters,
+        history,
+        previous_ending,
+        revision,
+    ) -> AutonomousNpcTurn:
+        """Run the autonomous-NPC pipeline for one chapter, in turn memory only.
+
+        Profile → active/expired agendas → candidate characters → Pi planner.
+        Director selection runs separately inside ``_call_director`` so the
+        same validated agendas feed both paths. Lifecycle updates remain in
+        memory until the chapter has passed the quality gate.
+        """
+        profile = self._load_autonomous_profile(project)
+        active_agendas, expired_updates = self._agenda_service.active(
+            ledger_items, plan.chapter_index
+        )
+
+        candidates = self._agenda_service.eligible_characters(
+            characters, plan, plan.chapter_index
+        )
+        if not candidates:
+            return AutonomousNpcTurn(
+                active_agendas=active_agendas,
+                agenda_updates=expired_updates,
+            )
+
+        # Compile the planner-visible profile context (no LLM; deterministic).
+        world_rules = [
+            i.content for i in ledger_items if i.section == "world_rules" and i.content
+  ][:5]
+        profile_context = self._profile_compiler.compile_for(
+            "npc_planner",
+            profile,
+            world_rules=world_rules,
+            history=history or "",
+            scene=previous_ending or "",
+            character_context={
+                c.name: getattr(c, "core_motivation", "") for c in candidates
+            },
+        )
+
+        adapter = NovelNpcAgendaAdapter()
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=plan.project_id,
+            chapter_index=plan.chapter_index,
+            revision=revision,
+            phase="npc_planner",
+            artifacts={"profile": profile_context, "candidates": tuple(candidates)},
+        ):
+            proposed = adapter.propose(
+                plan.project_id,
+                plan,
+                tuple(candidates),
+                active_agendas,
+                profile_context,
+            )
+        proposed_updates = tuple(
+            self._agenda_service.to_ledger_item(agenda, plan)
+            for agenda in proposed
+        )
+        updates_by_id = {item.item_id: item for item in expired_updates}
+        updates_by_id.update({item.item_id: item for item in proposed_updates})
+        return AutonomousNpcTurn(
+            active_agendas=active_agendas,
+            selected_agendas=proposed,
+            agenda_updates=tuple(updates_by_id.values()),
+        )
+
     def _call_director(
         self, project_id, plan, ledger_items, character_states,
         prev_chapter_ending,
@@ -464,6 +619,7 @@ class NovelEngine:
         foreshadowing_list: list | None = None,
         subplot_status: list | None = None,
         revision: int = 1,
+        candidate_agendas: tuple = (),
     ) -> DirectorGuidance:
         """Call Director agent."""
         from .novel_director_adapter import NovelDirectorAdapter
@@ -484,6 +640,7 @@ class NovelEngine:
                 foreshadowing_list=foreshadowing_list or [],
                 subplot_status=subplot_status or [],
                 previous_chapter_ending=prev_chapter_ending,
+                candidate_agendas=tuple(candidate_agendas),
             )
 
     def _check_continuity(
@@ -798,6 +955,16 @@ class NovelEngine:
 
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
+        npc_turn = self._prepare_autonomous_npc_turn(
+            project,
+            plan,
+            ledger_items,
+            characters,
+            history=global_summaries,
+            previous_ending=prev_chapter_ending,
+            revision=revision,
+        )
+
         # Phase: director — separate task-scoped Pi Agent Session.
         self._safe_on_phase("start", "director", {"ch": chapter_index})
         director_started = time.time()
@@ -815,6 +982,7 @@ class NovelEngine:
                 item for item in ledger_items if item.section == "subplot"
             ],
             revision=revision,
+            candidate_agendas=npc_turn.selected_agendas,
         )
         self._safe_on_phase("end", "director", {
             "ch": chapter_index,
@@ -892,6 +1060,11 @@ class NovelEngine:
             text=text,
             known_character_names={c.name for c in all_characters if c.name},
         )
+
+        # Autonomous NPC actions must only be committed when the chapter passed
+        # quality gates *before* the downgrade-accept policy kicks in.
+        chapter_quality_accepted = quality_decision.verdict.value == "accept"
+
         self._quality_pipeline.annotate_only(quality_decision)
         self._safe_on_phase("end", "continuity", {
             "ch": chapter_index,
@@ -921,6 +1094,16 @@ class NovelEngine:
         self._update_ledger(
             project_id, plan, text, ledger_items, characters, quality_decision,
             revision=revision,
+            selected_npc_actions=(
+                director_guidance.selected_npc_actions
+                if chapter_quality_accepted
+                else ()
+            ),
+            agenda_updates=(
+                npc_turn.agenda_updates
+                if chapter_quality_accepted
+                else ()
+            ),
         )
         self._safe_on_phase("end", "ledger", {
             "ch": chapter_index,
@@ -1063,6 +1246,8 @@ class NovelEngine:
         quality_decision,
         *,
         revision: int = 1,
+        selected_npc_actions: tuple = (),
+        agenda_updates: tuple[LedgerItem, ...] = (),
     ) -> None:
         """Update ledger and memory after chapter writing."""
         if quality_decision is None or not quality_decision.is_accepted():
@@ -1084,6 +1269,8 @@ class NovelEngine:
                     current_ledger_items=current_ledger,
                     characters=characters,
                     quality_decision=quality_decision,
+                    selected_npc_actions=selected_npc_actions,
+                    agenda_updates=agenda_updates,
                 )
         except Exception:
             pass  # Don't fail the chapter write if evolution update fails

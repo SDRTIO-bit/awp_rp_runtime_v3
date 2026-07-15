@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .novel_npc_agenda import SelectedNpcAction, VisibleConsequence
+
 SCHEMA_ID = "awp.novel.director-guidance.v2"
 SCHEMA_VERSION = 2
 
@@ -169,12 +171,17 @@ class DirectorGuidance:
     outline_enhancements: tuple[OutlineEnhancement, ...] = ()
     foreshadowing_schedule: tuple[ForeshadowingAction, ...] = ()
     subplot_status: tuple[SubplotStatus, ...] = ()
+    visible_consequences: tuple[VisibleConsequence, ...] = ()
+    selected_npc_actions: tuple[SelectedNpcAction, ...] = ()
     risk_flags: tuple[str, ...] = ()
     opportunities: tuple[str, ...] = ()
     reasoning: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        # ``selected_npc_actions`` and ``reasoning`` are Director-internal:
+        # they never belong on a Writer-bound packet. Omit them when empty so
+        # the serialized guidance never carries a private-selection key.
+        result: dict[str, Any] = {
             "schema_id": self.schema_id,
             "schema_version": self.schema_version,
             "guidance_id": self.guidance_id,
@@ -184,10 +191,17 @@ class DirectorGuidance:
             "outline_enhancements": [e.to_dict() for e in self.outline_enhancements],
             "foreshadowing_schedule": [f.to_dict() for f in self.foreshadowing_schedule],
             "subplot_status": [s.to_dict() for s in self.subplot_status],
-            "risk_flags": list(self.risk_flags),
-            "opportunities": list(self.opportunities),
-            "reasoning": self.reasoning,
+            "visible_consequences": [c.model_dump(mode="json") for c in self.visible_consequences],
         }
+        if self.selected_npc_actions:
+            result["selected_npc_actions"] = [
+                a.model_dump(mode="json") for a in self.selected_npc_actions
+            ]
+        result["risk_flags"] = list(self.risk_flags)
+        result["opportunities"] = list(self.opportunities)
+        if self.reasoning:
+            result["reasoning"] = self.reasoning
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DirectorGuidance:
@@ -202,6 +216,16 @@ class DirectorGuidance:
             outline_enhancements=tuple(OutlineEnhancement.from_dict(e) for e in data.get("outline_enhancements", []) if isinstance(e, dict)),
             foreshadowing_schedule=tuple(ForeshadowingAction.from_dict(f) for f in data.get("foreshadowing_schedule", []) if isinstance(f, dict)),
             subplot_status=tuple(SubplotStatus.from_dict(s) for s in data.get("subplot_status", []) if isinstance(s, dict)),
+            visible_consequences=tuple(
+                VisibleConsequence.model_validate(c)
+                for c in data.get("visible_consequences", [])
+                if isinstance(c, dict)
+            ),
+            selected_npc_actions=tuple(
+                SelectedNpcAction.model_validate(a)
+                for a in data.get("selected_npc_actions", [])
+                if isinstance(a, dict)
+            ),
             risk_flags=tuple(data.get("risk_flags", [])),
             opportunities=tuple(data.get("opportunities", [])),
             reasoning=data.get("reasoning", ""),

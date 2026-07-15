@@ -27,7 +27,7 @@ B. 【事实更新】(ledger_updates): 结构化条目，用于角色状态追�
 === ledger_updates 每个条目的精确 JSON Schema ===
 每个条目必须包含以下固定字段:
 {
-  "section": "character_state | timeline | foreshadowing | relationship | world_rules | open_threads",
+  "section": "character_state | timeline | foreshadowing | relationship | world_rules | open_threads | npc_agenda | npc_action",
   "entity": "关联角色名或实体名",
   "content": "具体事实描述，一句话",
   "status": "active | resolved | stale",
@@ -41,6 +41,8 @@ section 说明:
 - foreshadowing: 新埋设的伏笔
 - world_rules: 新设定的规则/背景信息
 - open_threads: 新出现的未解决线索/疑问
+- npc_agenda: 尚未完结的 NPC 自主议程（规划器已给出，Curator 只保留仍然有效的）
+- npc_action: 已被正文确认的 NPC 行动结果（Curator 只能从未被 quality 拒绝的章节中提取）
 
 伏笔状态: planted(新埋) | advanced(推进) | paid_off(回收) | stale(过期)
 

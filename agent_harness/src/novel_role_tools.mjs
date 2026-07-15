@@ -10,6 +10,12 @@ export const ROLE_TOOL_ALLOWLISTS = Object.freeze({
     "read_ledger",
     "read_characters",
   ]),
+  npc_planner: Object.freeze([
+    "read_project_contract",
+    "read_chapter_plan",
+    "read_ledger",
+    "read_characters",
+  ]),
   director: Object.freeze([
     "read_project_contract",
     "read_chapter_plan",
