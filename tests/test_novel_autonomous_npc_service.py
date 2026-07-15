@@ -47,3 +47,22 @@ def test_compatibility_profile_contains_no_fixed_story_material():
     serialized = default_autonomous_profile().model_dump_json()
     for text in ("刑侦", "匿名威胁", "警局", "第三章", "雨夜", "废弃仓库"):
         assert text not in serialized
+
+
+def test_agenda_to_ledger_item_round_trips_stable_agenda_id():
+    agenda = NpcAgenda(
+        agenda_id="agenda-7", thread_key="沈砚:遗物", npc="沈砚", private_goal="夺回遗物",
+        known_fact_ids=("fact-1",), resources=(), cost="无", next_action="跟踪",
+        trigger="线索", risk="暴露", visible_consequence=VisibleConsequence(
+            agenda_id="agenda-7", beat_id="b1", observable_event="有人跟踪",
+            observable_clue="脚印", affected_characters=("沈砚",),
+        ), deadline="5",
+    )
+    plan = ChapterPlan(project_id="p1", chapter_index=4)
+
+    item = NpcAgendaService().to_ledger_item(agenda, plan)
+
+    restored = NpcAgenda.model_validate(json.loads(item.content))
+    assert item.section == "npc_agenda"
+    assert item.status == "active"
+    assert restored.agenda_id == "agenda-7"

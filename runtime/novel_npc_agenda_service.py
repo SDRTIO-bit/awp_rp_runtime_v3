@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import datetime, timezone
 
+from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_npc_agenda import NpcAgenda
 
 
@@ -29,6 +31,25 @@ class NpcAgendaService:
             else:
                 agendas.append(agenda)
         return tuple(agendas[:MAX_ACTIVE_AGENDAS]), tuple(updates)
+
+    def to_ledger_item(self, agenda: NpcAgenda, chapter_plan, *, status: str = "active") -> LedgerItem:
+        """Encode a proposed agenda as an idempotent ledger record.
+
+        The caller owns the commit decision; this method is deliberately pure
+        with respect to stores so planner output remains turn-local.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        return LedgerItem(
+            item_id=f"novel-ledger-{chapter_plan.project_id}-npc_agenda-{agenda.agenda_id}",
+            project_id=chapter_plan.project_id,
+            section="npc_agenda",
+            entity=agenda.npc,
+            content=agenda.model_dump_json(),
+            status=status,
+            source_chapter=chapter_plan.chapter_index,
+            created_at=now,
+            updated_at=now,
+        )
 
     def eligible_characters(self, characters, plan, chapter_index: int):
         text = " ".join((plan.title, plan.content_summary.cause, plan.content_summary.development))

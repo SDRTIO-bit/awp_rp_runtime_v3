@@ -58,9 +58,9 @@ class AutonomousNpcTurn:
     """
 
     active_agendas: tuple = ()
-    expired_ledger_updates: tuple = ()
     selected_agendas: tuple = ()
     visible_consequences: tuple = ()
+    agenda_updates: tuple = ()
 
 
 class NovelEngine:
@@ -547,18 +547,13 @@ class NovelEngine:
 
         Profile → active/expired agendas → candidate characters → Pi planner.
         Director selection runs separately inside ``_call_director`` so the
-        same validated agendas feed both paths. Expired agendas are persisted
-        as ``stale`` ledger updates here (lifecycle bookkeeping that does not
-        depend on quality).
+        same validated agendas feed both paths. Lifecycle updates remain in
+        memory until the chapter has passed the quality gate.
         """
         profile = self._load_autonomous_profile(project)
         active_agendas, expired_updates = self._agenda_service.active(
             ledger_items, plan.chapter_index
         )
-
-        # Stale agenda updates are lifecycle bookkeeping; persist immediately.
-        for item in expired_updates:
-            self._registry.novel_ledger_store.upsert(item)
 
         candidates = self._agenda_service.eligible_characters(
             characters, plan, plan.chapter_index
@@ -566,7 +561,7 @@ class NovelEngine:
         if not candidates:
             return AutonomousNpcTurn(
                 active_agendas=active_agendas,
-                expired_ledger_updates=expired_updates,
+                agenda_updates=expired_updates,
             )
 
         # Compile the planner-visible profile context (no LLM; deterministic).
@@ -600,10 +595,16 @@ class NovelEngine:
                 active_agendas,
                 profile_context,
             )
+        proposed_updates = tuple(
+            self._agenda_service.to_ledger_item(agenda, plan)
+            for agenda in proposed
+        )
+        updates_by_id = {item.item_id: item for item in expired_updates}
+        updates_by_id.update({item.item_id: item for item in proposed_updates})
         return AutonomousNpcTurn(
             active_agendas=active_agendas,
-            expired_ledger_updates=expired_updates,
             selected_agendas=proposed,
+            agenda_updates=tuple(updates_by_id.values()),
         )
 
     def _call_director(
