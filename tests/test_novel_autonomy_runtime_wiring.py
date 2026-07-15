@@ -280,6 +280,46 @@ def test_rejected_chapter_writes_no_autonomy_items(
     assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
 
 
+def test_second_chapter_reads_the_first_accepted_agenda(
+    monkeypatch, reg, engine, fake_novel_role_runtime,
+):
+    _setup_real_path_project(reg)
+    reg.novel_chapter_plan_store.save(
+        ChapterPlan(
+            chapter_id="ch2",
+            project_id="p1",
+            chapter_index=2,
+            target_chars=100,
+            title="追查药渣",
+            content_summary=ContentSummary(
+                cause="配角甲留下药渣",
+                development="配角甲继续在暗处行动",
+            ),
+        )
+    )
+    seen_active: list[tuple[NpcAgenda, ...]] = []
+
+    def _propose(_self, _project_id, _plan, _candidates, active_agendas, _context):
+        seen_active.append(active_agendas)
+        return (_agenda(),)
+
+    monkeypatch.setattr(NovelNpcAgendaAdapter, "propose", _propose)
+    monkeypatch.setattr(
+        NovelDirectorAdapter,
+        "select_npc_actions",
+        lambda _self, _agendas, _selected_ids: (_selected(),),
+    )
+
+    engine.write_chapter(project_id="p1", chapter_index=1)
+    engine.write_chapter(project_id="p1", chapter_index=2)
+
+    assert len(seen_active) == 2
+    assert any(
+        agenda.agenda_id == "agenda-1" and agenda.thread_key == "observe"
+        for agenda in seen_active[1]
+    )
+
+
 def _rejected_quality_decision():
     from awp_rp_runtime_v3.contracts.quality_decision import (
         QualityDecision,

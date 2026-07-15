@@ -1,6 +1,6 @@
 # 小说管线完成报告
 
-**日期**：2026-07-15  
+**日期**：2026-07-15
 **分支**：`codex/pi-novel-role-agents`  
 **最新提交**：`2077b7f4 fix(agent_harness): map Qwen 3.7 Plus Writer thinking_level=off to enable_thinking=false`
 
@@ -370,3 +370,20 @@ python -m pytest -q tests/test_novel_autonomy_runtime_wiring.py \
 ## 6. 结论
 
 自主 NPC 运行时接线修正完成且零回归。Profile/规划器/Director 选择已真正接入真实写章路径；Writer 仅消费 `VisibleConsequence`，Curator 仅在质量接受后持久化；两章真实管线验收通过，真实 LLM 验收安全受控。
+
+---
+
+# 附录 C：接受后议程提交闭环
+
+**日期**：2026-07-15  
+**分支**：`codex/novel-autonomous-npc`
+
+本次补齐了运行时接线修正后遗留的三项缺口：
+
+- 兼容默认 Profile 已改为通用中文小说约束；不再写入固定的都市刑侦、人物、事件或场景。项目具体设定仍只来自项目配置、账本、人物和章节计划。
+- `NpcAgendaService` 仅将新建、推进或过期议程编码为本轮内存中的 `agenda_updates`；`NovelEngine` 不再在 Quality 前将 stale 议程写入账本。
+- 仅当 Quality verdict 严格为 `accept` 时，`NovelEvolutionCurator` 才同时 upsert `npc_agenda` 与已选择行动的 `npc_action`。拒绝或降级接受会丢弃整批自主 NPC 变更。
+
+跨章验证证明：第一章接受后保存的议程会在第二章重新传入 Planner，保持相同的 `agenda_id` 与 `thread_key`；Writer 序列化边界仍不含任何私密议程字段。
+
+验证结果：Python 自主 NPC 相关套件 **31 passed, 1 skipped**；`agent_harness` Node 测试 **17 passed, 0 failed**。
