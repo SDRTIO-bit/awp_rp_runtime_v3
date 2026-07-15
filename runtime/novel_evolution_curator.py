@@ -18,6 +18,7 @@ from ..contracts.memory_commit_plan import MemoryCommitPlan, MemoryCommitRequest
 from ..contracts.novel_chapter import ChapterPlan
 from ..contracts.novel_character import NovelCharacter
 from ..contracts.novel_ledger import LedgerItem
+from ..contracts.novel_npc_agenda import NpcAction, SelectedNpcAction
 from ..contracts.quality_decision import QualityDecision
 from ..contracts.rag_memory import RagMemoryRecord
 from .active_memory_commit_runtime import ActiveMemoryCommitRuntime
@@ -62,12 +63,20 @@ class NovelEvolutionCurator:
         current_ledger_items: list[LedgerItem],
         characters: list[NovelCharacter],
         quality_decision: QualityDecision | None,
+        selected_npc_actions: tuple[SelectedNpcAction, ...] = (),
     ) -> dict[str, Any]:
+        # Convert selected autonomous NPC actions to deterministic ledger updates
+        # so later chapters recall them as visible consequences.
+        npc_ledger_items = [
+            self._selected_npc_action_to_ledger(action, chapter_plan)
+            for action in selected_npc_actions
+        ]
+
         ledger_result = self._curate_ledger(
-            chapter_text, chapter_plan, current_ledger_items, characters
+            chapter_text, chapter_plan, current_ledger_items, characters,
         )
         chapter_summary = ledger_result.get("chapter_summary", "") if ledger_result else ""
-        ledger_updates = []
+        ledger_updates = list(npc_ledger_items)
         llm_items = ledger_result.get("ledger_updates", [])
         if llm_items and isinstance(llm_items, list) and len(llm_items) > 0:
             print(f"[LedgerCurator] LLM returned {len(llm_items)} ledger_updates, first item keys={list(llm_items[0].keys()) if isinstance(llm_items[0], dict) else type(llm_items[0])}", flush=True)
@@ -177,6 +186,29 @@ class NovelEvolutionCurator:
             traceback.print_exc()
             return {}
 
+    def _selected_npc_action_to_ledger(
+        self,
+        action: SelectedNpcAction,
+        chapter_plan: ChapterPlan,
+    ) -> LedgerItem:
+        """Persist an autonomous NPC action as a ledger item for continuity."""
+        project_id = chapter_plan.project_id
+        source_chapter = chapter_plan.chapter_index
+        entity = action.character_name
+        consequence = action.visible_consequence
+        content = f"{consequence.observable_event} | consequence: {consequence.observable_clue}"
+        return LedgerItem(
+            item_id=f"novel-ledger-{project_id}-ch{source_chapter}-npc_action-{_hash(entity + content)}",
+            project_id=project_id,
+            section=NpcAction.LEDGER_SECTION,
+            entity=entity,
+            content=content,
+            source_chapter=source_chapter,
+            status="active",
+            created_at=_now(),
+            updated_at=_now(),
+        )
+
     def _normalize_ledger_item(
         self, item: LedgerItem, chapter_plan: ChapterPlan
     ) -> LedgerItem | None:
@@ -217,6 +249,7 @@ class NovelEvolutionCurator:
             "chapter_summary", "character_state", "relationship", "timeline",
             "foreshadowing", "world_rules", "open_threads",
             "character", "state", "char",
+            "npc_agenda", "npc_action",
         }
         if section and section.lower().replace(" ", "_") not in known_sections:
             section = "character_state"

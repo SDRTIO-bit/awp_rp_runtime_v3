@@ -10,6 +10,12 @@ from pydantic import BaseModel, ConfigDict, field_validator
 _FACT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
+class NpcAction:
+    """Ledger-level constants for accepted autonomous NPC actions."""
+
+    LEDGER_SECTION: str = "npc_action"
+
+
 class VisibleConsequence(BaseModel):
     """The writer-visible result of a private NPC agenda."""
 
@@ -28,6 +34,7 @@ class SelectedNpcAction(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     agenda_id: str
+    character_name: str
     reasoning: str
     visible_consequence: VisibleConsequence
 

@@ -213,6 +213,7 @@ class NovelDirectorAdapter:
                 continue
             selected.append(SelectedNpcAction(
                 agenda_id=agenda.agenda_id,
+                character_name=agenda.npc,
                 reasoning=f"推进 {agenda.thread_key} 线",
                 visible_consequence=agenda.visible_consequence,
             ))

@@ -338,6 +338,11 @@ class NovelEngine:
             text=text,
             known_character_names={c.name for c in all_characters if c.name},
         )
+
+        # Autonomous NPC actions must only be committed when the chapter passed
+        # quality gates *before* the downgrade-accept policy kicks in.
+        chapter_quality_accepted = quality_decision.verdict.value == "accept"
+
         self._quality_pipeline.annotate_only(quality_decision)
 
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
@@ -365,6 +370,11 @@ class NovelEngine:
         self._update_ledger(
             project_id, plan, text, ledger_items, characters, quality_decision,
             revision=revision,
+            selected_npc_actions=(
+                director_guidance.selected_npc_actions
+                if chapter_quality_accepted
+                else ()
+            ),
         )
 
         return draft
@@ -892,6 +902,11 @@ class NovelEngine:
             text=text,
             known_character_names={c.name for c in all_characters if c.name},
         )
+
+        # Autonomous NPC actions must only be committed when the chapter passed
+        # quality gates *before* the downgrade-accept policy kicks in.
+        chapter_quality_accepted = quality_decision.verdict.value == "accept"
+
         self._quality_pipeline.annotate_only(quality_decision)
         self._safe_on_phase("end", "continuity", {
             "ch": chapter_index,
@@ -921,6 +936,11 @@ class NovelEngine:
         self._update_ledger(
             project_id, plan, text, ledger_items, characters, quality_decision,
             revision=revision,
+            selected_npc_actions=(
+                director_guidance.selected_npc_actions
+                if chapter_quality_accepted
+                else ()
+            ),
         )
         self._safe_on_phase("end", "ledger", {
             "ch": chapter_index,
@@ -1063,6 +1083,7 @@ class NovelEngine:
         quality_decision,
         *,
         revision: int = 1,
+        selected_npc_actions: tuple = (),
     ) -> None:
         """Update ledger and memory after chapter writing."""
         if quality_decision is None or not quality_decision.is_accepted():
@@ -1084,6 +1105,7 @@ class NovelEngine:
                     current_ledger_items=current_ledger,
                     characters=characters,
                     quality_decision=quality_decision,
+                    selected_npc_actions=selected_npc_actions,
                 )
         except Exception:
             pass  # Don't fail the chapter write if evolution update fails
