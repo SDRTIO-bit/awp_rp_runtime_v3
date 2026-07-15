@@ -112,7 +112,8 @@ class NovelWriterContextCompiler:
         plan_text = self._plan_text(plan)
         selected = []
         for item in items:
-            if item.section in {"chapter_summary", "world_rules"}:
+            # Private NPC agendas/actions never cross the Writer boundary.
+            if item.section in {"chapter_summary", "world_rules", "npc_agenda", "npc_action"}:
                 continue
             if item.status in {"resolved", "stale", "contradicted"}:
                 continue
