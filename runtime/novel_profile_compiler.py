@@ -15,17 +15,19 @@ class NovelProfileCompiler:
         role: str,
         profile: NovelWritingProfile,
         *,
-        world: list[str] | None = None,
-        history: str = "",
-        scene: str = "",
-    ) -> dict[str, Any]:
-        result: dict[str, Any] = {
+        world_rules: list[str],
+        history: str,
+        scene: str,
+        character_context: dict[str, object],
+    ) -> dict[str, object]:
+        result: dict[str, object] = {
             "profile_name": profile.name,
             "narrative": profile.narrative,
             "agent_contract": profile.agent_contracts.get(role, {}),
         }
         if role != "writer":
-            result["world"] = list(world or [])
+            result["world_rules"] = list(world_rules)
             result["history"] = history
             result["scene"] = scene
+            result["character_context"] = character_context
         return result
