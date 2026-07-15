@@ -10,6 +10,7 @@
   python scripts/novel_cli.py batch <dir> <start> <end>       # 批量生成
   python scripts/novel_cli.py export <dir>                    # 导出全部数据（章节、账本、角色状态）
   python scripts/novel_cli.py status <dir>                    # 查看项目状态
+  python scripts/novel_cli.py promote-state <dir> <character_id> --source <item_id> --patch '{"injured": true}'  # 人工提升角色状态
   python scripts/novel_cli.py run <dir> <start> <end>         # 一键 seed → plan → batch → export
 """
 
@@ -955,6 +956,59 @@ def cmd_run(args: argparse.Namespace) -> None:
     print(f"\n{GREEN}全部完成!{RESET}")
 
 
+def cmd_promote_state(args: argparse.Namespace) -> None:
+    """Manually promote an accepted npc_action into a character's current_state."""
+    novel_dir = Path(args.dir).resolve()
+    state = _load_state(novel_dir)
+    engine = _get_engine(state["db_path"])
+    pid = state["project_id"]
+    character_id = args.character_id
+    source_item_id = args.source
+
+    try:
+        patch = json.loads(args.patch)
+    except json.JSONDecodeError as e:
+        print(f"{RED}patch JSON 解析失败: {e}{RESET}")
+        return
+    if not isinstance(patch, dict):
+        print(f"{RED}patch 必须是 JSON 对象{RESET}")
+        return
+
+    forbidden_keys = {"identity", "motivation", "known_fact_ids"}
+    bad_keys = [k for k in patch if k in forbidden_keys]
+    if bad_keys:
+        print(f"{RED}禁止写入的键: {', '.join(bad_keys)}{RESET}")
+        return
+
+    character = engine._registry.novel_character_store.load(character_id)
+    if character is None or character.project_id != pid:
+        print(f"{RED}角色不存在或不属于本项目: {character_id}{RESET}")
+        return
+
+    source_item = engine._registry.novel_ledger_store.load(source_item_id)
+    if (
+        source_item is None
+        or source_item.project_id != pid
+        or source_item.section != "npc_action"
+    ):
+        print(f"{RED}source 必须是本项目已接受的 npc_action 账本项: {source_item_id}{RESET}")
+        return
+
+    from datetime import datetime, timezone
+
+    new_state = dict(character.current_state)
+    new_state.update(patch)
+    new_state["promoted_from_item_id"] = source_item_id
+    new_state["promoted_at"] = datetime.now(timezone.utc).isoformat()
+
+    updated = replace(character, current_state=new_state, updated_at=new_state["promoted_at"])
+    engine._registry.novel_character_store.save(updated)
+
+    print(f"{GREEN}已提升角色状态: {character.name} ({character_id}){RESET}")
+    print(f"  来源: {source_item_id}")
+    print(f"  写入: {json.dumps(patch, ensure_ascii=False)}")
+
+
 # ============================================================
 # Parser
 # ============================================================
@@ -1017,6 +1071,13 @@ p_export.add_argument("dir")
 p_status = sub.add_parser("status", help="查看项目管道状态")
 p_status.add_argument("dir")
 
+# promote-state
+p_promote_state = sub.add_parser("promote-state", help="人工将已接受的 npc_action 提升为角色 current_state")
+p_promote_state.add_argument("dir")
+p_promote_state.add_argument("character_id")
+p_promote_state.add_argument("--source", required=True, help="来源 npc_action 账本项 ID")
+p_promote_state.add_argument("--patch", required=True, help="要合并的 JSON 对象补丁，例如 '{\"injured\": true}'")
+
 # run (一键)
 p_run = sub.add_parser("run", help="一键 seed → plan → batch → export")
 p_run.add_argument("dir")
@@ -1044,6 +1105,8 @@ def main(argv: list[str]) -> int:
                 cmd_export(args)
             case "status":
                 cmd_status(args)
+            case "promote-state":
+                cmd_promote_state(args)
             case "run":
                 cmd_run(args)
             case _:

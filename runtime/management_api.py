@@ -1254,6 +1254,112 @@ try:
         except Exception as e:
             return _json({"error": str(e)[:200]}, 500)
 
+    @server.PromptServer.instance.routes.get("/awp/api/v1/novels/{project_id}/autonomy-summary")
+    async def get_novel_autonomy_summary(request):
+        """Return non-spoiler autonomy counts for a novel project.
+
+        Includes active/stale agenda counts and accepted npc_action counts
+        grouped by source chapter. Does not expose private agenda content.
+        """
+        project_id = request.match_info["project_id"]
+        try:
+            factory = _factory()
+            project = factory.registry.novel_project_store.load(project_id)
+            if not project:
+                return _json({"error": "Project not found"}, 404)
+
+            agendas = factory.registry.novel_ledger_store.list_by_project(
+                project_id, "npc_agenda"
+            )
+            actions = factory.registry.novel_ledger_store.list_by_project(
+                project_id, "npc_action"
+            )
+
+            active_count = sum(1 for item in agendas if item.status == "active")
+            stale_count = sum(1 for item in agendas if item.status == "stale")
+            chapter_action_counts: dict[str, int] = {}
+            for item in actions:
+                key = str(item.source_chapter or 0)
+                chapter_action_counts[key] = chapter_action_counts.get(key, 0) + 1
+
+            return _json({
+                "project_id": project_id,
+                "active_count": active_count,
+                "stale_count": stale_count,
+                "chapter_action_counts": chapter_action_counts,
+            })
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
+    @server.PromptServer.instance.routes.post(
+        "/awp/api/v1/novels/{project_id}/characters/{character_id}/state-promotions"
+    )
+    async def promote_novel_character_state(request):
+        """Manually promote an accepted npc_action into a character's current_state.
+
+        Body: {"source_item_id": "...", "patch": {"injured": true}}
+        Rejects non-npc_action sources, cross-project characters, and forbidden
+        semantic keys (identity, motivation, known_fact_ids).
+        """
+        from dataclasses import replace
+
+        from ..contracts.novel_character import NovelCharacter
+        from ..contracts.novel_ledger import LedgerItem
+
+        project_id = request.match_info["project_id"]
+        character_id = request.match_info["character_id"]
+        body = await request.json()
+        source_item_id = body.get("source_item_id", "")
+        patch = body.get("patch")
+
+        if not isinstance(patch, dict):
+            return _json({"error": "patch must be an object"}, 400)
+
+        forbidden_keys = {"identity", "motivation", "known_fact_ids"}
+        bad_keys = [k for k in patch if k in forbidden_keys]
+        if bad_keys:
+            return _json(
+                {"error": f"Forbidden keys in patch: {', '.join(bad_keys)}"}, 400
+            )
+
+        try:
+            factory = _factory()
+            character = factory.registry.novel_character_store.load(character_id)
+            if character is None or character.project_id != project_id:
+                return _json(
+                    {"error": "Character not found or does not belong to project"}, 400
+                )
+
+            source_item = factory.registry.novel_ledger_store.load(source_item_id)
+            if (
+                source_item is None
+                or source_item.project_id != project_id
+                or source_item.section != "npc_action"
+            ):
+                return _json(
+                    {"error": "source_item_id must reference an npc_action ledger item in this project"},
+                    400,
+                )
+
+            from datetime import datetime, timezone
+
+            new_state = dict(character.current_state)
+            new_state.update(patch)
+            new_state["promoted_from_item_id"] = source_item_id
+            new_state["promoted_at"] = datetime.now(timezone.utc).isoformat()
+
+            updated = replace(character, current_state=new_state, updated_at=new_state["promoted_at"])
+            factory.registry.novel_character_store.save(updated)
+
+            return _json({
+                "character_id": character_id,
+                "project_id": project_id,
+                "promoted_from_item_id": source_item_id,
+                "current_state": updated.current_state,
+            })
+        except Exception as e:
+            return _json({"error": str(e)[:200]}, 500)
+
     @server.PromptServer.instance.routes.post("/awp/api/v1/novels/plan")
     async def plan_novel_from_concept(request):
         """Generate a full novel plan from a brief concept.

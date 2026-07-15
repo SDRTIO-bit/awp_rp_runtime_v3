@@ -6,10 +6,13 @@ import {
 } from "antd";
 import {
   ArrowLeftOutlined, BookOutlined, EditOutlined, TeamOutlined, BulbOutlined,
+  RobotOutlined,
 } from "@ant-design/icons";
 import {
   getNovelProject, listNovelCharacters, listNovelChapterPlans, writeNovelChapter,
+  getAutonomySummary,
   NovelProject, NovelCharacter, NovelChapterPlan, NovelDraft,
+  AutonomySummary,
 } from "../api/client";
 
 const { Text, Paragraph, Title } = Typography;
@@ -24,6 +27,7 @@ export default function NovelDetail() {
   const [project, setProject] = useState<NovelProject | null>(null);
   const [characters, setCharacters] = useState<NovelCharacter[]>([]);
   const [chapters, setChapters] = useState<NovelChapterPlan[]>([]);
+  const [autonomy, setAutonomy] = useState<AutonomySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [writing, setWriting] = useState<number | null>(null);
   const [draftDrawer, setDraftDrawer] = useState<{ open: boolean; draft: NovelDraft | null }>({ open: false, draft: null });
@@ -35,10 +39,12 @@ export default function NovelDetail() {
       getNovelProject(id).catch(() => null),
       listNovelCharacters(id).catch(() => []),
       listNovelChapterPlans(id).catch(() => []),
-    ]).then(([proj, chars, chaps]) => {
+      getAutonomySummary(id).catch(() => null),
+    ]).then(([proj, chars, chaps, auto]) => {
       setProject(proj);
       setCharacters(chars);
       setChapters(chaps);
+      setAutonomy(auto);
     }).finally(() => setLoading(false));
   };
 
@@ -147,6 +153,35 @@ export default function NovelDetail() {
             <Paragraph type="secondary" style={{ fontSize: 12 }}>
               世界观详情请查看项目创建时生成的大纲。
             </Paragraph>
+          </Card>
+
+          <Card title={<><RobotOutlined /> NPC 自主状态</>} size="small" style={{ marginTop: 16 }}>
+            {autonomy ? (
+              <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                <Space>
+                  <Tag color="blue">活跃议程 {autonomy.active_agenda_count}</Tag>
+                  <Tag color="orange">过期议程 {autonomy.stale_agenda_count}</Tag>
+                  <Tag color="green">已接受动作 {autonomy.npc_action_count}</Tag>
+                </Space>
+                {autonomy.chapters.length > 0 && (
+                  <List
+                    size="small"
+                    dataSource={autonomy.chapters}
+                    renderItem={(ch) => (
+                      <List.Item>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          第{ch.chapter_index}章：活跃 {ch.active_agenda_count} · 过期 {ch.stale_agenda_count} · 动作 {ch.npc_action_count}
+                        </Text>
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </Space>
+            ) : (
+              <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                暂无自主状态数据。
+              </Paragraph>
+            )}
           </Card>
         </Col>
       </Row>
