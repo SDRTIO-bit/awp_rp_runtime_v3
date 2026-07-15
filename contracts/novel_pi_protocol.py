@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 FRAME_KINDS = frozenset({
     "init",
     "prompt",
+    "role_init",
+    "role_prompt",
+    "role_end",
+    "close_session",
     "cancel",
     "tool_call",
     "tool_result",

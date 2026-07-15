@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 from dataclasses import replace
@@ -34,6 +35,8 @@ from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter, Characte
 from awp_rp_runtime_v3.contracts.novel_volume import VolumePlan
 from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
 from awp_rp_runtime_v3.runtime.novel_trace import NovelStreamCallbacks
+from awp_rp_runtime_v3.runtime.novel_llm_factory import NovelLLMFactory
+from awp_rp_runtime_v3.runtime.novel_role_runtime import get_novel_role_runtime
 
 GREEN = "\033[92m"
 RED = "\033[91m"
@@ -58,6 +61,48 @@ try:
     _RICH_AVAILABLE = True
 except ImportError:
     pass
+
+
+def assert_pi_role_runtime_ready(project_root: Path = PROJECT_ROOT) -> None:
+    """Fail before generation when the embedded Pi role host is incomplete."""
+
+    if os.environ.get("NOVEL_AGENT_RUNTIME", "pi").lower() != "pi":
+        return
+    harness_root = Path(project_root) / "agent_harness"
+    dependency = (
+        harness_root
+        / "node_modules"
+        / "@earendil-works"
+        / "pi-coding-agent"
+        / "package.json"
+    )
+    if not dependency.exists():
+        raise RuntimeError(
+            "Pi novel role dependencies are missing. Run: "
+            f"cd {harness_root} && npm ci"
+        )
+    if not shutil.which("node"):
+        raise RuntimeError("Node.js >=22.19 is required for Pi novel role agents")
+    host = harness_root / "src" / "novel_role_host.mjs"
+    if not host.exists():
+        raise RuntimeError(f"Pi novel role host is missing: {host}")
+
+
+def _writer_role_connection():
+    return NovelLLMFactory.get_instance().get_pi_role_connection("writer")
+
+
+def _print_agent_runtime_banner() -> None:
+    runtime = get_novel_role_runtime()
+    connection = _writer_role_connection()
+    label = "Pi role agents" if runtime.runtime_name == "PiRoles" else runtime.runtime_name
+    print(f"Agent Runtime: {label}")
+    print(f"Provider/Model: {connection.provider} / {connection.model}")
+
+
+def _prepare_agent_runtime() -> None:
+    assert_pi_role_runtime_ready(PROJECT_ROOT)
+    _print_agent_runtime_banner()
 
 TEMPLATE_NOVEL_JSON = """{
   "project": {
@@ -588,6 +633,7 @@ def _sync_project_runtime_config(novel_dir: Path, state: dict) -> None:
 
 
 def cmd_plan(args: argparse.Namespace) -> None:
+    _prepare_agent_runtime()
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
     _sync_project_runtime_config(novel_dir, state)
@@ -639,6 +685,7 @@ def cmd_plan(args: argparse.Namespace) -> None:
 
 
 def cmd_write(args: argparse.Namespace) -> None:
+    _prepare_agent_runtime()
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
     _sync_project_runtime_config(novel_dir, state)
@@ -684,6 +731,7 @@ def cmd_write(args: argparse.Namespace) -> None:
 
 
 def cmd_batch(args: argparse.Namespace) -> None:
+    _prepare_agent_runtime()
     novel_dir = Path(args.dir).resolve()
     state = _load_state(novel_dir)
     pid = state["project_id"]

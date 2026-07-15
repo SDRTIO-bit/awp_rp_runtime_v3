@@ -6,6 +6,7 @@ Independent from PersistentTurnEngine, shares infrastructure (LLM adapters, stor
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any, Callable
 
@@ -24,6 +25,8 @@ from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
+from .novel_role_context import novel_role_scope
+from .novel_role_runtime import get_novel_role_runtime
 from .novel_trace import (
     NovelStreamCallbacks,
     safe_on_phase,
@@ -260,9 +263,21 @@ class NovelEngine:
         # Build global chapter summaries (lightweight, no plan detail)
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Build packet (Director 层已砍，传最小占位符)
-        director_guidance = DirectorGuidance(
-            guidance_id=f"dg-{plan.chapter_id}-skip",
+        # Director expands the structural plan inside its own task-scoped Pi session.
+        director_guidance = self._call_director(
+            project_id,
+            plan,
+            ledger_items,
+            character_states,
+            prev_chapter_ending,
+            completed_chapters_summary=global_summaries,
+            foreshadowing_list=[
+                item for item in ledger_items if item.section == "foreshadowing"
+            ],
+            subplot_status=[
+                item for item in ledger_items if item.section == "subplot"
+            ],
+            revision=revision,
         )
         packet = self._packet_builder.build(
             chapter_plan=plan,
@@ -276,23 +291,33 @@ class NovelEngine:
         )
 
         # Single-pass 生成（不再分 beat）
-        text = self._generate_with_beats(
-            plan,
-            packet,
-            director_guidance,
-            ledger_items,
-            active_memory_context=active_memory_context,
-            memory_recall=memory_recall,
-            writer_prompt_name=writer_prompt_name,
-            write_guidance=write_guidance,
-            single_pass=True,
-        )
+        with self._writer_session(packet, revision=revision):
+            text = self._generate_with_beats(
+                plan,
+                packet,
+                director_guidance,
+                ledger_items,
+                active_memory_context=active_memory_context,
+                memory_recall=memory_recall,
+                writer_prompt_name=writer_prompt_name,
+                write_guidance=write_guidance,
+                single_pass=True,
+            )
         if not text or not text.strip():
             raise RuntimeError("Writer returned empty output")
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="style_cleaner",
+        ):
+            quality_decision, text = self._quality_pipeline.run_chapter(
+                text, plan, skip_drumbeat_check=skip_drumbeat
+            )
 
         # Continuity check: 检查遗忘的伏笔/承诺、断层、角色矛盾。
         # 结果作为 informational warnings 注入，不阻塞存盘。
@@ -302,6 +327,7 @@ class NovelEngine:
             ledger_items=ledger_items,
             character_states=character_states,
             prev_chapter_ending=prev_chapter_ending,
+            revision=revision,
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
@@ -337,7 +363,8 @@ class NovelEngine:
         self._registry.novel_chapter_draft_store.save(draft)
 
         self._update_ledger(
-            project_id, plan, text, ledger_items, characters, quality_decision
+            project_id, plan, text, ledger_items, characters, quality_decision,
+            revision=revision,
         )
 
         return draft
@@ -411,17 +438,24 @@ class NovelEngine:
         """Call Architect agent."""
         from .novel_architect_adapter import NovelArchitectAdapter
         adapter = NovelArchitectAdapter(self._registry, architect_prompt_name=architect_prompt_name)
-        return adapter.plan_chapter(
+        with novel_role_scope(
+            registry=self._registry,
             project_id=project_id,
             chapter_index=chapter_index,
-            volume_plan=volume_plan,
-            completed_chapters=completed_chapters,
-            ledger_items=ledger_items,
-            character_states=character_states,
-            task_description=task_description,
-            prev_chapter_ending=prev_chapter_ending,
-            prev_ending_design=prev_ending_design,
-        )
+            revision=1,
+            phase="architect",
+        ):
+            return adapter.plan_chapter(
+                project_id=project_id,
+                chapter_index=chapter_index,
+                volume_plan=volume_plan,
+                completed_chapters=completed_chapters,
+                ledger_items=ledger_items,
+                character_states=character_states,
+                task_description=task_description,
+                prev_chapter_ending=prev_chapter_ending,
+                prev_ending_design=prev_ending_design,
+            )
 
     def _call_director(
         self, project_id, plan, ledger_items, character_states,
@@ -429,20 +463,28 @@ class NovelEngine:
         completed_chapters_summary: str = "",
         foreshadowing_list: list | None = None,
         subplot_status: list | None = None,
+        revision: int = 1,
     ) -> DirectorGuidance:
         """Call Director agent."""
         from .novel_director_adapter import NovelDirectorAdapter
         adapter = NovelDirectorAdapter(self._registry)
-        return adapter.generate_guidance(
+        with novel_role_scope(
+            registry=self._registry,
             project_id=project_id,
-            chapter_plan=plan,
-            completed_chapters_summary=completed_chapters_summary,
-            ledger_items=ledger_items,
-            character_states=character_states,
-            foreshadowing_list=foreshadowing_list or [],
-            subplot_status=subplot_status or [],
-            previous_chapter_ending=prev_chapter_ending,
-        )
+            chapter_index=plan.chapter_index,
+            revision=revision,
+            phase="director",
+        ):
+            return adapter.generate_guidance(
+                project_id=project_id,
+                chapter_plan=plan,
+                completed_chapters_summary=completed_chapters_summary,
+                ledger_items=ledger_items,
+                character_states=character_states,
+                foreshadowing_list=foreshadowing_list or [],
+                subplot_status=subplot_status or [],
+                previous_chapter_ending=prev_chapter_ending,
+            )
 
     def _check_continuity(
         self,
@@ -452,18 +494,26 @@ class NovelEngine:
         ledger_items: list[LedgerItem],
         character_states: dict,
         prev_chapter_ending: str,
+        revision: int = 1,
     ) -> list[str]:
         """Run continuity checker. Returns list of warning messages."""
         try:
             from .novel_continuity_checker import NovelContinuityChecker
             checker = NovelContinuityChecker(self._registry)
-            result = checker.check_chapter(
-                chapter_text=text,
-                chapter_plan=chapter_plan,
-                ledger_items=ledger_items,
-                character_states=character_states,
-                prev_chapter_ending=prev_chapter_ending,
-            )
+            with novel_role_scope(
+                registry=self._registry,
+                project_id=chapter_plan.project_id,
+                chapter_index=chapter_plan.chapter_index,
+                revision=revision,
+                phase="continuity",
+            ):
+                result = checker.check_chapter(
+                    chapter_text=text,
+                    chapter_plan=chapter_plan,
+                    ledger_items=ledger_items,
+                    character_states=character_states,
+                    prev_chapter_ending=prev_chapter_ending,
+                )
             issues = result.get("issues", [])
             severity = result.get("severity", "info")
             warnings: list[str] = []
@@ -583,6 +633,28 @@ class NovelEngine:
         from .novel_writer_adapter import NovelWriterAdapter
         adapter = NovelWriterAdapter(self._registry, writer_prompt_name=writer_prompt_name)
         return adapter.generate_chapter(packet, write_guidance=write_guidance)
+
+    @contextmanager
+    def _writer_session(self, packet: NovelWritePacket, *, revision: int):
+        """Bind and deterministically close one chapter/revision Writer session."""
+
+        chapter_index = packet.chapter_plan.chapter_index
+        session_key = f"{packet.project_id}:{chapter_index}:{revision}:writer"
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=packet.project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="writer",
+            artifacts={"write_packet": packet},
+        ) as context:
+            try:
+                yield context
+            finally:
+                get_novel_role_runtime().close_session(
+                    session_key,
+                    context=context,
+                )
 
     def _call_writer_beat(self, packet: NovelWritePacket, *, writer_prompt_name: str = "writer", write_guidance: str = "") -> str:
         """Call Writer for a single beat."""
@@ -726,10 +798,29 @@ class NovelEngine:
 
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Phase: writer (Director 层已砍 — 改为占位符)
-        director_guidance = DirectorGuidance(
-            guidance_id=f"dg-{plan.chapter_id}-skip",
+        # Phase: director — separate task-scoped Pi Agent Session.
+        self._safe_on_phase("start", "director", {"ch": chapter_index})
+        director_started = time.time()
+        director_guidance = self._call_director(
+            project_id,
+            plan,
+            ledger_items,
+            character_states,
+            prev_chapter_ending,
+            completed_chapters_summary=global_summaries,
+            foreshadowing_list=[
+                item for item in ledger_items if item.section == "foreshadowing"
+            ],
+            subplot_status=[
+                item for item in ledger_items if item.section == "subplot"
+            ],
+            revision=revision,
         )
+        self._safe_on_phase("end", "director", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - director_started) * 1000),
+            "beats": len(director_guidance.beat_details),
+        })
 
         packet = self._packet_builder.build(
             chapter_plan=plan, ledger_items=ledger_items,
@@ -744,14 +835,15 @@ class NovelEngine:
         # Phase: writer (with streaming beats)
         self._safe_on_phase("start", "writer", {"ch": chapter_index, "thinking": "medium"})
         t = time.time()
-        text = self._generate_with_beats_stream(
-            plan, packet, director_guidance, ledger_items,
-            active_memory_context=active_memory_context,
-            memory_recall=memory_recall,
-            writer_prompt_name=writer_prompt_name,
-            write_guidance=write_guidance,
-            single_pass=True,
-        )
+        with self._writer_session(packet, revision=revision):
+            text = self._generate_with_beats_stream(
+                plan, packet, director_guidance, ledger_items,
+                active_memory_context=active_memory_context,
+                memory_recall=memory_recall,
+                writer_prompt_name=writer_prompt_name,
+                write_guidance=write_guidance,
+                single_pass=True,
+            )
         if not text or not text.strip():
             self._safe_on_error("writer", "Writer returned empty output")
             raise RuntimeError("Writer returned empty output")
@@ -766,7 +858,16 @@ class NovelEngine:
         # Phase: quality
         self._safe_on_phase("start", "quality", {"ch": chapter_index})
         t = time.time()
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="style_cleaner",
+        ):
+            quality_decision, text = self._quality_pipeline.run_chapter(
+                text, plan, skip_drumbeat_check=skip_drumbeat
+            )
         self._safe_on_phase("end", "quality", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),
@@ -781,6 +882,7 @@ class NovelEngine:
         continuity_issues = self._check_continuity(
             text=text, chapter_plan=plan, ledger_items=ledger_items,
             character_states=character_states, prev_chapter_ending=prev_chapter_ending,
+            revision=revision,
         )
         if continuity_issues:
             quality_decision.warnings.extend(continuity_issues)
@@ -817,7 +919,8 @@ class NovelEngine:
         self._safe_on_phase("start", "ledger", {"ch": chapter_index})
         t = time.time()
         self._update_ledger(
-            project_id, plan, text, ledger_items, characters, quality_decision
+            project_id, plan, text, ledger_items, characters, quality_decision,
+            revision=revision,
         )
         self._safe_on_phase("end", "ledger", {
             "ch": chapter_index,
@@ -863,6 +966,7 @@ class NovelEngine:
             ledger_items=ledger_items,
             character_states=character_states,
             prev_chapter_ending=previous_ending,
+            revision=draft.revision,
         )
         return {
             "chapter": chapter_index,
@@ -957,6 +1061,8 @@ class NovelEngine:
         text: str, current_ledger: list[LedgerItem],
         characters: list,
         quality_decision,
+        *,
+        revision: int = 1,
     ) -> None:
         """Update ledger and memory after chapter writing."""
         if quality_decision is None or not quality_decision.is_accepted():
@@ -965,13 +1071,20 @@ class NovelEngine:
         from .novel_evolution_curator import NovelEvolutionCurator
         try:
             curator = NovelEvolutionCurator(self._registry)
-            curator.curate(
-                chapter_text=text,
-                chapter_plan=plan,
-                current_ledger_items=current_ledger,
-                characters=characters,
-                quality_decision=quality_decision,
-            )
+            with novel_role_scope(
+                registry=self._registry,
+                project_id=project_id,
+                chapter_index=plan.chapter_index,
+                revision=revision,
+                phase="ledger_curator",
+            ):
+                curator.curate(
+                    chapter_text=text,
+                    chapter_plan=plan,
+                    current_ledger_items=current_ledger,
+                    characters=characters,
+                    quality_decision=quality_decision,
+                )
         except Exception:
             pass  # Don't fail the chapter write if evolution update fails
 
@@ -1016,11 +1129,28 @@ class NovelEngine:
             director_guidance=director_guidance,
         )
 
-        text = self._generate_with_beats(plan, packet, director_guidance, ledger_items)
-        quality_decision, text = self._quality_pipeline.run_chapter(text, plan, skip_drumbeat_check=skip_drumbeat)
+        new_revision = current_draft.revision + 1
+        with self._writer_session(packet, revision=new_revision):
+            text = self._generate_with_beats(
+                plan,
+                packet,
+                director_guidance,
+                ledger_items,
+                writer_prompt_name=writer_prompt_name,
+                write_guidance=feedback,
+            )
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=new_revision,
+            phase="style_cleaner",
+        ):
+            quality_decision, text = self._quality_pipeline.run_chapter(
+                text, plan, skip_drumbeat_check=skip_drumbeat
+            )
         status = "accepted" if quality_decision.verdict.value == "accept" else "rejected"
 
-        new_revision = current_draft.revision + 1
         draft = ChapterDraft(
             draft_id=f"draft-{plan.chapter_id}-r{new_revision}",
             chapter_id=plan.chapter_id,

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from typing import Any
 
 from ..contracts.novel_chapter import (
@@ -17,6 +18,9 @@ from ..contracts.novel_chapter import (
     EndingDesign,
     PlotArrangement,
 )
+from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
+from .novel_role_context import get_novel_role_context
+from .novel_role_runtime import get_novel_role_runtime
 
 # Thinking configuration for structural planning
 _THINKING_HIGH = {"thinking": {"type": "enabled", "reasoning_effort": "high"}}
@@ -54,25 +58,25 @@ class NovelArchitectAdapter:
             completed_chapters, ledger_items, character_states,
             task_description, prev_chapter_ending, prev_ending_design,
         )
-        # Call LLM and parse JSON response
-        from .novel_llm_factory import NovelLLMFactory
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("architect")
-        thinking = factory.get_thinking_config("architect")
-        model = factory.get_model("architect")
-        max_tokens = factory.get_max_tokens("architect")
-
-        try:
-            text, receipt = adapter.generate_text(
-                user_prompt,
-                max_tokens=max_tokens,
-                provider_role="novel_architect",
-                model=model,
-                extra_body=thinking,
-                system_prompt=system_prompt,
-            )
-        except Exception:
-            text = ""
+        # Architect is a real Pi Agent Session. Python keeps final schema parsing.
+        context = get_novel_role_context()
+        result = get_novel_role_runtime().run(
+            NovelPiRoleTask(
+                role="architect",
+                project_id=project_id,
+                chapter_index=chapter_index,
+                revision=context.revision,
+                phase="chapter_plan",
+                session_key=f"task:{uuid.uuid4().hex}",
+                task_contract=system_prompt,
+                input_payload={
+                    "prompt": user_prompt,
+                    "response_format": "chapter_plan_json",
+                },
+            ),
+            context=context,
+        )
+        text = result.text
 
         # Parse JSON response robustly (tolerate ```json fences, leading prose).
         extracted = self._extract_json_object(text)
@@ -115,7 +119,10 @@ class NovelArchitectAdapter:
             volume_id=plan.volume_id,
             chapter_index=chapter_index,
             title=plan.title or f"第{chapter_index}章",
-            target_chars=plan.target_chars or 3000,
+            # Novel mode now uses a single continuous scene per chapter.
+            # Keep the target stable so Architect/Writer/quality checks do not
+            # reintroduce the previous multi-beat 3k–6k tug of war.
+            target_chars=2000,
             chapter_position=plan.chapter_position,
             target_emotion=plan.target_emotion,
             opening_hook=plan.opening_hook,
@@ -327,7 +334,9 @@ class NovelArchitectAdapter:
             "content_summary(五段式), plot_arrangement(多线), "
             "character_appearance(出场顺序), scene_beats(beat预算), "
             "ending_design(钩子), cost_and_reward。\n"
-            "所有字段必须有实质内容，不允许空字符串或空数组。",
+            "所有字段必须有实质内容，不允许空字符串或空数组。\n"
+            "本项目每章只生成一次连续场景：target_chars 必须为 2000，"
+            "scene_beats 只保留一个 beat，budget_chars 必须为 2000。",
         ]
 
         # Varying context

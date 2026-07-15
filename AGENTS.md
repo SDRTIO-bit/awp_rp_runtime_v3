@@ -17,16 +17,16 @@
 - `NovelEngine` in `runtime/novel_engine.py` — main orchestrator
 - `NovelLLMFactory` in `runtime/novel_llm_factory.py` — role-based adapter factory
 
-## Novel Mode Architecture (2025-07 latest)
+## Novel Mode Architecture (2026-07 latest)
 
 ### Streaming Pipeline (new)
 | Layer | File | Purpose |
 |-------|------|---------|
 | Callbacks | `runtime/novel_trace.py` | `NovelStreamCallbacks` dataclass — on_phase, on_beat, on_chunk, on_error |
 | Engine | `runtime/novel_engine.py` | `write_chapter_stream()` — fires phase callbacks at each stage |
-| Writer | `runtime/novel_writer_adapter.py` | `generate_beat_stream()` — streaming from LLM |
-| Adapter | `adapters/llm/deepseek_adapter.py` | `generate_text_stream()` — `stream=True` on OpenAI SDK |
-| Adapter alt | `adapters/llm/openai_compatible.py` | `generate_text_stream()` — same interface |
+| Writer | `runtime/novel_writer_adapter.py` | Builds a chapter-scoped Pi Writer task and preserves streaming callbacks |
+| Role runtime | `runtime/novel_role_runtime.py` | Pi role sessions by default; explicit legacy compatibility boundary |
+| Role bridge | `runtime/novel_pi_role_bridge.py` | Synchronous JSONL bridge to the isolated Pi Role Host |
 | CLI | `scripts/novel_cli.py` | `--stream` flag for write/batch commands |
 
 ### NovelBrain (LLM Agent)
@@ -41,8 +41,9 @@
 
 ### Embedded Pi Novel Harness
 - `agent_harness/` pins `@earendil-works/pi-coding-agent` at `0.80.6` and requires Node `>=22.19`.
-- The Host is a Node child process, not an external Pi CLI. It communicates only through stdin/stdout JSON Lines; it opens no port.
-- Pi starts with `noTools: "all"` and exposes only `project_status`, `read_chapter`, `plan_chapter`, `write_chapter`, and `audit_chapter`.
+- Pi is embedded through two isolated Node child processes, not an external Pi CLI: the interactive Host and the automated Role Host. Both use stdin/stdout JSON Lines and open no port.
+- The interactive Host exposes five project tools. The Role Host runs separate Pi Agent Sessions for Architect, Director, Writer, Continuity, Style Cleaner, and Ledger Curator with role-specific read-only tools and skills.
+- Writer keeps one Session for a chapter revision; other automated roles use task-scoped Sessions. Python remains the only state/file writer.
 - Run `npm test` in `agent_harness/` for Node tests and `pytest tests/test_novel_pi_*.py -v` for Python bridge tests.
 - `NOVEL_AGENT_RUNTIME=pi` is the default. `NOVEL_AGENT_RUNTIME=legacy` is the only manual fallback; Pi failures must not silently switch runtimes.
 
@@ -81,7 +82,7 @@ Player Input → management_api.py → ExecutionDispatcher → PersistentTurnEng
 
 ### Data Flow: Novel Streaming (new)
 ```
-Brain/TUI → NovelEngine.write_chapter_stream() → NovelWriterAdapter.generate_beat_stream() → DeepSeekAdapter.generate_text_stream(stream=True) → NovelStreamCallbacks → TUI widgets
+TUI/CLI → NovelEngine.write_chapter_stream() → NovelRoleRuntime → isolated Pi Role Host → Writer Pi Session → NovelStreamCallbacks → TUI/CLI
 ```
 
 ## Important Files

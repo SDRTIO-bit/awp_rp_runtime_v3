@@ -10,6 +10,9 @@ from typing import Any
 
 from ..contracts.novel_write_packet import NovelWritePacket
 from ..contracts.novel_chapter import ChapterPlan, BeatDetail
+from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
+from .novel_role_context import get_novel_role_context
+from .novel_role_runtime import get_novel_role_runtime
 
 # Thinking configuration for creative writing
 _THINKING_MEDIUM = {"thinking": {"type": "enabled", "reasoning_effort": "medium"}}
@@ -71,24 +74,32 @@ class NovelWriterAdapter:
 
     def generate_chapter(self, packet: NovelWritePacket, write_guidance: str = "") -> str:
         """Generate full chapter text from a write packet."""
-        import sys, traceback
-        try:
-            system_prompt, user_prompt = self._build_prompt(packet, write_guidance=write_guidance)
-            result = self._call_llm(user_prompt, system_prompt)
-            return result
-        except Exception as e:
-            traceback.print_exc(file=sys.stderr)
-            raise
+        system_prompt, user_prompt = self._build_prompt(
+            packet, write_guidance=write_guidance
+        )
+        return self._call_role(packet, user_prompt, system_prompt, phase="chapter")
 
     def generate_beat(self, packet: NovelWritePacket, write_guidance: str = "") -> str:
         """Generate a single beat's text."""
         system_prompt, user_prompt = self._build_beat_prompt(packet, write_guidance=write_guidance)
-        return self._call_llm(user_prompt, system_prompt)
+        beat_id = packet.current_scene_beat.beat_id if packet.current_scene_beat else ""
+        return self._call_role(
+            packet,
+            user_prompt,
+            system_prompt,
+            phase=f"beat:{beat_id}",
+        )
 
     def generate_chapter_stream(self, packet: NovelWritePacket, on_chunk, write_guidance: str = "") -> str:
         """Generate full chapter text with streaming callback."""
         system_prompt, user_prompt = self._build_prompt(packet, write_guidance=write_guidance)
-        return self._call_llm_stream(user_prompt, system_prompt, on_chunk)
+        return self._call_role(
+            packet,
+            user_prompt,
+            system_prompt,
+            on_chunk=on_chunk,
+            phase="chapter",
+        )
 
     @staticmethod
     def _crosses_next_beat_boundary(text: str, next_description: str) -> bool:
@@ -351,59 +362,43 @@ class NovelWriterAdapter:
                 lines.append(f"- [{source} {importance:.2f}] {content}")
         return "\n".join(lines)
 
-    def _call_llm(self, prompt: str, system_prompt: str = "") -> str:
-        """Call LLM with thinking=medium. Raises on failure (no placeholder)."""
-        from .novel_llm_factory import NovelLLMFactory
-        import traceback, sys
-        try:
-            factory = NovelLLMFactory.get_instance()
-            adapter = factory.get_adapter("writer")
-            thinking = factory.get_thinking_config("writer")
-            model = factory.get_model("writer")
-            max_tokens = factory.get_max_tokens("writer")
+    def _call_role(
+        self,
+        packet: NovelWritePacket,
+        prompt: str,
+        system_prompt: str = "",
+        *,
+        on_chunk=None,
+        phase: str,
+    ) -> str:
+        """Run this writing step inside the chapter's persistent Pi session."""
 
-            text, receipt = adapter.generate_text(
-                prompt,
-                max_tokens=max_tokens,
-                provider_role="novel_writer",
-                model=model,
-                extra_body=thinking,
-                system_prompt=system_prompt or None,
-            )
-            if text and text.strip():
-                return text
-        except Exception as e:
-            traceback.print_exc(file=sys.stderr)
-            # Fall through to the failure raise below.
-            pass
-        # Previously returned a placeholder string, which got persisted as the
-        # chapter text and silently counted as a "completed" chapter. Now raise
-        # so the caller (NovelEngine retry loop / batch_write except) can handle it.
-        raise RuntimeError("Novel writer LLM returned empty output")
-
-    def _call_llm_stream(self, prompt: str, system_prompt: str,
-                         on_chunk) -> str:
-        """Call LLM with streaming. Raises on failure."""
-        from .novel_llm_factory import NovelLLMFactory
-        factory = NovelLLMFactory.get_instance()
-        adapter = factory.get_adapter("writer")
-        thinking = factory.get_thinking_config("writer")
-        model = factory.get_model("writer")
-        max_tokens = factory.get_max_tokens("writer")
-
-        import traceback
-        try:
-            text = adapter.generate_text_stream(
-                prompt,
-                on_chunk=on_chunk,
-                max_tokens=max_tokens,
-                model=model,
-                extra_body=thinking,
-                system_prompt=system_prompt or None,
-            )
-        except Exception as e:
-            traceback.print_exc()
-            raise RuntimeError(f"Writer streaming failed: {e}")
-        if text and text.strip():
-            return text
-        raise RuntimeError("Novel writer LLM streaming returned empty output")
+        context = get_novel_role_context()
+        context.artifacts["write_packet"] = packet
+        beat = packet.current_scene_beat
+        result = get_novel_role_runtime().run(
+            NovelPiRoleTask(
+                role="writer",
+                project_id=context.project_id,
+                chapter_index=context.chapter_index,
+                revision=context.revision,
+                phase=phase,
+                session_key=(
+                    f"{context.project_id}:{context.chapter_index}:"
+                    f"{context.revision}:writer"
+                ),
+                task_contract=system_prompt,
+                input_payload={
+                    "prompt": prompt,
+                    "packet_id": packet.packet_id,
+                    "beat_id": beat.beat_id if beat is not None else "",
+                    "response_format": "novel_prose",
+                },
+                stream=on_chunk is not None,
+            ),
+            context=context,
+            on_chunk=on_chunk,
+        )
+        if result.text and result.text.strip():
+            return result.text
+        raise RuntimeError("Novel writer Pi Agent returned empty output")

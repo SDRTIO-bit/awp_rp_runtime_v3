@@ -35,6 +35,8 @@ from textual import events
 
 from awp_rp_runtime_v3.runtime.novel_brain import BrainCallbacks
 from awp_rp_runtime_v3.runtime.novel_agent_runtime import create_novel_agent_runtime
+from awp_rp_runtime_v3.runtime.novel_llm_factory import NovelLLMFactory
+from awp_rp_runtime_v3.runtime.novel_role_runtime import get_novel_role_runtime
 from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from awp_rp_runtime_v3.storage.sqlite.database import Database
 
@@ -293,7 +295,20 @@ class NovelTui(App):
             mode_text = ""
         else:
             id_text = self._state.get("project_id", "?")
-            mode_text = f"| Agent: [bold cyan]{self._brain.runtime_name if self._brain else '?'}[/]"
+            interactive_runtime = self._brain.runtime_name if self._brain else "?"
+            try:
+                role_runtime = get_novel_role_runtime().runtime_name
+                writer_model = NovelLLMFactory.get_instance().get_pi_role_connection(
+                    "writer"
+                ).model
+            except Exception:
+                role_runtime = "?"
+                writer_model = "?"
+            mode_text = (
+                f"| Agent: [bold cyan]{interactive_runtime}[/] "
+                f"| Roles: [bold cyan]{role_runtime}[/] "
+                f"| Writer: {writer_model}"
+            )
         header.update(
             f"[b]Project:[/b] {id_text}  {mode_text}"
         )

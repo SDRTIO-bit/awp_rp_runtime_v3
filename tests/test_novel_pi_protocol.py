@@ -23,3 +23,13 @@ def test_protocol_rejects_unknown_frame_kind():
         decode_frame(
             '{"schema_version":1,"kind":"shell","request_id":"x","payload":{}}'
         )
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["role_init", "role_prompt", "role_end", "close_session"],
+)
+def test_protocol_accepts_role_host_frames(kind):
+    frame = NovelPiFrame(kind=kind, request_id="role-1", payload={})
+
+    assert decode_frame(encode_frame(frame)) == frame
