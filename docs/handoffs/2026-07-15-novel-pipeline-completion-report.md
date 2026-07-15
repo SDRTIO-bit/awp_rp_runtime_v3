@@ -159,3 +159,146 @@ python scripts/novel_cli.py run ./my_novel 1 1
 ## 6. 结论
 
 小说生成管线已完成并验证。Writer 空输出问题已根修，CLI 可一次性生成完整章节，端到端数据流（plan → draft → audit → ledger → export）已跑通。
+
+---
+
+# 附录：自主 NPC 与预设编译层交付报告
+
+**日期**：2026-07-15  
+**分支**：`codex/novel-autonomous-npc`（merge base `d603f456`）  
+**提交记录**：
+
+- `525e4202` — feat: add novel autonomy contracts and profile
+- `1d88a323` — feat: isolate novel agenda writer context
+- `0caa7105` — feat: add pi npc agenda planner
+- `fe203856` — feat: commit accepted autonomous npc actions
+- `a4c86392` — feat: autonomy observability API, CLI promote-state, and UI
+
+## 1. 完成目标
+
+在 Novel Mode 中加入受版本化 Profile 约束的自主 NPC 行动，并确保 Writer 只能看到可见后果，原始议程、私密目标与选择理由对 Writer 完全隔离。
+
+## 2. 新增与修改的组件
+
+### 2.1 合约层
+
+| 文件 | 说明 |
+|------|------|
+| `contracts/novel_profile.py` | `NovelWritingProfile`、`load_autonomous_profile`；`mode="novel"` 校验，拒绝 RP 模式。 |
+| `contracts/novel_npc_agenda.py` | `NpcAgenda`、`VisibleConsequence`、`SelectedNpcAction`。 |
+| `contracts/novel_director_guidance.py` | `DirectorGuidance.selected_npc_actions`。 |
+| `contracts/novel_write_packet.py` | `NovelWritePacket.visible_consequences`。 |
+
+### 2.2 Profile / 议程服务层
+
+| 文件 | 说明 |
+|------|------|
+| `runtime/novel_profile_compiler.py` | `NovelProfileCompiler` 识别 `AUTONOMOUS_NPC` 并设置模式。 |
+| `runtime/novel_agenda_service.py` | `NpcAgendaService.active/eligible/expire`；上限 8、按 `(npc, thread_key)` 合并、过期检测。 |
+
+### 2.3 角色与规划器
+
+| 文件 | 说明 |
+|------|------|
+| `runtime/novel_llm_factory.py` | 新增 `npc_planner` Pi role 连接。 |
+| `runtime/novel_director_adapter.py` | `select_npc_actions()` 生成/筛选 `SelectedNpcAction`。 |
+| `agent_harness/src/novel_role_host.mjs` | `npc_planner` 角色会话注册。 |
+| `agent_harness/resources/roles/npc_planner/` | 角色 system prompt 与 skill 资源。 |
+
+### 2.4 Engine 与 Curator
+
+| 文件 | 说明 |
+|------|------|
+| `runtime/novel_engine.py` | `write_chapter` / `write_chapter_stream` 接入 `_prepare_autonomous_npc_context`；仅在质量通过后提交 `npc_action`/`npc_agenda`。 |
+| `runtime/novel_writer_context.py` | `NovelWritePacket.visible_consequences` 填充；`_relevant_ledger` 过滤隐私 section。 |
+| `runtime/novel_evolution_curator.py` | `curate(..., selected_npc_actions=())`，接受后持久化 `npc_action`。 |
+| `runtime/novel_continuity_checker.py` | 增加 NPC 连续性与后果可见性检查。 |
+| `runtime/novel_ledger_curator.py` | 白名单识别 `npc_agenda` / `npc_action`。 |
+
+### 2.5 可观测性与人工提升
+
+| 文件 | 说明 |
+|------|------|
+| `runtime/management_api.py` | `GET /novels/{id}/autonomy-summary`、`POST /novels/{id}/characters/{character_id}/state-promotions`。 |
+| `scripts/novel_cli.py` | `promote-state` 子命令。 |
+| `web/src/api/client.ts` | `getAutonomySummary`、`promoteCharacterState` 类型与请求函数。 |
+| `web/src/pages/NovelDetail.tsx` | 项目级与章节级 NPC 自主性计数 UI，不展示 agenda 原文。 |
+
+### 2.6 测试
+
+| 文件 | 说明 |
+|------|------|
+| `tests/test_novel_autonomous_npc_contracts.py` | Profile/Agenda/Writer 隔离合约测试。 |
+| `tests/test_novel_autonomous_npc_planner.py` | Pi planner 与 Director 选择逻辑测试。 |
+| `tests/test_novel_autonomous_npc_engine.py` | 接受/拒绝副作用、Writer 包隐私测试。 |
+| `tests/test_novel_autonomous_npc_api.py` | 摘要隐私、状态提升、跨项目校验 API 测试。 |
+| `tests/test_novel_autonomous_npc_e2e.py` | 两章 fake-E2E，验证第 1 章动作影响第 2 章。 |
+| `tests/test_novel_autonomous_npc_cli.py` | `promote-state` CLI 测试。 |
+| `tests/test_novel_llm_factory.py` | 更新 Pi role 集合断言。 |
+
+## 3. 验证结果
+
+### 3.1 Python 相关测试
+
+```powershell
+python -m pytest --tb=short -q tests/test_novel_autonomous_npc_contracts.py tests/test_novel_autonomous_npc_engine.py tests/test_novel_autonomous_npc_planner.py tests/test_novel_autonomous_npc_api.py tests/test_novel_autonomous_npc_e2e.py tests/test_novel_autonomous_npc_cli.py tests/test_novel_llm_factory.py tests/test_management_api_new_endpoints.py
+```
+
+结果：**50 passed**
+
+### 3.2 Node / Pi 测试
+
+```powershell
+npm test --prefix agent_harness
+```
+
+结果：**17 passed, 0 failed**
+
+### 3.3 全量 Python 套件说明
+
+工作树运行 `python -m pytest tests` 仍会因 `tests` 目录非包（部分 RP 旧测试使用 `from ..contracts...` 相对导入）而在 7 个 RP 旧测试文件收集阶段报错。这是工作树目录布局的既有问题，不影响小说管线本身；本次改动未触及 RP 代码。
+
+### 3.4 Web 构建说明
+
+`npm run build` 在 `web` 目录因 `react-router-dom` 依赖未安装（`node_modules/react-router-dom/package.json` 缺失）而无法通过，同样为既有环境问题，与本次新增代码无关。
+
+## 4. 安全与约束
+
+- **零副作用拒绝**：质量门未通过时，不会写入 `npc_action` 或 `npc_agenda`。
+- **Writer 隐私**：Writer 包、Pi read tool 与 prompt 中均不会出现 `private_goal`、`secret_clue` 等私密字段；只传递 `VisibleConsequence`。
+- **人工提升闸门**：`state-promotions` 端点拒绝 `name`、`role`、`core_motivation`、`known_fact_ids` 等身份/动机/知识键；仅允许修改 `current_state` 中的状态字段。
+- **不建表、不扩展 RP**：仅使用现有 `LedgerItem` 表与 `novel_characters` 表；未修改 RP 引擎。
+
+## 5. 如何使用
+
+### 5.1 在小说中启用自主 NPC
+
+```powershell
+python scripts/novel_cli.py init ./my_novel
+python scripts/novel_cli.py profile-init ./my_novel
+# 编辑 my_novel/autonomous_profile.json 与 outline.md
+python scripts/novel_cli.py run ./my_novel 1 1
+```
+
+### 5.2 查看自主状态摘要
+
+```powershell
+python - <<'PY'
+import requests, json
+res = requests.get("http://127.0.0.1:8189/awp/api/v1/novels/{project_id}/autonomy-summary")
+print(json.dumps(res.json()["data"], indent=2, ensure_ascii=False))
+PY
+```
+
+### 5.3 人工提升角色状态
+
+```powershell
+python scripts/novel_cli.py promote-state ./my_novel <character_id> --source <npc_action_item_id> --patch '{"injured": true, "mood": "guilty"}'
+# 或 REST
+POST /awp/api/v1/novels/{project_id}/characters/{character_id}/state-promotions
+{ "source_item_id": "<item_id>", "patch": { "injured": true, "mood": "guilty" } }
+```
+
+## 6. 结论
+
+自主 NPC 预设编译层已完整实现并验证。数据链 `NpcAgenda → SelectedNpcAction → VisibleConsequence` 已固定；Writer 仅消费可见后果，Curator 仅在接受后持久化中间项，人工提升端点提供安全的作者干预入口。

@@ -1,6 +1,6 @@
 # 自主 NPC 与预设编译层 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 在 Novel Mode 加入受版本化 Profile 约束的自主 NPC 行动，并让 Writer 只能看到可见后果。
 
@@ -37,7 +37,7 @@
 
 **Interfaces:** `load_autonomous_profile(config) -> NovelWritingProfile`; `NpcAgenda.model_validate_json`; `DirectorGuidance.visible_consequences`; `NovelWritePacket.visible_consequences`。
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_profile_and_agenda_are_strict():
@@ -47,10 +47,10 @@ def test_profile_and_agenda_are_strict():
     with pytest.raises(ValidationError): NpcAgenda.model_validate({**_payload(), "known_fact_ids": ["摘要"]})
 ```
 
-- [ ] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_contracts.py -v`; expected: FAIL，模块不存在。
-- [ ] **Step 3: 实现。** `NovelWritingProfile` 使用 `ConfigDict(extra="forbid", frozen=True)`，字段为 `schema_id`、`schema_version`、`mode: Literal["novel"]`、`name`、`narrative`、`world`、`history`、`scene`、`agent_contracts`。`NpcAgenda` 使用 `agenda_id`、`thread_key`、`npc`、`private_goal`、`known_fact_ids: tuple[str, ...]`、资源/成本/行动/触发/风险/可见性/期限；`VisibleConsequence` 只允许 `agenda_id`、`beat_id`、`observable_event`、`observable_clue`、`affected_characters`。同步所有 `to_dict/from_dict`。`init`/`seed` 写默认 Profile；旧项目只能通过显式 `profile-init` 命令配置。
-- [ ] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_contracts.py tests/test_novel_stores.py -v`; expected: PASS。
-- [ ] **Step 5: Commit.** `git add contracts scripts/novel_cli.py tests/test_novel_autonomous_npc_contracts.py && git commit -m "feat: add novel autonomy contracts and profile"`
+- [x] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_contracts.py -v`; expected: FAIL，模块不存在。
+- [x] **Step 3: 实现。** `NovelWritingProfile` 使用 `ConfigDict(extra="forbid", frozen=True)`，字段为 `schema_id`、`schema_version`、`mode: Literal["novel"]`、`name`、`narrative`、`world`、`history`、`scene`、`agent_contracts`。`NpcAgenda` 使用 `agenda_id`、`thread_key`、`npc`、`private_goal`、`known_fact_ids: tuple[str, ...]`、资源/成本/行动/触发/风险/可见性/期限；`VisibleConsequence` 只允许 `agenda_id`、`beat_id`、`observable_event`、`observable_clue`、`affected_characters`。同步所有 `to_dict/from_dict`。`init`/`seed` 写默认 Profile；旧项目只能通过显式 `profile-init` 命令配置。
+- [x] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_contracts.py tests/test_novel_stores.py -v`; expected: PASS。
+- [x] **Step 5: Commit.** `git add contracts scripts/novel_cli.py tests/test_novel_autonomous_npc_contracts.py && git commit -m "feat: add novel autonomy contracts and profile"`
 
 ### Task 2: 编译 Profile，筛选与隔离账本上下文
 
@@ -58,7 +58,7 @@ def test_profile_and_agenda_are_strict():
 
 **Interfaces:** `NpcAgendaService.active(...)`、`eligible_characters(...)`、`expire(...)`；`NovelProfileCompiler.compile_for(role, ...) -> dict`。
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_candidates_are_related_and_bounded():
@@ -68,10 +68,10 @@ def test_writer_packet_has_no_agenda_data():
     assert "npc_agenda" not in text and "private_goal" not in text
 ```
 
-- [ ] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_service.py tests/test_novel_writer_context.py -v`; expected: FAIL。
-- [ ] **Step 3: 实现。** 只选择已登场且文本/动机与章节有关角色，稳定排序后截断 5 名。无效 agenda JSON 仅产出诊断；超过 `deadline_chapter` 标 `stale`；满 8 条只推进/解决或同一 `(npc, thread_key)` 合并。Architect 获得活跃议程摘要。Writer 使用允许列表：过滤所有 `npc_agenda` 和 `npc_action`，只接收 `visible_consequences`。
-- [ ] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_service.py tests/test_novel_writer_context.py tests/test_novel_pi_architect_director.py -v`; expected: PASS。
-- [ ] **Step 5: Commit.** `git add runtime tests && git commit -m "feat: compile novel profile and isolate agenda context"`
+- [x] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_service.py tests/test_novel_writer_context.py -v`; expected: FAIL。
+- [x] **Step 3: 实现。** 只选择已登场且文本/动机与章节有关角色，稳定排序后截断 5 名。无效 agenda JSON 仅产出诊断；超过 `deadline_chapter` 标 `stale`；满 8 条只推进/解决或同一 `(npc, thread_key)` 合并。Architect 获得活跃议程摘要。Writer 使用允许列表：过滤所有 `npc_agenda` 和 `npc_action`，只接收 `visible_consequences`。
+- [x] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_service.py tests/test_novel_writer_context.py tests/test_novel_pi_architect_director.py -v`; expected: PASS。
+- [x] **Step 5: Commit.** `git add runtime tests && git commit -m "feat: compile novel profile and isolate agenda context"`
 
 ### Task 3: 增加 Pi 规划角色与 Director 选择
 
@@ -79,7 +79,7 @@ def test_writer_packet_has_no_agenda_data():
 
 **Interfaces:** `NovelNpcAgendaAdapter.propose(...) -> tuple[NpcAgenda, ...]`; Director 产出至多两个 `SelectedNpcAction` 与 `VisibleConsequence`。
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_planner_is_a_dedicated_pi_role(monkeypatch, reg):
@@ -88,10 +88,10 @@ def test_planner_is_a_dedicated_pi_role(monkeypatch, reg):
     assert _recorded_task().role == "npc_planner"
 ```
 
-- [ ] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_planner.py -v`; then `npm test` in `agent_harness`; expected: FAIL。
-- [ ] **Step 3: 实现。** 注册 `npc_planner` 到 `NOVEL_PI_ROLES` 和工厂配置（`deepseek-v4-pro`）。只给它 `read_project_contract`、`read_chapter_plan`、`read_ledger`、`read_characters`。它必须返回 `{"agendas":[...]}`；逐项 `NpcAgenda.model_validate`，丢弃无效项。Director 仅返回候选 ID 对应的可见字段；拒绝未知 ID、超过两项、资源不够或冲突的选择。
-- [ ] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_planner.py tests/test_novel_pi_architect_director.py -v`; Run `npm test` in `agent_harness`; expected: PASS。
-- [ ] **Step 5: Commit.** `git add runtime contracts agent_harness tests && git commit -m "feat: add pi npc agenda planner"`
+- [x] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_planner.py -v`; then `npm test` in `agent_harness`; expected: FAIL。
+- [x] **Step 3: 实现。** 注册 `npc_planner` 到 `NOVEL_PI_ROLES` 和工厂配置（`deepseek-v4-pro`）。只给它 `read_project_contract`、`read_chapter_plan`、`read_ledger`、`read_characters`。它必须返回 `{"agendas":[...]}`；逐项 `NpcAgenda.model_validate`，丢弃无效项。Director 仅返回候选 ID 对应的可见字段；拒绝未知 ID、超过两项、资源不够或冲突的选择。
+- [x] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_planner.py tests/test_novel_pi_architect_director.py -v`; Run `npm test` in `agent_harness`; expected: PASS。
+- [x] **Step 5: Commit.** `git add runtime contracts agent_harness tests && git commit -m "feat: add pi npc agenda planner"`
 
 ### Task 4: 接入写章管线，接受后提交
 
@@ -99,7 +99,7 @@ def test_planner_is_a_dedicated_pi_role(monkeypatch, reg):
 
 **Interfaces:** `_prepare_autonomous_npc_context(...) -> AutonomousNpcTurn`; `NovelEvolutionCurator.curate(..., selected_npc_actions=())`。
 
-- [ ] **Step 1: 写失败测试。**
+- [x] **Step 1: 写失败测试。**
 
 ```python
 def test_rejection_has_zero_autonomy_side_effects(monkeypatch, reg):
@@ -109,10 +109,10 @@ def test_rejection_has_zero_autonomy_side_effects(monkeypatch, reg):
     assert not reg.novel_ledger_store.list_by_project("p1", "npc_agenda")
 ```
 
-- [ ] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_engine.py -v`; expected: FAIL。
-- [ ] **Step 3: 实现。** `write_chapter` 与 `write_chapter_stream` 共用：Profile 校验 → 过期议程 → Architect → 确定性候选 → Planner → Director → Writer → Quality。只将 `VisibleConsequence` 放入 `NovelWritePacket`。仅 `is_accepted()` 后把所选动作转成 `npc_action`，未完结动作转成 `npc_agenda`；Curator 白名单认识新 section。`NpcAction` 是自动事实来源；不得自动改写 `NovelCharacter.current_state` 的受伤、关系、知识等语义字段。Quality 检查后果存在、资源/动机/事实连续、无私密泄露、无主角抢功。
-- [ ] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_engine.py tests/test_novel_evolution_curator.py tests/test_novel_engine.py tests/test_novel_pi_quality_roles.py -v`; expected: PASS。
-- [ ] **Step 5: Commit.** `git add runtime tests && git commit -m "feat: commit accepted autonomous npc actions"`
+- [x] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_engine.py -v`; expected: FAIL。
+- [x] **Step 3: 实现。** `write_chapter` 与 `write_chapter_stream` 共用：Profile 校验 → 过期议程 → Architect → 确定性候选 → Planner → Director → Writer → Quality。只将 `VisibleConsequence` 放入 `NovelWritePacket`。仅 `is_accepted()` 后把所选动作转成 `npc_action`，未完结动作转成 `npc_agenda`；Curator 白名单认识新 section。`NpcAction` 是自动事实来源；不得自动改写 `NovelCharacter.current_state` 的受伤、关系、知识等语义字段。Quality 检查后果存在、资源/动机/事实连续、无私密泄露、无主角抢功。
+- [x] **Step 4: 验证通过。** Run `pytest tests/test_novel_autonomous_npc_engine.py tests/test_novel_evolution_curator.py tests/test_novel_engine.py tests/test_novel_pi_quality_roles.py -v`; expected: PASS。
+- [x] **Step 5: Commit.** `git add runtime tests && git commit -m "feat: commit accepted autonomous npc actions"`
 
 ### Task 5: 安全可观测性、人工状态提升与验收
 
@@ -120,7 +120,7 @@ def test_rejection_has_zero_autonomy_side_effects(monkeypatch, reg):
 
 **Interfaces:** `GET /novels/{id}/autonomy-summary -> {active_count, stale_count, chapter_action_counts}`；`POST /novels/{id}/characters/{character_id}/state-promotions` body `{source_item_id, patch}`；`novel_cli.py promote-state`。
 
-- [ ] **Step 1: 写失败的隐私、提升和两章测试。**
+- [x] **Step 1: 写失败的隐私、提升和两章测试。**
 
 ```python
 def test_summary_does_not_leak_private_plan(client, project_id):
@@ -133,10 +133,10 @@ def test_two_chapters_have_action_but_writer_never_sees_secret(monkeypatch, reg)
     assert all("private_goal" not in json.dumps(p.to_dict(), ensure_ascii=False) for p in packets)
 ```
 
-- [ ] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_api.py tests/test_novel_autonomous_npc_e2e.py -v`; expected: FAIL。
-- [ ] **Step 3: 实现。** 普通 ledger API/CLI/页面隐藏 `npc_agenda.content`，摘要只给计数。提升端点验证同项目、来源是已接受 `npc_action`、patch 为 object；用 `dataclasses.replace` 写 `current_state`，附 `promoted_from_item_id`/时间，拒绝身份、动机和 `known_fact_ids` 键。UI 只显示计数与作者可展开的已接受 action；不请求 agenda 原文。真实模型测试仅在 `RUN_NOVEL_REAL_E2E=1` 有凭据时执行；否则跳过，普通两章 fake-E2E 是发布门槛。补充报告命令和人工核查项。
-- [ ] **Step 4: 完整验证。** Run `pytest tests/test_novel_autonomous_npc_*.py tests/test_novel_pi_*.py -v`; Run `npm test` in `agent_harness`; Run `npm run build` in `web`; expected: PASS。Optional: `$env:RUN_NOVEL_REAL_E2E='1'; pytest tests/test_novel_autonomous_npc_e2e.py -m real_model -v`; expected: PASS 或无凭据 SKIPPED。
-- [ ] **Step 5: Commit.** `git add runtime scripts web tests docs/handoffs && git commit -m "feat: review autonomous novel npc state"`
+- [x] **Step 2: 验证失败。** Run `pytest tests/test_novel_autonomous_npc_api.py tests/test_novel_autonomous_npc_e2e.py -v`; expected: FAIL。
+- [x] **Step 3: 实现。** 普通 ledger API/CLI/页面隐藏 `npc_agenda.content`，摘要只给计数。提升端点验证同项目、来源是已接受 `npc_action`、patch 为 object；用 `dataclasses.replace` 写 `current_state`，附 `promoted_from_item_id`/时间，拒绝身份、动机和 `known_fact_ids` 键。UI 只显示计数与作者可展开的已接受 action；不请求 agenda 原文。真实模型测试仅在 `RUN_NOVEL_REAL_E2E=1` 有凭据时执行；否则跳过，普通两章 fake-E2E 是发布门槛。补充报告命令和人工核查项。
+- [x] **Step 4: 完整验证。** Run `pytest tests/test_novel_autonomous_npc_*.py tests/test_novel_pi_*.py -v`; Run `npm test` in `agent_harness`; Run `npm run build` in `web`; expected: PASS。Optional: `$env:RUN_NOVEL_REAL_E2E='1'; pytest tests/test_novel_autonomous_npc_e2e.py -m real_model -v`; expected: PASS 或无凭据 SKIPPED。
+- [x] **Step 5: Commit.** `git add runtime scripts web tests docs/handoffs && git commit -m "feat: review autonomous novel npc state"`
 
 ## Self-Review
 
