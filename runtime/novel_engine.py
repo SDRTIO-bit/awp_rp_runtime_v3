@@ -419,6 +419,11 @@ class NovelEngine:
                 if chapter_quality_accepted
                 else ()
             ),
+            agenda_updates=(
+                npc_turn.agenda_updates
+                if chapter_quality_accepted
+                else ()
+            ),
         )
 
         return draft
@@ -1094,6 +1099,11 @@ class NovelEngine:
                 if chapter_quality_accepted
                 else ()
             ),
+            agenda_updates=(
+                npc_turn.agenda_updates
+                if chapter_quality_accepted
+                else ()
+            ),
         )
         self._safe_on_phase("end", "ledger", {
             "ch": chapter_index,
@@ -1237,6 +1247,7 @@ class NovelEngine:
         *,
         revision: int = 1,
         selected_npc_actions: tuple = (),
+        agenda_updates: tuple[LedgerItem, ...] = (),
     ) -> None:
         """Update ledger and memory after chapter writing."""
         if quality_decision is None or not quality_decision.is_accepted():
@@ -1259,6 +1270,7 @@ class NovelEngine:
                     characters=characters,
                     quality_decision=quality_decision,
                     selected_npc_actions=selected_npc_actions,
+                    agenda_updates=agenda_updates,
                 )
         except Exception:
             pass  # Don't fail the chapter write if evolution update fails

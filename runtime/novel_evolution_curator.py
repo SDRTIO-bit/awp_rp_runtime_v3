@@ -64,13 +64,15 @@ class NovelEvolutionCurator:
         characters: list[NovelCharacter],
         quality_decision: QualityDecision | None,
         selected_npc_actions: tuple[SelectedNpcAction, ...] = (),
+        agenda_updates: tuple[LedgerItem, ...] = (),
     ) -> dict[str, Any]:
         # Autonomous NPC actions are committed only after a chapter the
         # quality gate accepted. A rejected/downgrade-accepted chapter must
         # persist no npc_action/npc_agenda side effects even if a caller passes
         # them here directly.
-        accepted = quality_decision is None or quality_decision.is_accepted()
+        accepted = quality_decision is not None and quality_decision.is_accepted()
         effective_npc_actions = selected_npc_actions if accepted else ()
+        effective_agenda_updates = agenda_updates if accepted else ()
         # Convert selected autonomous NPC actions to deterministic ledger updates
         # so later chapters recall them as visible consequences.
         npc_ledger_items = [
@@ -82,7 +84,7 @@ class NovelEvolutionCurator:
             chapter_text, chapter_plan, current_ledger_items, characters,
         )
         chapter_summary = ledger_result.get("chapter_summary", "") if ledger_result else ""
-        ledger_updates = list(npc_ledger_items)
+        ledger_updates = [*effective_agenda_updates, *npc_ledger_items]
         llm_items = ledger_result.get("ledger_updates", [])
         if llm_items and isinstance(llm_items, list) and len(llm_items) > 0:
             print(f"[LedgerCurator] LLM returned {len(llm_items)} ledger_updates, first item keys={list(llm_items[0].keys()) if isinstance(llm_items[0], dict) else type(llm_items[0])}", flush=True)

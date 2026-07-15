@@ -19,6 +19,7 @@ from awp_rp_runtime_v3.contracts.novel_npc_agenda import (
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
 from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.runtime.novel_npc_agenda_adapter import NovelNpcAgendaAdapter
 
 
 def _rejected_decision() -> QualityDecision:
@@ -62,6 +63,25 @@ def _guidance_with_npc() -> DirectorGuidance:
     return DirectorGuidance(
         guidance_id="g1",
         selected_npc_actions=(_selected_action(),),
+    )
+
+
+def _proposed_agenda():
+    from awp_rp_runtime_v3.contracts.novel_npc_agenda import NpcAgenda
+
+    return NpcAgenda(
+        agenda_id="agenda-1",
+        thread_key="配角甲:观察",
+        npc="配角甲",
+        private_goal="私密目标",
+        known_fact_ids=("fact-1",),
+        resources=(),
+        cost="无",
+        next_action="观察主角",
+        trigger="主角出现",
+        risk="暴露",
+        visible_consequence=_selected_action().visible_consequence,
+        deadline="3",
     )
 
 
@@ -133,6 +153,56 @@ def test_accepted_chapter_persists_npc_action(
     assert len(actions) == 1
     assert actions[0].entity == _selected_action().character_name
     assert "observable event" in actions[0].content
+
+
+def test_accepted_chapter_persists_proposed_npc_agenda(
+    reg, engine, monkeypatch, fake_novel_role_runtime,
+):
+    _setup_project(reg)
+    monkeypatch.setattr(
+        NovelNpcAgendaAdapter,
+        "propose",
+        lambda *args, **kwargs: (_proposed_agenda(),),
+    )
+    monkeypatch.setattr(
+        engine._agenda_service,
+        "eligible_characters",
+        lambda characters, *_args: tuple(characters),
+    )
+    monkeypatch.setattr(engine, "_call_director", lambda *args, **kwargs: _guidance_with_npc())
+
+    engine.write_chapter(project_id="p1", chapter_index=1)
+
+    agendas = reg.novel_ledger_store.list_by_project("p1", "npc_agenda")
+    assert len(agendas) == 1
+    assert agendas[0].status == "active"
+
+
+def test_rejected_chapter_discards_staged_npc_agenda(
+    reg, engine, monkeypatch, fake_novel_role_runtime,
+):
+    _setup_project(reg)
+    monkeypatch.setattr(
+        NovelNpcAgendaAdapter,
+        "propose",
+        lambda *args, **kwargs: (_proposed_agenda(),),
+    )
+    monkeypatch.setattr(
+        engine._agenda_service,
+        "eligible_characters",
+        lambda characters, *_args: tuple(characters),
+    )
+    monkeypatch.setattr(engine, "_call_director", lambda *args, **kwargs: _guidance_with_npc())
+    monkeypatch.setattr(
+        engine._quality_pipeline,
+        "run_chapter",
+        lambda *args, **kwargs: (_rejected_decision(), args[0]),
+    )
+
+    engine.write_chapter(project_id="p1", chapter_index=1)
+
+    assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
+    assert reg.novel_ledger_store.list_by_project("p1", NpcAction.LEDGER_SECTION) == []
 
 
 def test_streaming_accepted_chapter_persists_npc_action(
