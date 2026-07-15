@@ -41,3 +41,9 @@ def test_writer_profile_context_excludes_world_history_and_scene():
         world_rules=["秘密规则"], history="秘密历史", scene="秘密场景", character_context={},
     )
     assert "world_rules" not in context and "history" not in context and "scene" not in context
+
+
+def test_compatibility_profile_contains_no_fixed_story_material():
+    serialized = default_autonomous_profile().model_dump_json()
+    for text in ("刑侦", "匿名威胁", "警局", "第三章", "雨夜", "废弃仓库"):
+        assert text not in serialized

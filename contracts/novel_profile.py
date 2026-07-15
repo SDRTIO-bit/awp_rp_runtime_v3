@@ -39,33 +39,25 @@ def default_autonomous_profile() -> NovelWritingProfile:
         name="default-novel-autonomy",
         narrative={
             "language": "zh-CN",
-            "tone": "克制、有留白",
-            "style": "第三人称有限视角，聚焦主角的感官与情绪",
-            "objective": "200字以内的小说目标：写一段主角在压力下做出选择、并承担可见后果的现代都市悬疑场景。",
+            "tone": "服从项目既有风格与人物视角",
+            "style": "以章节既定视角叙事，展示角色选择及其可见后果",
+            "objective": "推进本章计划，并保持角色行动的自主性与连续性。",
         },
         world={
             "rules": [
-                "案件调查必须遵守现实刑侦逻辑",
-                "关键物证在本章必须被角色实际触碰或观察",
+                "以项目账本、人物和章节计划为唯一具体世界来源",
                 "NPC 动机独立于主角意志",
             ],
             "budget": "世界观约束不超过 5 条",
         },
         history={
-            "facts": [
-                "主角在上一章收到匿名威胁短信",
-                "警局内部有人泄露案卷照片",
-                "关键证人已经在第三章失踪",
-            ],
-            "constraints": "历史事实必须被本章角色行为或对话提及，不能只作为旁白",
+            "facts": [],
+            "constraints": "仅使用已接受的项目历史与账本事实",
         },
         scene={
             "budget": "场景约束不超过 5 条",
-            "must_include": ["一个只出现一次但有象征意义的环境细节", "一段不解释动机的 NPC 动作"],
-            "constraints": [
-                "本章必须在雨夜进行",
-                "主要冲突发生在废弃仓库二楼",
-            ],
+            "must_include": [],
+            "constraints": ["仅执行章节计划定义的场景与节拍"],
         },
         agent_contracts={
             "architect": {
