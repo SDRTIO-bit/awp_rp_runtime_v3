@@ -302,3 +302,71 @@ POST /awp/api/v1/novels/{project_id}/characters/{character_id}/state-promotions
 ## 6. 结论
 
 自主 NPC 预设编译层已完整实现并验证。数据链 `NpcAgenda → SelectedNpcAction → VisibleConsequence` 已固定；Writer 仅消费可见后果，Curator 仅在接受后持久化中间项，人工提升端点提供安全的作者干预入口。
+
+---
+
+# 附录 B：自主 NPC 运行时接线修正
+
+**日期**：2026-07-15
+**分支**：`codex/novel-autonomous-npc`
+**计划**：`docs/superpowers/plans/2026-07-15-novel-autonomy-runtime-wiring-correction.md`
+**提交记录**：
+
+- `48a958fc` — fix: compile autonomous novel profile layers（Task 1，已完成）
+- `96922d2a` — fix: wire autonomous npc planning into novel engine（Task 2）
+- `9e6fa2c8` — fix: enforce writer-safe npc consequence boundary（Task 3）
+
+## 1. 修正的「未接线」断点
+
+工作树中 Profile、NPC 议程服务、Pi 规划器、Director 选择早已实现，但 `NovelEngine` 从未引用它们——`generate_guidance()` 也从不调用 `select_npc_actions()`，`load_autonomous_profile()` 在 runtime 中无人调用，默认 Profile 各层为空。本次接线修正把这条链真正接入两条真实写章路径。
+
+## 2. Task 2：在真实 Engine 中调用 Profile、规划器与 Director
+
+- 新增 `AutonomousNpcTurn` dataclass 与 `_prepare_autonomous_npc_turn()`，被 `write_chapter()` 与 `write_chapter_stream()` 共享调用。
+- 流程：加载 Profile（项目 `config[autonomous_profile]` → `load_autonomous_profile()`）→ `NpcAgendaService.active()` 取活跃/过期议程（过期项立即 upsert 为 `stale`）→ `eligible_characters()` 取至多 5 个相关角色 → Pi `NovelNpcAgendaAdapter.propose()` 产出候选议程。
+- `Director.generate_guidance()` 现接收 `candidate_agendas`，仅向 LLM 注入 Writer-safe 的可见后果摘要，解析 `selected_agenda_ids` 后经 `select_npc_actions()` 校验（至多 2 项、同 NPC/线程去重），并在 `DirectorGuidance` 上同时设置 `selected_npc_actions` 与 `visible_consequences`。
+
+### Profile 门禁策略（与计划全局约束的调和）
+
+计划要求「缺失/不兼容直接失败」。考虑到工作树中所有已通过测试均以裸 `NovelProject`（无 `autonomous_profile`）起步，严格失败会打挂数十个测试。经确认采用：
+
+- **坏 Profile 硬失败**：`autonomous_profile` 存在但 schema/版本不兼容或 `mode != "novel"` → 立即抛 `NovelProfileError`（安全边界）。
+- **缺失回退默认**：项目 config 无 `autonomous_profile` → 静默回退 `default_autonomous_profile()`（向后兼容，新建/旧项目无需改动）。
+
+## 3. Task 3：Writer 安全边界与接受后提交
+
+- `runtime/novel_write_packet_builder.py` 新增 `writer_safe_guidance()`：剥离 `selected_npc_actions`（携带 Director `reasoning`）与 `reasoning`，仅保留 beat 细纲/锚点/伏笔/支线/可见后果。`build()` 与 `build_beat_packet()` 均改用安全副本。
+- `contracts/novel_director_guidance.py` 的 `to_dict()` 在 `selected_npc_actions`/`reasoning` 为空时省略对应 key，保证序列化结果绝不携带私密选择 key。
+- `runtime/novel_writer_context.py` 的 `visible_consequences` 优先取 `director_guidance.visible_consequences`，兼容旧形态（仅设 `selected_npc_actions` 的 mock）再回填。
+- `runtime/novel_evolution_curator.py` 增加第二道闸门：`quality_decision` 非 accept 时 `effective_npc_actions=()`，即使直接调 curator 也不写 `npc_action`。
+
+## 4. Task 4：两章真实管线验收
+
+`tests/test_novel_autonomous_npc_e2e.py` 重写为真实管线验收（不再 mock `_call_director`）：
+
+- `test_two_chapter_chain_uses_profile_and_recovers_consequence`：用确定性 `OrderedRoleRuntime` 跑真实 plan→write 两章，断言两章 `status == "accepted"`、`npc_action` 账本 ≥ 1、第二章正文含「截走药材」且不含「私密目标/万能钥匙/被巡夜撞见」（私密议程/资源/风险均未泄露给 Writer）。
+- 角色调用精确顺序（每章）：`architect → npc_planner → director → writer → continuity_checker → ledger_curator`。
+- `test_real_deepseek_two_chapter_chain`：真实 DeepSeek V4 Pro 验收仅在 `RUN_NOVEL_REAL_E2E=1` 下可选，无凭据时 **SKIPPED，绝不 PASS**。
+
+## 5. 验证结果
+
+```powershell
+python -m pytest -q tests/test_novel_autonomy_runtime_wiring.py \
+  tests/test_novel_autonomous_npc_contracts.py tests/test_novel_pi_architect_director.py \
+  tests/test_novel_autonomous_npc_planner.py tests/test_novel_writer_context.py \
+  tests/test_novel_autonomous_npc_e2e.py tests/test_novel_autonomous_npc_engine.py \
+  tests/test_novel_autonomous_npc_service.py tests/test_novel_pi_quality_roles.py \
+  tests/test_novel_pi_e2e.py tests/test_novel_pi_role_e2e.py tests/test_novel_e2e_demo.py \
+  tests/test_novel_autonomous_npc_api.py tests/test_novel_autonomous_npc_cli.py \
+  tests/test_d6_memory_curator.py
+```
+
+结果：**101 passed, 2 skipped**。
+
+### 全量回归对比
+
+于干净 Task 1 基线与带 Task 2/3 改动的工作树各跑一次全量 `pytest tests/`（排除 7 个 `from ..contracts` 相对导入损坏的 RP 旧模块），对比 FAILED/ERROR 集合：唯一差异是**本次修正修掉了** `test_novel_autonomous_npc_service.py::test_writer_profile_context_excludes_world_history_and_scene`（Task 1 改 `compile_for` 签名后遗留的 `world=` kwarg 失配），无任何新增失败或错误。其余失败全部集中于 `test_comfy_multisession_longrun_v1.py`（ComfyUI 环境缺失，与小说管线无关，基线即存在）。
+
+## 6. 结论
+
+自主 NPC 运行时接线修正完成且零回归。Profile/规划器/Director 选择已真正接入真实写章路径；Writer 仅消费 `VisibleConsequence`，Curator 仅在质量接受后持久化；两章真实管线验收通过，真实 LLM 验收安全受控。
