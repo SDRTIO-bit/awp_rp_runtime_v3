@@ -22,6 +22,16 @@ class VisibleConsequence(BaseModel):
     affected_characters: tuple[str, ...]
 
 
+class SelectedNpcAction(BaseModel):
+    """A Director-approved autonomous NPC action exposed to the writer."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    agenda_id: str
+    reasoning: str
+    visible_consequence: VisibleConsequence
+
+
 class NpcAgenda(BaseModel):
     """A private NPC plan, including the safe consequence exposed downstream."""
 

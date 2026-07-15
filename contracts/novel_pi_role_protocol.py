@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 NOVEL_PI_ROLES = frozenset({
     "architect",
+    "npc_planner",
     "director",
     "writer",
     "continuity_checker",

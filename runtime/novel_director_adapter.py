@@ -13,6 +13,7 @@ from typing import Any
 from ..contracts.novel_director_guidance import (
     DirectorGuidance, BeatGuidance, ForeshadowingAction, SubplotStatus, OutlineEnhancement,
 )
+from ..contracts.novel_npc_agenda import NpcAgenda, SelectedNpcAction
 from ..contracts.novel_pi_role_protocol import NovelPiRoleTask
 from .prompt_loader import load_prompt
 from .novel_role_context import get_novel_role_context
@@ -188,6 +189,36 @@ class NovelDirectorAdapter:
                 for b in chapter_plan.scene_beats
             ],
         }
+
+    def select_npc_actions(
+        self,
+        agendas: tuple[NpcAgenda, ...],
+        selected_ids: tuple[str, ...],
+    ) -> tuple[SelectedNpcAction, ...]:
+        """Return at most two validated, non-conflicting selected NPC actions.
+
+        Rejects unknown agenda IDs, selections over the budget, or actions that
+        share the same NPC or thread key (would compete for the same screen
+        real estate in a single chapter).
+        """
+        by_id = {a.agenda_id: a for a in agendas}
+        selected: list[SelectedNpcAction] = []
+        seen_npcs: set[str] = set()
+        seen_threads: set[str] = set()
+        for agenda_id in selected_ids[:2]:
+            agenda = by_id.get(agenda_id)
+            if agenda is None:
+                continue
+            if agenda.npc in seen_npcs or agenda.thread_key in seen_threads:
+                continue
+            selected.append(SelectedNpcAction(
+                agenda_id=agenda.agenda_id,
+                reasoning=f"推进 {agenda.thread_key} 线",
+                visible_consequence=agenda.visible_consequence,
+            ))
+            seen_npcs.add(agenda.npc)
+            seen_threads.add(agenda.thread_key)
+        return tuple(selected)
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:

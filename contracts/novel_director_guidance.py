@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .novel_npc_agenda import VisibleConsequence
+from .novel_npc_agenda import SelectedNpcAction, VisibleConsequence
 
 SCHEMA_ID = "awp.novel.director-guidance.v2"
 SCHEMA_VERSION = 2
@@ -172,6 +172,7 @@ class DirectorGuidance:
     foreshadowing_schedule: tuple[ForeshadowingAction, ...] = ()
     subplot_status: tuple[SubplotStatus, ...] = ()
     visible_consequences: tuple[VisibleConsequence, ...] = ()
+    selected_npc_actions: tuple[SelectedNpcAction, ...] = ()
     risk_flags: tuple[str, ...] = ()
     opportunities: tuple[str, ...] = ()
     reasoning: str = ""
@@ -188,6 +189,7 @@ class DirectorGuidance:
             "foreshadowing_schedule": [f.to_dict() for f in self.foreshadowing_schedule],
             "subplot_status": [s.to_dict() for s in self.subplot_status],
             "visible_consequences": [c.model_dump(mode="json") for c in self.visible_consequences],
+            "selected_npc_actions": [a.model_dump(mode="json") for a in self.selected_npc_actions],
             "risk_flags": list(self.risk_flags),
             "opportunities": list(self.opportunities),
             "reasoning": self.reasoning,
@@ -210,6 +212,11 @@ class DirectorGuidance:
                 VisibleConsequence.model_validate(c)
                 for c in data.get("visible_consequences", [])
                 if isinstance(c, dict)
+            ),
+            selected_npc_actions=tuple(
+                SelectedNpcAction.model_validate(a)
+                for a in data.get("selected_npc_actions", [])
+                if isinstance(a, dict)
             ),
             risk_flags=tuple(data.get("risk_flags", [])),
             opportunities=tuple(data.get("opportunities", [])),

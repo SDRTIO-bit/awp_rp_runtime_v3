@@ -27,6 +27,7 @@ THINKING_DISABLED = {"thinking": {"type": "disabled"}}
 ROLE_CONFIGS = {
     "director":          {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
     "architect":         {"model": "deepseek-v4-flash",  "max_tokens": 20000, "thinking": THINKING_DISABLED},
+    "npc_planner":       {"model": "deepseek-v4-pro",    "max_tokens": 4000, "thinking": THINKING_HIGH},
     "writer":            {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_MEDIUM},
     "continuity_checker": {"model": "deepseek-v4-flash", "max_tokens": 4000, "thinking": THINKING_DISABLED},
     "brain":              {"model": "deepseek-v4-pro",   "max_tokens": 2000, "thinking": THINKING_LOW},
@@ -310,6 +311,7 @@ class NovelLLMFactory:
 
         roles = (
             "architect",
+            "npc_planner",
             "director",
             "writer",
             "continuity_checker",
