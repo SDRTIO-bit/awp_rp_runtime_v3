@@ -1,7 +1,8 @@
 """NovelDirectorAdapter — Director LLM adapter for novel mode v3.
 
-职责单一：把 Architect 的 3 个 beat 展开成 McKee 框架细纲。
-角色锚点/时间锚点从已有数据直接拼，不经过 LLM。
+V3: Director 从"全局优化"改为"章节约束压缩器"。
+只确认 must_not_design / ordinary_space / primary_function，
+不再设计 gap/complication/pressure/对白/情绪高潮/象征。
 """
 
 from __future__ import annotations
@@ -69,6 +70,12 @@ class NovelDirectorAdapter:
         risk_flags = result.get("risk_flags", [])
         opportunities = result.get("opportunities", [])
 
+        # ── V3 新字段 ──
+        chapter_goal = result.get("chapter_goal", "")
+        ordinary_space = result.get("ordinary_space", "")
+        max_planned_reversals = int(result.get("max_planned_reversals", 1))
+        max_symbolic_props = int(result.get("max_symbolic_props", 0))
+
         # Validate the Director's chosen agenda IDs through the deterministic
         # selection rules (at most 2, no same-NPC/thread conflicts). Only the
         # visible consequences of the survivors ever cross to the Writer.
@@ -79,6 +86,14 @@ class NovelDirectorAdapter:
             guidance_id=f"guid-ch{chapter_plan.chapter_index}",
             character_anchor=character_anchor,
             timeline_anchor=timeline_anchor,
+            # ── V3 章节约束 ──
+            chapter_goal=chapter_goal,
+            entry_state="",
+            exit_state="",
+            ordinary_space=ordinary_space,
+            max_planned_reversals=max_planned_reversals,
+            max_symbolic_props=max_symbolic_props,
+            # ── beat / 辅助 ──
             beat_details=tuple(beat_details),
             foreshadowing_schedule=tuple(foreshadowing_schedule),
             subplot_status=tuple(subplot_status),
@@ -174,7 +189,7 @@ class NovelDirectorAdapter:
                 "在 JSON 中增加 selected_agenda_ids（至多 2 个），其余字段保持不变。"
             )
 
-        parts.append(f"\n=== 任务 ===\n把上面章节计划里的 scene_beats 展开成细纲。每个 beat 一个。共 {len(chapter_plan.scene_beats)} 个。")
+        parts.append(f"\n=== 任务 ===\n把上面章节计划里的 scene_beats 生成约束（V3 模式）。每个 beat 一个 JSON 项。共 {len(chapter_plan.scene_beats)} 个。不要增减 beat。只输出 must_not_design（禁止的设计动作）和 primary_function（主要功能）。不需要填写 gap/complication/pressure 等 v2 字段。")
 
         user_prompt = "\n\n".join(parts)
 

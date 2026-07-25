@@ -641,6 +641,8 @@ class NovelStyleCleaner:
         text = re.sub(r'\{\{setvar::COT-PersonalityReshaping::.*?\}\}', '', text, flags=re.DOTALL)
         text = re.sub(r'###\s+COT-PersonalityReshaping.*?(?=\*\*\*\s*\n|###\s*正文)', '', text, flags=re.DOTALL)
         text = re.sub(r'<PersonalityReshaping>.*?</PersonalityReshaping>', '', text, flags=re.DOTALL)
+        text = re.sub(r'<内部状态表>.*?</内部状态表>', '', text, flags=re.DOTALL)
+        text = re.sub(r'\A.*?\n\*{3,4}\s*\n', '', text, count=1, flags=re.DOTALL)
         text = re.sub(r'^(根据设定与任务约束.*?正文内容[：:]?\s*)$', '', text, flags=re.MULTILINE)
         text = re.sub(r'^(【COT-PersonalityReshaping】[\s\S]*?)(?=\*\*\*\s*\n)', '', text, flags=re.DOTALL)
         text = re.sub(r'\n\*\*\*\s*\n', '\n', text)
@@ -757,14 +759,51 @@ S7_GENERIC_ENDING 章末不用概括句
 只输出JSON：{"verdict":"PASS|PASS_WITH_WARNINGS|REJECT","reconstructed_ledger":{"scenes":[]},"issue_results":[{"issue_id":"","status":"RESOLVED|UNRESOLVED|PARTIAL|REGRESSED","evidence_quote":"","explanation":""}],"new_regressions":[{"category":"","severity":"hard|medium|soft","quote":"","diagnosis":""}],"patch_results":[{"patch_id":"","valid":true,"unnecessary_change":false,"reason":""}],"rollback_patch_ids":[],"summary":""}"""
 
     # ═══════════════════════════════════════════════════════════
+    # 设计过载审计器 V3 (DESIGN Gate)
+    # ═══════════════════════════════════════════════════════════
+
+    _DESIGN_AUDIT_SYSTEM_PROMPT = """你是叙事设计过载审计器。不修改正文，只诊断。
+
+检查 D1-D5，每个最多标记 1 处。不设硬性上限但总数不超过 8。
+
+D1_ACTION_OVERLOAD
+单个动作是否同时承担 3+ 个功能（解围/暧昧/象征/绑定/视觉特写）。
+命中的动作：列出每个功能的原文证据。
+
+D2_SCENE_FUNCTION_OVERLOAD
+单个场景是否同时完成 4+ 个独立功能（秘密暴露/人设展示/救场/关系绑定/道具交付/主线建立）。
+命中的场景：列出每个功能。
+
+D3_SUPPORTING_CAST_FUNCTIONAL
+配角是否每次出场都贡献精准有效台词。
+检测：王磊是否每次都负责笑点、顾远是否每次都冷静补刀。
+允许配角吃包子不推动剧情、没接上话、理解错重点。
+
+D4_PROP_OVERLOADED
+单一物件（钥匙、信纸、意见箱）是否同时承担 3+ 个功能。
+检测物件是否同时作为：情节工具 + 人物象征 + 关系象征 + 章节结尾 + 主线入口。
+
+D5_NARRATIVE_VOICE_SHIFT
+检测同一场景是否在这些叙述模式间切换：
+人物吐槽 → 中性镜头 → 偶像剧特写 → 作者心理分析 → 章末总结。
+
+输出 JSON：
+{"verdict":"PASS|WARN|REGENERATE_SCENE|AUTHOR_DECISION",
+ "issues":[{"id":"","category":"D1_ACTION_OVERLOAD|D2_SCENE_FUNCTION_OVERLOAD|D3_SUPPORTING_CAST_FUNCTIONAL|D4_PROP_OVERLOADED|D5_NARRATIVE_VOICE_SHIFT",
+            "quote":"原文证据","diagnosis":"为什么是设计过载","severity":"warn|regenerate|decision"}],
+ "summary":"PASS=无过载|WARN=有过载但不阻塞|REGENERATE_SCENE=场景需局部重写|AUTHOR_DECISION=结构问题需人类裁决"}"""
+
+    # ═══════════════════════════════════════════════════════════
     # 固定约束
     # ═══════════════════════════════════════════════════════════
 
     _FOCAL_CHARACTER = "陈默"
     _POV_MODE = "第三人称限知，正文只能直接进入陈默的感知、判断和回忆；其他人物心理只能通过可见行为推测"
     _DEFAULT_PLOT_BEATS: tuple[str, ...] = ()
-    _PATCH_BUDGET = 0.08  # 8% max change ratio
+    _PATCH_BUDGET = 0.08  # 8% max change ratio (HARD)
+    _PATCH_BUDGET_STYLE = 0.05  # 5% max change ratio (STYLE, delete-first)
     _PATCH_MAX_BEFORE_CHARS = 160
+    _PATCH_MAX_BEFORE_CHARS_STYLE = 120  # STYLE 单个 before 不超过 120 字
     _PATCH_MAX_AFTER_CHARS = 160
     _PATCH_AFTER_TO_BEFORE_RATIO = 1.35
 
@@ -776,9 +815,10 @@ S7_GENERIC_ENDING 章末不用概括句
                             revision: int = 1,
                             plot_beats: tuple[str, ...] = (),
                             write_guidance: str = "") -> str:
-        """V2 双回路精修：HARD → Patch → Verify → STYLE → Patch → Verify。
+        """V3 三阶段精修：HARD → DESIGN → STYLE。
 
-        硬逻辑修复与AI味删除分开执行，补丁由代码确定性应用。
+        硬逻辑修复与设计过载审计分开执行。
+        STYLE 失败回退到 HARD 通过版本（非原始 Writer 输出）。
         任何阶段失败均降级保留原文，不阻塞存盘。
         """
         if not text or not text.strip():
@@ -788,9 +828,15 @@ S7_GENERIC_ENDING 章末不用概括句
 
         # ── 回路一：硬逻辑修复 ──
         text = self._run_hard_loop(text, orig_len, plot_beats=plot_beats)
+        hard_passed_text = text  # baseline for STYLE rollback
 
-        # ── 回路二：AI味删除 ──
-        text = self._run_style_loop(text, orig_len, plot_beats=plot_beats)
+        # ── 回路二：设计过载审计（不自动补丁） ──
+        design_report = self._run_design_audit(text, plot_beats=plot_beats)
+        _ = design_report  # 记录但暂不触发 REGENERATE_SCENE（TODO）
+
+        # ── 回路三：AI味删除 ──
+        text = self._run_style_loop(text, orig_len, plot_beats=plot_beats,
+                                     hard_passed_text=hard_passed_text)
 
         return text.strip()
 
@@ -829,8 +875,14 @@ S7_GENERIC_ENDING 章末不用概括句
         return patched
 
     def _run_style_loop(self, text: str, orig_len: int, *,
-                        plot_beats: tuple[str, ...] = ()) -> str:
-        """STYLE audit → patch generation → code apply → verify."""
+                        plot_beats: tuple[str, ...] = (),
+                        hard_passed_text: str = "") -> str:
+        """STYLE audit → patch generation → code apply → verify。
+
+        verify 失败时回退到 hard_passed_text（非原始 Writer 输出）。
+        STYLE 补丁预算=5%（低于 HARD 的 8%），仅 DELETE 和 REPLACE_LOCAL。
+        """
+        baseline = hard_passed_text or text
         audit = self._run_audit(text, audit_mode="STYLE", plot_beats=plot_beats)
         if not audit or not audit.get("issues"):
             return text
@@ -839,7 +891,16 @@ S7_GENERIC_ENDING 章末不用概括句
         if not patches_json:
             return text
 
-        patched, _ = self._apply_patches(text, patches_json.get("patches", []), budget=orig_len)
+        patched, _ = self._apply_patches(text, patches_json.get("patches", []),
+                                          budget=orig_len, budget_ratio=NovelStyleCleaner._PATCH_BUDGET_STYLE)
+
+        # ── Verify: rollback to hard_passed_text on REJECT ──
+        verdict_json = self._run_verify(text, audit, patched,
+                                         patches_json.get("patches", []),
+                                         plot_beats=plot_beats)
+        verdict = verdict_json.get("verdict", "REJECT") if verdict_json else "REJECT"
+        if verdict == "REJECT":
+            return baseline  # 回退到 hard_passed_text
         return patched if patched else text
 
     # ═══════════════════════════════════════════════════════════
@@ -848,7 +909,8 @@ S7_GENERIC_ENDING 章末不用概括句
 
     @staticmethod
     def _apply_patches(text: str, patches: list[dict[str, Any]], *,
-                       budget: int = 0) -> tuple[str, int]:
+                       budget: int = 0,
+                       budget_ratio: float | None = None) -> tuple[str, int]:
         """Code-side deterministic patch application with hard guards.
 
         Returns (patched_text, applied_count).
@@ -860,15 +922,16 @@ S7_GENERIC_ENDING 章末不用概括句
         total_changed = 0
         applied = 0
         result = text
-        budget_limit = budget * NovelStyleCleaner._PATCH_BUDGET
+        ratio = budget_ratio if budget_ratio is not None else NovelStyleCleaner._PATCH_BUDGET
+        budget_limit = int(budget * ratio)
 
         for p in patches:
             before = p.get("before", "")
             after = p.get("after", "")
             op = p.get("operation", "replace")
 
-            # ── Guards ──
-            if result.count(before) != 1:
+            before_count = result.count(before)
+            if before_count != 1:
                 continue
             if len(after) > NovelStyleCleaner._PATCH_MAX_AFTER_CHARS:
                 continue
@@ -878,7 +941,6 @@ S7_GENERIC_ENDING 章末不用概括句
             if total_changed + change_size > budget_limit:
                 continue
 
-            # ── Apply ──
             if op == "delete":
                 result = result.replace(before, "", 1)
             elif op == "replace":
@@ -909,6 +971,17 @@ S7_GENERIC_ENDING 章末不用概括句
         sys_prompt = self._AUDIT_SYSTEM_PROMPT.replace("{{AUDIT_MODE}}", audit_mode)
         role = "polish_audit" if audit_mode == "HARD" else "polish_repair"
         return self._call_llm_json(sys_prompt, user_prompt, role=role, max_tokens=8000)
+
+    def _run_design_audit(self, text: str, *,
+                           plot_beats: tuple[str, ...] = ()) -> dict[str, Any] | None:
+        """DESIGN 审计：检查叙事设计过载 (D1-D5)。不自动补丁，只诊断。"""
+        import json
+        prompt = self._build_constraint_prompt(plot_beats=plot_beats)
+        user_prompt = prompt + f"\n\n正文：\n{text}"
+        return self._call_llm_json(
+            self._DESIGN_AUDIT_SYSTEM_PROMPT, user_prompt,
+            role="design_audit", max_tokens=4000,
+        )
 
     def _run_patch_gen(self, text: str, issues: list[dict[str, Any]], *,
                        plot_beats: tuple[str, ...] = ()) -> dict[str, Any] | None:

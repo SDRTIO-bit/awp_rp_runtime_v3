@@ -37,6 +37,9 @@ ROLE_CONFIGS = {
     "polish_audit":      {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
     "polish_repair":     {"model": "deepseek-v4-pro",   "max_tokens": 16000, "thinking": THINKING_DISABLED},
     "polish_verify":     {"model": "deepseek-v4-flash",  "max_tokens": 4000, "thinking": THINKING_DISABLED},
+    # ── V3 新增：Writer Low + DESIGN 审计 ──
+    "writer_low":        {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_DISABLED},
+    "design_audit":      {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
 }
 
 

@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "version": "v3",
+    "description": "参考标杆的统计倾向，不是风格规则。告诉 Writer 的松弛度，而不是让它模仿词汇。",
+    "usage": "将此 JSON 连同 reference_examples.md (3-5 个 100-250 字短样) 一并传给 Writer。"
+  },
+  "statistical_tendencies": {
+    "ordinary_narration_ratio": "high",
+    "sentence_function_density": "low",
+    "dialogue_efficiency": "mixed",
+    "author_commentary": "allowed_but_voice_consistent",
+    "symbolic_actions": "rare",
+    "scene_primary_functions": "1-2",
+    "minor_irrelevant_actions": "allowed"
+  },
+  "what_to_absorb": {
+    "narrative_texture": "参考叙事松弛度：允许人物走路、收书、发愣、吃包子不推动剧情。对话允许无回应、偏题、说废话。",
+    "do_not_copy": "不复制词汇、句式、笑话和人物表达。标杆里写了'卧槽'不等于你也要写'卧槽'。"
+  },
+  "scene_density": {
+    "max_primary_function_per_scene": 2,
+    "ordinary_space_required": true,
+    "forbidden": [
+      "不要给每个动作分配剧情意义",
+      "不要让撕纸承担象征撕裂关系的意义",
+      "不要让钥匙反光暗示命运的齿轮",
+      "不要用夕阳晚霞暗示情绪的转折"
+    ]
+  }
+}

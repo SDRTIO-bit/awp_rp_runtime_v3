@@ -1,9 +1,9 @@
 """DirectorGuidance, BeatGuidance, OutlineEnhancement, ForeshadowingAction, SubplotStatus.
 
-schemaId: awp.novel.director-guidance.v2
+schemaId: awp.novel.director-guidance.v3
 
-v2: 融合 McKee 框架，将旧字段（chapter_direction/emotional_arc/pacing_strategy/
-key_scenes/dialogue_tone/reader_expectation_plan/character_arc_beats）拆入 beat_details。
+v3: Director 从"全局优化"改为"章节约束压缩器"——不再设计情绪高潮/象征/笑点/身体接触，
+只确认必须发生什么 + 禁止设计什么 + 允许哪些普通空间。
 """
 
 from __future__ import annotations
@@ -13,23 +13,30 @@ from typing import Any
 
 from .novel_npc_agenda import SelectedNpcAction, VisibleConsequence
 
-SCHEMA_ID = "awp.novel.director-guidance.v2"
-SCHEMA_VERSION = 2
+SCHEMA_ID = "awp.novel.director-guidance.v3"
+SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True)
 class BeatGuidance:
-    """单个 beat 的细纲（McKee 框架驱动）。"""
+    """单个 beat 的最小约束（V3：Director 不再设计，只约束）。"""
     beat_id: str = ""
-    content_outline: str = ""      # 具体事件：谁做了什么，发生了什么
-    gap: str = ""                  # McKee gap：期望 vs 结果的落差
-    complication: str = ""         # 比上一个 beat 复杂在哪（递进复杂化）
-    pressure_point: str = ""       # 角色面对的压力/两难选择
-    dialogue_keys: tuple[str, ...] = ()  # 关键对白要点（含潜台词标注）
-    info_release: str = ""         # 读者在这个 beat 新知道什么
-    emotion_shift: str = ""        # 情绪翻转（如"压抑→怀疑"）
-    info_type: str = ""            # 信息传递方式：对话/行为/叙述/内心推断
-    hook_execution: str = ""       # 钩子怎么落地（悬念/情绪/反转/信息差）
+    content_outline: str = ""      # 具体事件：谁做了什么，发生了什么（保留 v2）
+    gap: str = ""                  # v2 遗留，V3 可不填
+    complication: str = ""         # v2 遗留，V3 可不填
+    pressure_point: str = ""       # v2 遗留，V3 可不填
+    dialogue_keys: tuple[str, ...] = ()  # v2 遗留，V3 可不填
+    info_release: str = ""         # v2 遗留，V3 可不填
+    emotion_shift: str = ""        # v2 遗留，V3 可不填
+    info_type: str = ""            # v2 遗留，V3 可不填
+    hook_execution: str = ""       # v2 遗留，V3 可不填
+
+    # ── V3 新增：场景约束而非设计 ──
+    immediate_goal: str = ""       # 角色当前想解决什么眼前问题
+    obstacle: str = ""             # 阻碍
+    required_change: str = ""      # 必须发生的状态变化
+    primary_function: str = ""     # 本场景唯一主要功能
+    must_not_design: tuple[str, ...] = ()  # 禁止设计哪些动作/象征/身体接触
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,6 +50,12 @@ class BeatGuidance:
             "emotion_shift": self.emotion_shift,
             "info_type": self.info_type,
             "hook_execution": self.hook_execution,
+            # V3
+            "immediate_goal": self.immediate_goal,
+            "obstacle": self.obstacle,
+            "required_change": self.required_change,
+            "primary_function": self.primary_function,
+            "must_not_design": list(self.must_not_design),
         }
 
     @classmethod
@@ -50,6 +63,8 @@ class BeatGuidance:
         data = data if isinstance(data, dict) else {}
         dk = data.get("dialogue_keys", [])
         dk = tuple(dk) if isinstance(dk, (list, tuple)) else ()
+        mnd = data.get("must_not_design", [])
+        mnd = tuple(mnd) if isinstance(mnd, (list, tuple)) else ()
         return cls(
             beat_id=str(data.get("beat_id", "") or ""),
             content_outline=str(data.get("content_outline", "") or ""),
@@ -61,6 +76,12 @@ class BeatGuidance:
             emotion_shift=str(data.get("emotion_shift", "") or ""),
             info_type=str(data.get("info_type", "") or ""),
             hook_execution=str(data.get("hook_execution", "") or ""),
+            # V3
+            immediate_goal=str(data.get("immediate_goal", "") or ""),
+            obstacle=str(data.get("obstacle", "") or ""),
+            required_change=str(data.get("required_change", "") or ""),
+            primary_function=str(data.get("primary_function", "") or ""),
+            must_not_design=mnd,
         )
 
 
@@ -150,10 +171,10 @@ class SubplotStatus:
 
 @dataclass(frozen=True)
 class DirectorGuidance:
-    """Director 的输出 v2：事实锚点 + beat 细纲 + 全局辅助。
+    """Director 的输出 V3：最小约束而非全局优化。
 
-    旧字段（chapter_direction/emotional_arc/pacing_strategy/key_scenes/
-    dialogue_tone/reader_expectation_plan/character_arc_beats）已融合入 beat_details。
+    V3 关键变化：Director 不再设计对白/潜台词/情感高潮/象征物/笑点/身体接触。
+    只确认：必须发生什么 + 必须禁止什么 + 允许哪些无功能的普通空间。
     """
     schema_id: str = SCHEMA_ID
     schema_version: int = SCHEMA_VERSION
@@ -164,7 +185,15 @@ class DirectorGuidance:
     character_anchor: str = ""    # "林知夏: 28岁女, 自由插画师, 失眠三年 | 袁护士: ~50岁, 护士"
     timeline_anchor: str = ""     # "第3章, 搬入第2天, Day2 凌晨→清晨"
 
-    # beat 细纲（替代旧的 chapter_direction/emotional_arc/pacing_strategy/key_scenes/dialogue_tone/reader_expectation_plan/character_arc_beats）
+    # ── V3 新增：章节级约束 ──
+    chapter_goal: str = ""        # 本章结束时要达成的可见变化（一句话）
+    entry_state: str = ""         # 章节开始时的角色状态
+    exit_state: str = ""          # 章节结束时的角色状态
+    ordinary_space: str = ""      # 允许的无功能空间："允许人物走路/收书/吃包子不推动剧情"
+    max_planned_reversals: int = 1  # 本章最多安排几个反转
+    max_symbolic_props: int = 0     # 本章最多几个象征物（0=禁止）
+
+    # beat 详细（保留 v2 字段兼容 + V3 约束字段）
     beat_details: tuple[BeatGuidance, ...] = ()
 
     # 全局辅助
