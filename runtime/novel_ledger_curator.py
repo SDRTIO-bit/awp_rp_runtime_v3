@@ -56,7 +56,7 @@ section 说明:
 class NovelLedgerCurator:
     """Ledger Curator for novel mode."""
 
-    def __init__(self, registry, model: str = "deepseek-v4-flash"):
+    def __init__(self, registry, model: str = "deepseek-v4-pro"):
         self._registry = registry
         self._model = model
 

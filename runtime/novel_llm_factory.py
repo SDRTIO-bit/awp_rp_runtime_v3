@@ -28,11 +28,15 @@ ROLE_CONFIGS = {
     "director":          {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
     "architect":         {"model": "deepseek-v4-pro",    "max_tokens": 20000, "thinking": THINKING_DISABLED},
     "npc_planner":       {"model": "deepseek-v4-pro",    "max_tokens": 4000, "thinking": THINKING_HIGH},
-    "writer":            {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_MEDIUM},
+    "writer":            {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_DISABLED},
     "continuity_checker": {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_DISABLED},
     "brain":              {"model": "deepseek-v4-pro",   "max_tokens": 2000, "thinking": THINKING_LOW},
     "style_cleaner":     {"model": "deepseek-v4-pro",   "max_tokens": 2000, "thinking": THINKING_DISABLED},
     "ledger_curator":    {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_DISABLED},
+    # ── 三段式 Polish 管线专用角色 ──
+    "polish_audit":      {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
+    "polish_repair":     {"model": "deepseek-v4-pro",   "max_tokens": 16000, "thinking": THINKING_DISABLED},
+    "polish_verify":     {"model": "deepseek-v4-flash",  "max_tokens": 4000, "thinking": THINKING_DISABLED},
 }
 
 

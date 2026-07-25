@@ -78,7 +78,7 @@ CONTINUITY_CHECKER_PROMPT = """=== STABLE CONTINUITY CHECKER CONTRACT ===
 class NovelContinuityChecker:
     """Continuity Checker for novel mode."""
 
-    def __init__(self, registry, model: str = "deepseek-v4-flash"):
+    def __init__(self, registry, model: str = "deepseek-v4-pro"):
         self._registry = registry
         self._model = model
 

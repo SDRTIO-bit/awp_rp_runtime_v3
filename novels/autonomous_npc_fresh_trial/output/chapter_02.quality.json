@@ -1,0 +1,88 @@
+{
+  "draft_id": "draft-ch-autonomous-npc-fresh-trial-2-r1",
+  "chapter_id": "ch-autonomous-npc-fresh-trial-2",
+  "revision": 1,
+  "status": "accepted",
+  "quality_decision_id": "qd-ch-autonomous-npc-fresh-trial-2-daf877b7",
+  "annotations": [
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "banned_patterns",
+      "category": "style",
+      "severity": "warning",
+      "description": "禁用句式: 不是.{1,20}。\\s*是.{1,20}[。！]，匹配: ['不是栈桥方向传来的。是巷子另一头，货栈正门那边。']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "拆短句或换动作"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "metadata_leak",
+      "category": "content_leak",
+      "severity": "error",
+      "description": "行39: 工程词泄露 ['上一章']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "删除工程词/章名标记"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "metadata_leak",
+      "category": "content_leak",
+      "severity": "error",
+      "description": "行87: 工程词泄露 ['第一章']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "删除工程词/章名标记"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "metadata_leak",
+      "category": "content_leak",
+      "severity": "error",
+      "description": "行99: 工程词泄露 ['上一章']",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "删除工程词/章名标记"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "drumbeat",
+      "category": "style",
+      "severity": "warning",
+      "description": "短句密度过高: 75/137 句 ≤12字 (比例 55%)，AI鼓点综合征",
+      "evidence": "",
+      "fixable": true,
+      "fix_guidance": "减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下"
+    },
+    {
+      "schema_id": "awp.rp.quality-issue.v1",
+      "schema_version": 1,
+      "issue_id": "",
+      "gate_name": "beat_budget",
+      "category": "structure",
+      "severity": "warning",
+      "description": "beat '林照踩着退潮后湿滑的栈桥木板摸到后巷口，' 缺少密度标记",
+      "evidence": "",
+      "fixable": false,
+      "fix_guidance": ""
+    },
+    {
+      "gate_name": "plan_adherence",
+      "category": "structure",
+      "blocking_reasons": [],
+      "warnings": [],
+      "coverage": 1.0
+    }
+  ]
+}

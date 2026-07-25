@@ -171,10 +171,10 @@ TurnRecordStore.load(turn_id)
 
 | Profile | Provider | Model | 用途 |
 |---------|----------|-------|------|
-| `deepseek-v4-flash-director` | deepseek | deepseek-v4-flash | Director（思考开启，reasoning_effort=high）|
-| `deepseek-v4-pro-writer` | deepseek | deepseek-v4-pro | Writer（思考禁用）|
-| `deepseek-v4-pro-director` | deepseek | deepseek-v4-pro | Director（兼容旧配置）|
-| `deepseek-v4-flash-writer` | deepseek | deepseek-v4-flash | Writer（兼容旧配置）|
+| `deepseek-v4-pro-director` | deepseek | deepseek-v4-pro | Director 默认配置 |
+| `deepseek-v4-pro-writer` | deepseek | deepseek-v4-pro | Writer 默认配置 |
+| `deepseek-v4-flash-director` | deepseek | deepseek-v4-flash | 兼容旧工作流 |
+| `deepseek-v4-flash-writer` | deepseek | deepseek-v4-flash | 兼容旧工作流 |
 | `fake-director` | fake | fake_director_v1 | 测试 |
 | `fake-writer` | fake | fake_writer_v1 | 测试 |
 
@@ -208,7 +208,7 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"        # OpenAI 端点（
 # $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic" # Anthropic 端点
 
 # 可选：模型覆盖
-$env:AWP_DIRECTOR_MODEL = "deepseek-v4-flash"
+$env:AWP_DIRECTOR_MODEL = "deepseek-v4-pro"
 $env:AWP_WRITER_MODEL = "deepseek-v4-pro"
 ```
 
@@ -218,7 +218,7 @@ $env:AWP_WRITER_MODEL = "deepseek-v4-pro"
 
 ```
 fake-director / fake-writer          → 测试用，不调用 API
-deepseek-v4-flash-director           → Director（Flash + 思考）
+deepseek-v4-pro-director             → Director（Pro）
 deepseek-v4-pro-writer               → Writer（Pro + 禁思考）
 ```
 
@@ -239,7 +239,7 @@ client = OpenAI(
     base_url='https://api.deepseek.com/v1',
 )
 resp = client.chat.completions.create(
-    model='deepseek-v4-flash', max_tokens=50,
+    model='deepseek-v4-pro', max_tokens=50,
     messages=[{'role': 'user', 'content': '你好'}],
 )
 print(resp.choices[0].message.content)
@@ -815,13 +815,8 @@ $env:NOVEL_LLM_PROVIDER = "deepseek"     # 走 DeepSeek API（默认）
 $env:OPENCODE_API_KEY = "your-key"
 $env:NOVEL_LLM_BASE_URL = "https://opencode.ai/zen/go/v1"  # 默认值
 
-# 按角色覆盖模型（可选）
-$env:NOVEL_LLM_MODEL_WRITER = "qwen3.7-plus"
-$env:NOVEL_LLM_MODEL_DIRECTOR = "qwen3.7-plus"
-$env:NOVEL_LLM_MODEL_ARCHITECT = "qwen3.7-plus"
-$env:NOVEL_LLM_MODEL_CONTINUITY_CHECKER = "qwen3.7-plus"
-$env:NOVEL_LLM_MODEL_STYLE_CLEANER = "qwen3.7-plus"
-$env:NOVEL_LLM_MODEL_LEDGER_CURATOR = "qwen3.7-plus"
+# 默认所有小说角色均使用 DeepSeek V4 Pro；如需显式声明：
+$env:NOVEL_LLM_MODEL = "deepseek-v4-pro"
 ```
 
 ### 小说模式 LLM 角色配置
@@ -829,11 +824,11 @@ $env:NOVEL_LLM_MODEL_LEDGER_CURATOR = "qwen3.7-plus"
 | 角色 | 模型（默认） | max_tokens | thinking |
 |------|-------------|------------|----------|
 | director | deepseek-v4-pro | 8000 | high |
-| architect | deepseek-v4-pro | 6000 | high |
+| architect | deepseek-v4-pro | 20000 | disabled |
 | writer | deepseek-v4-pro | 4000 | medium |
-| continuity_checker | deepseek-v4-flash | 4000 | disabled |
-| style_cleaner | deepseek-v4-flash | 2000 | disabled |
-| ledger_curator | deepseek-v4-flash | 4000 | disabled |
+| continuity_checker | deepseek-v4-pro | 4000 | disabled |
+| style_cleaner | deepseek-v4-pro | 2000 | disabled |
+| ledger_curator | deepseek-v4-pro | 4000 | disabled |
 
 OpenCode 模式下默认全部走 `qwen3.7-plus`。
 

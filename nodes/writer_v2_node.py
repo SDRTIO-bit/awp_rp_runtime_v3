@@ -18,7 +18,7 @@ class AWPV2WriterGenerate:
 
     Supports:
       - fake-writer: deterministic fake output (no API call)
-      - deepseek-v4-pro-writer / deepseek-v4-flash-writer: real DeepSeek
+      - deepseek-v4-pro-writer: default DeepSeek profile; flash profiles remain legacy-compatible
     """
 
     @classmethod

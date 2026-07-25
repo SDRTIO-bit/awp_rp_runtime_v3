@@ -6,7 +6,7 @@ Auto-detects endpoint from DEEPSEEK_BASE_URL:
 
 Director uses function calling (OpenAI) or tool_use (Anthropic) for
 structured output. Writer uses standard text generation.
-Models: deepseek-v4-pro (director), deepseek-v4-flash (writer).
+Runtime defaults use deepseek-v4-pro for both Director and Writer.
 """
 
 from __future__ import annotations

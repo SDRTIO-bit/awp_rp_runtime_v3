@@ -90,7 +90,7 @@ SCENE_REPEAT_THRESHOLD = 0.5
 class NovelStyleCleaner:
     """Style Cleaner for novel mode — deterministic checks + optional LLM."""
 
-    def __init__(self, registry, model: str = "deepseek-v4-flash"):
+    def __init__(self, registry, model: str = "deepseek-v4-pro"):
         self._registry = registry
         self._model = model
 
@@ -409,7 +409,8 @@ class NovelStyleCleaner:
 2. 两个短句能连起来就连成一个长句。三个孤立短句可以拆成一个长句+一个短句收尾。
 3. 禁止输出"不是A。是B。"、"没有X。只有Y。"等否定对比碎句。
 4. 允许一段只有1-2句话，但要保证句子内部的因果、动作、感官是串起来的。
-5. 输出只包含改写后的片段文字，不要标签、解释、标记。"""
+5. 视角红线：保持主角陈默的第三人称有限视角。不改视角、不引入上帝视角。
+6. 输出只包含改写后的片段文字，不要标签、解释、标记。"""
 
     def find_drumbeat_regions(
         self, text: str,
@@ -547,9 +548,13 @@ class NovelStyleCleaner:
    - 工程词/章名泄露（本章/读者/细纲/伏笔 等）→ 直接删除或改为正文语境。
    - 重复复读句 → 删除多余副本，仅保留一次或改写其中一处。
    - 疑似截断 → 末尾补一个完整收束句，落在 。！？」』）】 之一。
-3. 保持原有文风、视角、语气、信息密度，不得添加原文没有的新情节或新人物。
-4. 输出只有改写后的完整正文，无标签、无 JSON、无解释、无前后说明。
-5. 字数与原文相差不超过 ±10%。
+3. 视角红线（不可违背）：严格保持主角陈默的第三人称有限视角。
+   只写陈默看到、听到、想到的内容。严禁出现陈默不在场的场景。
+   严禁直接揭示其他角色的内心想法或未被陈默观察到的信息。
+   严禁上帝视角旁白（"他不知道的是""此刻她心里""她明白了"等）。
+4. 保持原有文风、语气、信息密度，不得添加原文没有的新情节或新人物。
+5. 输出只有改写后的完整正文，无标签、无 JSON、无解释、无前后说明。
+6. 字数与原文相差不超过 ±10%。
 
 === 替换指引（禁止→替换为）===
 - 心痛/心碎 → 手指掐进肉里自己不知道疼
@@ -573,7 +578,7 @@ class NovelStyleCleaner:
 
         - 整章输入（按用户决策）：LLM 自行在原文中定位问题并修复。
         - 失败时返回原文（不抛异常，避免改写层阻断整章输出）。
-        - 改写 LLM 用 deepseek-v4-flash + thinking=low，成本远低于整章 Writer 重写。
+        - 改写 LLM 默认使用 deepseek-v4-pro + thinking=low，避免角色间模型差异。
         """
         if not text or not text.strip():
             return text
@@ -624,6 +629,333 @@ class NovelStyleCleaner:
             return cleaned
         # 改写 LLM 失败或多次截断：保留原文，由上层决定降级接受或拒收。
         return text
+
+    # ── 确定性预处理 + 底层 LLM 调用 ──────────────────────────────────
+
+    @staticmethod
+    def _strip_boilerplate(text: str) -> str:
+        """Remove COT blocks, model preambles, and markdown wrappers before audit."""
+        import re
+        text = re.sub(r'<!--\s*COT-PersonalityReshaping.*?-->', '', text, flags=re.DOTALL)
+        text = re.sub(r'```json\s*\n\s*\{\s*"COT-PersonalityReshaping".*?\}\s*\n\s*```', '', text, flags=re.DOTALL)
+        text = re.sub(r'\{\{setvar::COT-PersonalityReshaping::.*?\}\}', '', text, flags=re.DOTALL)
+        text = re.sub(r'###\s+COT-PersonalityReshaping.*?(?=\*\*\*\s*\n|###\s*正文)', '', text, flags=re.DOTALL)
+        text = re.sub(r'<PersonalityReshaping>.*?</PersonalityReshaping>', '', text, flags=re.DOTALL)
+        text = re.sub(r'^(根据设定与任务约束.*?正文内容[：:]?\s*)$', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^(【COT-PersonalityReshaping】[\s\S]*?)(?=\*\*\*\s*\n)', '', text, flags=re.DOTALL)
+        text = re.sub(r'\n\*\*\*\s*\n', '\n', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip() + "\n"
+
+    def _call_llm_json(self, system_prompt: str, user_prompt: str, *,
+                        role: str = "style_cleaner", max_tokens: int = 8000,
+                        temperature: float = 0.0) -> dict[str, Any] | None:
+        """Direct JSON-mode LLM call via the factory adapter."""
+        import json
+        from .novel_llm_factory import NovelLLMFactory
+        factory = NovelLLMFactory.get_instance()
+        adapter = factory.get_adapter(role)
+        if not adapter or not adapter.is_available:
+            return None
+        try:
+            thinking_config = factory.get_thinking_config(role)
+            extra_body = None
+            if thinking_config.get("thinking", {}).get("type") != "disabled":
+                extra_body = thinking_config
+            out_text, _ = adapter.generate_text(
+                prompt=user_prompt, system_prompt=system_prompt,
+                max_tokens=max_tokens, model=factory.get_model(role),
+                extra_body=extra_body,
+            )
+            content = out_text.strip()
+            if not content:
+                return None
+            if content.startswith("```"):
+                parts = content.split("```", 2)
+                if len(parts) >= 2:
+                    content = parts[1]
+                    if content.startswith("json"):
+                        content = content[4:]
+                content = content.strip()
+            return json.loads(content)
+        except Exception:
+            return None
+
+    # ═══════════════════════════════════════════════════════════
+    # 审计器 V2：支持 HARD/STYLE 双模式，事实账本驱动
+    # ═══════════════════════════════════════════════════════════
+
+    _AUDIT_SYSTEM_PROMPT = """你是小说证据审计器。不润色、不续写、不重写。
+
+【运行模式】AUDIT_MODE={{AUDIT_MODE}}
+
+HARD：只查时间、位置、人数、物体、规则、人物知识、因果、视角、人物边界、场景衔接。硬问题不设数量上限。
+STYLE：只查作者总结、人物标签、段子密度、过强反应、模板化心理说明、过度设计句。最多10个。
+
+【第一步：建立事实账本】逐场景提取：时间日期、位置、在场人物及进出、关键物体归属状态、已建立的制度规则、每人已知信息、每人直接目标、场景新增信息/选择/后果。不确定的标unknown。
+
+【HARD检查项】
+H1_TIME 时间/铃声/日期/课程/今天明天周末互不矛盾
+H2_PRESENCE 人数在场状态前后一致
+H3_SPACE 位置/方向/遮挡/受力成立
+H4_OBJECT 纸张/钥匙/衣服等物体位置数量归属状态连续
+H5_KNOWLEDGE 人物不知道没有途径获知的信息
+H6_RULE 不依赖未建立的制度/班规/权限
+H7_CAUSALITY 行为有当时成立的直接理由
+H8_POV 限知视角不把观察猜测写成确定事实，不进入他人内心
+H9_BOUNDARY 不扣押私人信息/胁迫/替人决定并当作魅力行为
+H10_SCENE_VALUE 后一场景不重复已有信息，新增选择/后果/信息/关系变化
+
+【STYLE检查项】
+S1_SUMMARY 动作已表达后不应再有阅读理解总结
+S2_LABEL 不用人物卡标签代替现场表现
+S3_MEME_DENSITY 相邻段落网络梗/金句不连续出现
+S4_MAX_REACTION 不过度用猛地/瞬间/死死/炸开/极其
+S5_OVERDESIGNED 句子不为对称/象征/宣传存在
+S6_EXPLANATION 刚发生动作旁白不立即解释原因
+S7_GENERIC_ENDING 章末不用概括句
+
+【证据】每个问题必须有原文准确短句、被违反事实、为何可确定。HARD不设数量上限。
+【修复权限】只提操作类型：DELETE/REPLACE_LOCAL/ADJUST_SETUP/AUTHOR_DECISION。ADJUST_SETUP最多两句。场景无推进且需新增剧情→AUTHOR_DECISION。
+
+只输出JSON：{"ledger":{"scenes":[{"scene_id":"S1","time":"","location":"","present_characters":[],"entries_and_exits":[],"objects":[{"name":"","owner":"","location":"","state":""}],"established_rules":[],"knowledge":[{"character":"","knows":[],"does_not_know":[]}],"scene_new_value":[],"visible_consequence":[]}]},"issues":[{"id":"","category":"","severity":"hard|medium|soft","confidence":0.0,"quote":"","related_quote":"","violated_fact":"","diagnosis":"","repair_operation":"DELETE|REPLACE_LOCAL|ADJUST_SETUP|AUTHOR_DECISION","repair_constraint":"","forbidden_change":""}]}"""
+
+    # ═══════════════════════════════════════════════════════════
+    # 精确补丁生成器 V2：不输出全文，只输出可程序应用的补丁
+    # ═══════════════════════════════════════════════════════════
+
+    _PATCH_SYSTEM_PROMPT = """你是小说精确补丁生成器。不得输出完整正文，只输出能被程序应用的文本补丁。
+
+【输入原则】每个补丁的before必须逐字出现在原文且只出现一次。找不到唯一文本→UNPATCHABLE。
+
+【可自动处理】DELETE/REPLACE_LOCAL/ADJUST_SETUP(≤两句)。禁止处理AUTHOR_DECISION/需新增剧情/需改变人物动机/需重写场景/需新增人物秘密回忆伏笔。
+
+【最小修改】1.每补丁只解一个issue 2.优先删不优先写 3.能改一词不改整句 4.能改一句不改整段 5.不改审计未覆盖内容 6.不统一语气 7.不新增比喻梗描写总结 8.不把模糊判断变确定事实 9.不以扣押胁迫修复关系 10.不用正好恰好原来临时解释制度漏洞。
+
+【预算】普通补丁before≤160字after≤160字且after≤1.35×before。ADJUST_SETUP最多两句放规则首次相关位置。整章修改≤8%。超预算只处理hard其余deferred。
+
+【补丁类型】replace/delete/insert_before/insert_after。
+
+只输出JSON：{"patches":[{"patch_id":"P001","issue_id":"","operation":"replace|delete|insert_before|insert_after","before":"","after":"","context_before":"","context_after":"","expected_occurrences":1,"reason":""}],"unpatchable":[{"issue_id":"","status":"UNPATCHABLE|AUTHOR_DECISION","reason":"","required_decision":""}],"deferred":[],"estimated_changed_ratio":0.0}
+
+禁止输出revised_text。禁止输出完整章节。禁止修改未被issue引用的段落。"""
+
+    # ═══════════════════════════════════════════════════════════
+    # 验收器 V2：重新提取事实账本，对抗性检查
+    # ═══════════════════════════════════════════════════════════
+
+    _VERIFY_SYSTEM_PROMPT = """你是小说修复的对抗性验收器。不修改正文，主动寻找未解决问题和新增回归。
+
+【第一步】独立阅读修复稿，重新建立事实账本：时间线/位置/每场在场人物/进出/关键物体归属状态/已建立制度/人物已知信息/每场新增信息选择后果。不复制原审计，依据修复稿重新提取。
+
+【第二步：逐问题验收】RESOLVED/UNRESOLVED/PARTIAL/REGRESSED。不根据文字是否流畅判定解决。
+
+【第三步：新增回归检查】新时间矛盾/新人数在场矛盾/新物体状态错误/人物知道不该知道的信息/新制度无铺垫/焦点视角越界/人物边界受损/为解释修复新增总结/未标记段落被大幅改写/剧情节点丢失。
+
+【硬性通过】所有hard→RESOLVED；无新增hard；无新增人物设定秘密剧情事件；补丁修改≤8%；补丁只改对应issue附近文本；人物私人物品和行动权未被无理由剥夺；视角稳定。任一未解决或新增hard→REJECT。
+
+只输出JSON：{"verdict":"PASS|PASS_WITH_WARNINGS|REJECT","reconstructed_ledger":{"scenes":[]},"issue_results":[{"issue_id":"","status":"RESOLVED|UNRESOLVED|PARTIAL|REGRESSED","evidence_quote":"","explanation":""}],"new_regressions":[{"category":"","severity":"hard|medium|soft","quote":"","diagnosis":""}],"patch_results":[{"patch_id":"","valid":true,"unnecessary_change":false,"reason":""}],"rollback_patch_ids":[],"summary":""}"""
+
+    # ═══════════════════════════════════════════════════════════
+    # 固定约束
+    # ═══════════════════════════════════════════════════════════
+
+    _FOCAL_CHARACTER = "陈默"
+    _POV_MODE = "第三人称限知，正文只能直接进入陈默的感知、判断和回忆；其他人物心理只能通过可见行为推测"
+    _DEFAULT_PLOT_BEATS: tuple[str, ...] = ()
+    _PATCH_BUDGET = 0.08  # 8% max change ratio
+    _PATCH_MAX_BEFORE_CHARS = 160
+    _PATCH_MAX_AFTER_CHARS = 160
+    _PATCH_AFTER_TO_BEFORE_RATIO = 1.35
+
+    # ═══════════════════════════════════════════════════════════
+    # 编排入口
+    # ═══════════════════════════════════════════════════════════
+
+    def polish_chapter_text(self, text: str, *,
+                            revision: int = 1,
+                            plot_beats: tuple[str, ...] = (),
+                            write_guidance: str = "") -> str:
+        """V2 双回路精修：HARD → Patch → Verify → STYLE → Patch → Verify。
+
+        硬逻辑修复与AI味删除分开执行，补丁由代码确定性应用。
+        任何阶段失败均降级保留原文，不阻塞存盘。
+        """
+        if not text or not text.strip():
+            return text
+        text = self._strip_boilerplate(text)
+        orig_len = len(text)
+
+        # ── 回路一：硬逻辑修复 ──
+        text = self._run_hard_loop(text, orig_len, plot_beats=plot_beats)
+
+        # ── 回路二：AI味删除 ──
+        text = self._run_style_loop(text, orig_len, plot_beats=plot_beats)
+
+        return text.strip()
+
+    # ═══════════════════════════════════════════════════════════
+    # 回路实现
+    # ═══════════════════════════════════════════════════════════
+
+    def _run_hard_loop(self, text: str, orig_len: int, *,
+                       plot_beats: tuple[str, ...] = ()) -> str:
+        """HARD audit → patch generation → code apply → verify."""
+        # 1. Audit
+        audit = self._run_audit(text, audit_mode="HARD", plot_beats=plot_beats)
+        if not audit:
+            return text
+        hard_issues = [i for i in audit.get("issues", []) if i.get("severity") == "hard"]
+        if not hard_issues:
+            return text
+
+        # 2. Generate patches
+        patches_json = self._run_patch_gen(text, hard_issues, plot_beats=plot_beats)
+        if not patches_json:
+            return text
+
+        # 3. Deterministic apply
+        patched, applied_count = self._apply_patches(text, patches_json.get("patches", []), budget=orig_len)
+        if applied_count == 0:
+            return text
+
+        # 4. Verify
+        patches_for_verify = patches_json.get("patches", [])
+        verdict_json = self._run_verify(text, audit, patched, patches_for_verify, plot_beats=plot_beats)
+        verdict = verdict_json.get("verdict", "REJECT") if verdict_json else "REJECT"
+
+        if verdict == "REJECT":
+            return text  # 回退原文
+        return patched
+
+    def _run_style_loop(self, text: str, orig_len: int, *,
+                        plot_beats: tuple[str, ...] = ()) -> str:
+        """STYLE audit → patch generation → code apply → verify."""
+        audit = self._run_audit(text, audit_mode="STYLE", plot_beats=plot_beats)
+        if not audit or not audit.get("issues"):
+            return text
+
+        patches_json = self._run_patch_gen(text, audit.get("issues", []), plot_beats=plot_beats)
+        if not patches_json:
+            return text
+
+        patched, _ = self._apply_patches(text, patches_json.get("patches", []), budget=orig_len)
+        return patched if patched else text
+
+    # ═══════════════════════════════════════════════════════════
+    # 确定性补丁应用
+    # ═══════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _apply_patches(text: str, patches: list[dict[str, Any]], *,
+                       budget: int = 0) -> tuple[str, int]:
+        """Code-side deterministic patch application with hard guards.
+
+        Returns (patched_text, applied_count).
+        Skips any patch where: before not found exactly once, after too long,
+        changed ratio exceeds budget, or operation unknown.
+        """
+        if not patches:
+            return text, 0
+        total_changed = 0
+        applied = 0
+        result = text
+        budget_limit = budget * NovelStyleCleaner._PATCH_BUDGET
+
+        for p in patches:
+            before = p.get("before", "")
+            after = p.get("after", "")
+            op = p.get("operation", "replace")
+
+            # ── Guards ──
+            if result.count(before) != 1:
+                continue
+            if len(after) > NovelStyleCleaner._PATCH_MAX_AFTER_CHARS:
+                continue
+            if before and len(after) > len(before) * NovelStyleCleaner._PATCH_AFTER_TO_BEFORE_RATIO:
+                continue
+            change_size = abs(len(after) - len(before))
+            if total_changed + change_size > budget_limit:
+                continue
+
+            # ── Apply ──
+            if op == "delete":
+                result = result.replace(before, "", 1)
+            elif op == "replace":
+                result = result.replace(before, after, 1)
+            elif op == "insert_before":
+                result = result.replace(before, after + before, 1)
+            elif op == "insert_after":
+                result = result.replace(before, before + after, 1)
+            else:
+                continue
+
+            total_changed += change_size
+            applied += 1
+
+        return result, applied
+
+    # ═══════════════════════════════════════════════════════════
+    # 审计 / 补丁生成 / 验收 — 各阶段 LLM 调用
+    # ═══════════════════════════════════════════════════════════
+
+    def _run_audit(self, text: str, *,
+                   audit_mode: str = "HARD",
+                   plot_beats: tuple[str, ...] = ()) -> dict[str, Any] | None:
+        """审计：HARD 或 STYLE 模式。hard 用 thinking=high，style 用 writer 角色。"""
+        import json
+        prompt = self._build_constraint_prompt(plot_beats=plot_beats)
+        user_prompt = prompt + f"\n\nAUDIT_MODE：{audit_mode}\n\n正文：\n{text}"
+        sys_prompt = self._AUDIT_SYSTEM_PROMPT.replace("{{AUDIT_MODE}}", audit_mode)
+        role = "polish_audit" if audit_mode == "HARD" else "polish_repair"
+        return self._call_llm_json(sys_prompt, user_prompt, role=role, max_tokens=8000)
+
+    def _run_patch_gen(self, text: str, issues: list[dict[str, Any]], *,
+                       plot_beats: tuple[str, ...] = ()) -> dict[str, Any] | None:
+        """生成精确补丁。用 writer 角色（可切换到 low）。"""
+        import json
+        approved = [i for i in issues if i.get("repair_operation") != "AUTHOR_DECISION"]
+        if not approved:
+            return None
+        prompt = self._build_constraint_prompt(plot_beats=plot_beats)
+        user_prompt = (
+            prompt
+            + f"\n\n原始正文：\n{text}"
+            + f"\n\n已批准问题：\n{json.dumps(approved, ensure_ascii=False, indent=2)}"
+        )
+        return self._call_llm_json(
+            self._PATCH_SYSTEM_PROMPT, user_prompt,
+            role="polish_repair", max_tokens=4000, temperature=0.1,
+        )
+
+    def _run_verify(self, original: str, audit: dict[str, Any],
+                    patched: str, patches: list[dict[str, Any]], *,
+                    plot_beats: tuple[str, ...] = ()) -> dict[str, Any] | None:
+        """对抗性验收。重建事实账本。"""
+        import json
+        prompt = self._build_constraint_prompt(plot_beats=plot_beats)
+        user_prompt = (
+            prompt
+            + f"\n\n原始正文：\n{original}"
+            + f"\n\n原审计报告：\n{json.dumps(audit, ensure_ascii=False, indent=2)}"
+            + f"\n\n实际应用的补丁：\n{json.dumps(patches, ensure_ascii=False, indent=2)}"
+            + f"\n\n修复后正文：\n{patched}"
+        )
+        return self._call_llm_json(
+            self._VERIFY_SYSTEM_PROMPT, user_prompt,
+            role="polish_audit", max_tokens=8000,
+        )
+
+    @staticmethod
+    def _build_constraint_prompt(*, plot_beats: tuple[str, ...] = ()) -> str:
+        """Build constraint preamble for all stages."""
+        parts = [
+            f"焦点人物：{NovelStyleCleaner._FOCAL_CHARACTER}",
+            f"视角规则：{NovelStyleCleaner._POV_MODE}",
+        ]
+        if plot_beats:
+            parts.append("必须保留的剧情节点：\n" + "\n".join(f"  - {b}" for b in plot_beats))
+        return "\n\n".join(parts)
 
     @staticmethod
     def _run_style_role(

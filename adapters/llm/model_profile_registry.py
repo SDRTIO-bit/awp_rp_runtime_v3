@@ -50,9 +50,8 @@ def _register(profile: ModelProfile) -> None:
     _PROFILES[profile.profile_id] = profile
 
 
-# DeepSeek production profiles
-# NOTE: Director uses Flash (fast, thinking-enabled) for cheap planning.
-# Writer uses Pro (capable, thinking-disabled) for quality narrative.
+# DeepSeek production profiles.  Runtime defaults use the two V4 Pro profiles;
+# the Flash profiles below remain resolvable only for backward compatibility.
 _register(ModelProfile(
     profile_id="deepseek-v4-flash-director",
     provider="deepseek",
@@ -77,7 +76,7 @@ _register(ModelProfile(
     token_hard_limit=50_000,
 ))
 
-# Legacy profiles (kept for backward compatibility)
+# Canonical V4 Pro Director profile.
 _register(ModelProfile(
     profile_id="deepseek-v4-pro-director",
     provider="deepseek",
@@ -102,12 +101,12 @@ _register(ModelProfile(
     token_hard_limit=50_000,
 ))
 
-# Simulated player profile (low-cost model, isolated token budget).
+# Simulated player profile (isolated token budget).
 # Used ONLY by the user-simulation harness, never by the RP turn pipeline.
 _register(ModelProfile(
     profile_id="simulated-player-v1",
     provider="deepseek",
-    model="deepseek-v4-flash",
+    model="deepseek-v4-pro",
     base_url="https://api.deepseek.com",
     timeout_seconds=60,
     default_max_tokens=1000,

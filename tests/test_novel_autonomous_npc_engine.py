@@ -20,6 +20,7 @@ from awp_rp_runtime_v3.contracts.novel_project import NovelProject
 from awp_rp_runtime_v3.contracts.quality_decision import QualityDecision, QualityVerdict
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.runtime.novel_npc_agenda_adapter import NovelNpcAgendaAdapter
+from awp_rp_runtime_v3.runtime.novel_npc_agenda_service import NpcAgendaService
 
 
 def _rejected_decision() -> QualityDecision:
@@ -203,6 +204,44 @@ def test_rejected_chapter_discards_staged_npc_agenda(
 
     assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
     assert reg.novel_ledger_store.list_by_project("p1", NpcAction.LEDGER_SECTION) == []
+
+
+def test_active_agendas_remain_director_candidates_across_chapters(
+    reg, engine, monkeypatch, fake_novel_role_runtime,
+):
+    _setup_project(reg)
+    project = reg.novel_project_store.load("p1")
+    plan = reg.novel_chapter_plan_store.load_by_index("p1", 1)
+    existing = _proposed_agenda()
+    reg.novel_ledger_store.upsert(
+        NpcAgendaService().to_ledger_item(existing, plan)
+    )
+
+    new_agenda = existing.model_copy(update={"agenda_id": "agenda-2"})
+    monkeypatch.setattr(
+        NovelNpcAgendaAdapter,
+        "propose",
+        lambda *args, **kwargs: (new_agenda,),
+    )
+    monkeypatch.setattr(
+        engine._agenda_service,
+        "eligible_characters",
+        lambda characters, *_args: tuple(characters),
+    )
+
+    turn = engine._prepare_autonomous_npc_turn(
+        project,
+        plan,
+        reg.novel_ledger_store.list_by_project("p1"),
+        reg.novel_character_store.list_by_project("p1"),
+        history="",
+        previous_ending="",
+        revision=1,
+    )
+
+    assert [agenda.agenda_id for agenda in turn.selected_agendas] == [
+        "agenda-1", "agenda-2"
+    ]
 
 
 def test_streaming_accepted_chapter_persists_npc_action(

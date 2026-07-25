@@ -51,12 +51,14 @@ class NovelArchitectAdapter:
         task_description: str = "",
         prev_chapter_ending: str = "",
         prev_ending_design: Any = None,
+        completed_text_context: str = "",
     ) -> ChapterPlan:
         """Generate a chapter plan."""
         system_prompt, user_prompt = self._build_prompt(
             project_id, chapter_index, volume_plan,
             completed_chapters, ledger_items, character_states,
             task_description, prev_chapter_ending, prev_ending_design,
+            completed_text_context=completed_text_context,
         )
         # Architect is a real Pi Agent Session. Python keeps final schema parsing.
         context = get_novel_role_context()
@@ -251,75 +253,95 @@ class NovelArchitectAdapter:
             return None
         t = text.strip()
 
-        # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
         import re
-        # Strip opening fence: ^```[json]?$
-        t = re.sub(r"^```[a-z]*\s*", "", t)
-        # Strip trailing fence: ```$ (possibly preceded by whitespace)
-        t = re.sub(r"\s*```\s*$", "", t)
+        import json
 
-        # 2. Find the first { and extract balanced JSON object
-        start = t.find("{")
-        if start == -1:
-            return None
-
-        depth = 0
-        in_string = False
-        escape = False
-        for i in range(start, len(t)):
-            ch = t[i]
-            if in_string:
-                if escape:
-                    escape = False
-                elif ch == "\\":
-                    escape = True
-                elif ch == '"':
-                    in_string = False
-                continue
-            if ch == '"':
-                in_string = True
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = t[start:i + 1]
-                    # 3. Validate it's actually parseable JSON
-                    import json
-                    try:
-                        json.loads(candidate)
-                        return candidate
-                    except (json.JSONDecodeError, ValueError):
-                        # Malformed JSON (e.g. unescaped newlines in strings).
-                        # Try to salvage by escaping bare newlines inside strings.
-                        repaired = candidate.replace("\n", "\\n").replace("\r", "\\r")
-                        try:
-                            json.loads(repaired)
-                            return repaired
-                        except (json.JSONDecodeError, ValueError):
-                            return None
-        # 4. No closing brace found — JSON truncated. Try to close it.
-        # Find the last } after start and attempt to close open braces.
-        remaining = t[start:]
-        # Count open vs close braces
-        open_count = remaining.count("{")
-        close_count = remaining.count("}")
-        if open_count > close_count:
-            # Try appending missing closing braces
-            suffix = "}" * (open_count - close_count)
-            candidate = remaining + suffix
-            import json
+        def valid_object(candidate: str) -> str | None:
             try:
                 json.loads(candidate)
                 return candidate
             except (json.JSONDecodeError, ValueError):
-                pass
+                repaired: list[str] = []
+                in_string = False
+                escape = False
+                for index, char in enumerate(candidate):
+                    if not in_string:
+                        repaired.append(char)
+                        if char == '"':
+                            in_string = True
+                        continue
+                    if escape:
+                        repaired.append(char)
+                        escape = False
+                        continue
+                    if char == "\\":
+                        repaired.append(char)
+                        escape = True
+                        continue
+                    if char != '"':
+                        repaired.append(char)
+                        continue
+
+                    # A model sometimes writes Chinese quotation marks with
+                    # ASCII double quotes inside an already quoted JSON value.
+                    # A closing JSON quote is followed by a structural token;
+                    # otherwise retain it as escaped prose punctuation.
+                    suffix = candidate[index + 1:].lstrip()
+                    if suffix and suffix[0] not in ",}]:":
+                        repaired.append("\\\"")
+                    else:
+                        repaired.append(char)
+                        in_string = False
+                repaired_text = "".join(repaired)
+                try:
+                    json.loads(repaired_text)
+                    return repaired_text
+                except (json.JSONDecodeError, ValueError):
+                    return None
+
+        # OpenCode models often emit reasoning before a fenced final response.
+        # Prefer every fenced JSON payload before considering braces in prose.
+        for fenced in re.findall(r"```(?:json)?\s*(.*?)\s*```", t, re.DOTALL):
+            candidate = valid_object(fenced.strip())
+            if candidate is not None:
+                return candidate
+
+        # Fall back to each balanced object, rather than stopping at the first
+        # brace in prose such as "{constraint}".
+        for start, char in enumerate(t):
+            if char != "{":
+                continue
+            depth = 0
+            in_string = False
+            escape = False
+            for index in range(start, len(t)):
+                ch = t[index]
+                if in_string:
+                    if escape:
+                        escape = False
+                    elif ch == "\\":
+                        escape = True
+                    elif ch == '"':
+                        in_string = False
+                    continue
+                if ch == '"':
+                    in_string = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = valid_object(t[start:index + 1])
+                        if candidate is not None:
+                            return candidate
+                        break
         return None
 
     def _build_prompt(
         self, project_id, chapter_index, volume_plan,
         completed_chapters, ledger_items, character_states,
         task_description, prev_chapter_ending="", prev_ending_design=None,
+        completed_text_context="",
     ) -> tuple[str, str]:
         """Returns (system_prompt, user_prompt).
 
@@ -328,15 +350,12 @@ class NovelArchitectAdapter:
         # Stable prefix — cacheable
         parts = [
             "=== OUTPUT FORMAT ===\n"
-            "严格的 JSON 输出，符合 ChapterPlan schema。\n"
-            "包含：chapter_id, project_id, chapter_index, title, target_chars, "
-            "chapter_position, target_emotion, opening_hook, main_payoff, "
-            "content_summary(五段式), plot_arrangement(多线), "
-            "character_appearance(出场顺序), scene_beats(beat预算), "
-            "ending_design(钩子), cost_and_reward。\n"
-            "所有字段必须有实质内容，不允许空字符串或空数组。\n"
-            "本项目每章只生成一次连续场景：target_chars 必须为 2000，"
-            "scene_beats 只保留一个 beat，budget_chars 必须为 2000。",
+            "输出 JSON，符合 ChapterPlan schema。\n"
+            "核心字段：title, target_emotion, opening_hook, main_payoff, "
+            "content_summary, scene_beats。\n"
+            "content_summary 写清楚本章做什么（起因→发展→高潮→收尾）。\n"
+            "scene_beats 按场景切分，每个 beat 写 description + function_tag。\n"
+            "字数、beat 数量自由，不设硬性限制。",
         ]
 
         # Varying context
@@ -351,17 +370,21 @@ class NovelArchitectAdapter:
         if volume_plan:
             parts.append(f"\n卷计划:\n{volume_plan.to_dict() if hasattr(volume_plan, 'to_dict') else volume_plan}")
 
-        # ═══ CRITICAL: 上章结尾钩子——本章必须推进 ═══
+        # ═══ 上文：上一章结尾，供规划参考 ═══
         hook_parts = []
         if prev_chapter_ending:
-            hook_parts.append(f"【上一章结尾原文】\n{prev_chapter_ending}")
+            hook_parts.append(f"【上一章结尾】\n{prev_chapter_ending}")
         if prev_ending_design:
             ed = prev_ending_design
             if hasattr(ed, 'to_dict'):
                 ed = ed.to_dict()
-            hook_parts.append(f"【上一章设计的钩子/悬念】\n{json.dumps(ed, ensure_ascii=False, default=str)}")
+            hook_parts.append(f"【上一章钩子】\n{json.dumps(ed, ensure_ascii=False, default=str)}")
         if hook_parts:
-            parts.append(f"\n=== MUST CONTINUE FROM PREV CHAPTER ===\n" + "\n\n".join(hook_parts))
+            parts.append(f"\n=== 上文参考 ===\n" + "\n\n".join(hook_parts))
+
+        # ═══ 正文上文 — 已写章节的实际内容，非大纲 ═══
+        if completed_text_context:
+            parts.append(f"\n=== 已完成章节正文摘要（由此判断情节走向和角色状态） ===\n{completed_text_context}")
 
         chapter_summaries = []
         if ledger_items:

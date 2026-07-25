@@ -888,7 +888,7 @@ class NovelBrain:
                 prompt,
                 max_tokens=300,
                 provider_role="continuity_checker",
-                model="deepseek-v4-flash",
+                model="deepseek-v4-pro",
             )
             if summary_text and summary_text.strip():
                 return summary_text.strip()

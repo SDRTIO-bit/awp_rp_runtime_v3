@@ -1,33 +1,33 @@
 {
-  "draft_id": "draft-ch-daily-high-school-003-r1",
-  "chapter_id": "ch-daily-high-school-003",
+  "draft_id": "draft-ch-autonomous-npc-fresh-trial-1-r1",
+  "chapter_id": "ch-autonomous-npc-fresh-trial-1",
   "revision": 1,
   "status": "accepted",
-  "quality_decision_id": "qd-ch-daily-high-school-003-119dd1e4",
+  "quality_decision_id": "qd-ch-autonomous-npc-fresh-trial-1-478d34a4",
   "annotations": [
     {
       "schema_id": "awp.rp.quality-issue.v1",
       "schema_version": 1,
       "issue_id": "",
-      "gate_name": "banned_words",
+      "gate_name": "drumbeat",
       "category": "style",
       "severity": "warning",
-      "description": "一级禁用词 '一丝' 出现 1 次",
+      "description": "短句密度过高: 33/77 句 ≤12字 (比例 43%)，AI鼓点综合征",
       "evidence": "",
       "fixable": true,
-      "fix_guidance": "替换为更具体的描写"
+      "fix_guidance": "减少短句堆叠，用长句串起因果和感官，把短句密度降到20%以下"
     },
     {
       "schema_id": "awp.rp.quality-issue.v1",
       "schema_version": 1,
       "issue_id": "",
-      "gate_name": "banned_words",
-      "category": "style",
+      "gate_name": "word_count",
+      "category": "length",
       "severity": "warning",
-      "description": "一级禁用词 '微微' 出现 2 次",
+      "description": "字数偏少: 1371 < 目标 2000 的 90%",
       "evidence": "",
       "fixable": true,
-      "fix_guidance": "替换为更具体的描写"
+      "fix_guidance": "可适当展开"
     },
     {
       "gate_name": "plan_adherence",

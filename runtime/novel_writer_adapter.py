@@ -111,12 +111,12 @@ class NovelWriterAdapter:
     def _build_prompt(self, packet: NovelWritePacket, write_guidance: str = "") -> tuple[str, str]:
         """Build the full chapter generation prompt. Returns (system_prompt, user_prompt).
 
-        减法结构：benchmark 先行 → 情境 → 计划 → 红线 → 约束 → 开写。
-        不做 beat 切分，不给结构指令。靠 benchmark + 红线约束，其余交给 Writer 自由发挥。
+        顺序：benchmark → 世界约束 → 连续性约束（含故事情境+账本+引导）→ 章节契约 → 开写。
+        system prompt（writer.md）负责红线与风格，user prompt 只给素材与约束，不做指令堆叠。
         """
         parts: list[str] = []
 
-        # ═══ 1. STYLE BENCHMARK — 最先，最强的风格参考 ═══
+        # ═══ 1. STYLE BENCHMARK — 文风参考 ═══
         benchmark = _get_style_benchmark(
             project_root=packet.project_root,
             project_id=packet.project_id,
@@ -124,10 +124,17 @@ class NovelWriterAdapter:
         if benchmark:
             parts.append(benchmark)
 
-        # ═══ 2. 故事情境 — 故事进展 + 角色现状 ═══
-        context_lines: list[str] = []
+        # ═══ 2. 本章世界约束 ═══
+        if packet.world_constraints:
+            parts.append(
+                "\n=== 本章世界约束 ===\n"
+                + "\n".join(f"- {rule}" for rule in packet.world_constraints)
+            )
+
+        # ═══ 3. 连续性约束 — 故事情境 + 账本 + 伏笔 + 前章结尾 + 引导 ═══
+        continuity_parts: list[str] = []
         if packet.history_context:
-            context_lines.append("【最近章节摘要】\n" + packet.history_context)
+            continuity_parts.append("【最近章节摘要】\n" + packet.history_context)
         if packet.character_states:
             chars_text = "\n".join(
                 (
@@ -140,61 +147,34 @@ class NovelWriterAdapter:
                 )
                 for name, info in packet.character_states.items()
             )
-            context_lines.append("【本章角色卡】\n" + chars_text)
-        if context_lines:
-            parts.append("\n=== 故事情境 ===\n" + "\n".join(context_lines))
+            continuity_parts.append("【本章角色卡】\n" + chars_text)
+        if packet.prev_chapter_ending:
+            continuity_parts.append(f"【上一章结尾】{packet.prev_chapter_ending}")
+        if packet.relevant_ledger_items:
+            items_text = "\n".join(
+                f"- [{i.section}] {i.entity}: {i.content}"
+                for i in packet.relevant_ledger_items
+            )
+            continuity_parts.append(f"【已知事实】\n{items_text}")
+        if packet.foreshadowing_items:
+            fg_text = "\n".join(
+                f"- [{i.get('status','active')}] {i.get('entity','')}: {i.get('content','')}"
+                for i in packet.foreshadowing_items[:10]
+            )
+            continuity_parts.append(f"【伏笔】\n{fg_text}")
+        if write_guidance:
+            continuity_parts.append(f"【额外要求】{write_guidance}")
+        if continuity_parts:
+            parts.append("\n=== 连续性约束 ===\n" + "\n".join(continuity_parts))
 
-        # ═══ 3. 章节契约 — 中等粒度，约束事件但不规定正文句子 ═══
+        # ═══ 4. 章节契约 — 最靠近正文，直接告诉本章要写什么 ═══
         contract = packet.chapter_contract
         if not contract:
             from .novel_writer_context import NovelWriterContextCompiler
             contract = NovelWriterContextCompiler._chapter_contract(
                 packet.chapter_plan, packet.allowed_cast
             )
-        parts.append("\n=== 章节契约（必须兑现，具体对白与写法自由） ===\n" + contract)
-
-        if packet.world_constraints:
-            parts.append(
-                "\n=== 本章世界约束 ===\n"
-                + "\n".join(f"- {rule}" for rule in packet.world_constraints)
-            )
-
-        # ═══ 4. 必须遵守 — 红线 + 输出规则合一 ═══
-        rules = [
-            "禁止'不是A而是B'否定对比句式",
-            "全文比喻不超过3个。日常描写不附加比喻",
-            "禁止精确秒数/分钟数/厘米/角度。用'片刻''一会儿'",
-            "情绪不拆三层，一句话写完",
-            "叙述者不替读者感受",
-            "对话+行为占正文60%以上",
-            "结尾留悬念/钩子",
-            "不要添加章节内小标题或数字分节，正文保持连续流动",
-            "只输出正文，无标签、无JSON、无元信息",
-        ]
-        parts.append("\n=== 必须遵守 ===\n" + "\n".join(f"- {r}" for r in rules))
-
-        # ═══ 5. 连续性约束 — 账本 + 伏笔 + 前章结尾 ═══
-        constraint_parts: list[str] = []
-        if packet.prev_chapter_ending:
-            constraint_parts.append(
-                f"【上一章结尾】{packet.prev_chapter_ending}"
-            )
-        if packet.relevant_ledger_items:
-            items_text = "\n".join(
-                f"- [{i.section}] {i.entity}: {i.content}"
-                for i in packet.relevant_ledger_items
-            )
-            constraint_parts.append(f"【已知事实】\n{items_text}")
-        if packet.foreshadowing_items:
-            fg_text = "\n".join(
-                f"- [{i.get('status','active')}] {i.get('entity','')}: {i.get('content','')}"
-                for i in packet.foreshadowing_items[:10]
-            )
-            constraint_parts.append(f"【伏笔】\n{fg_text}")
-        if write_guidance:
-            constraint_parts.append(f"【额外要求】{write_guidance}")
-        if constraint_parts:
-            parts.append("\n=== 连续性约束 ===\n" + "\n".join(constraint_parts))
+        parts.append("\n=== 章节契约 ===\n" + contract)
 
         parts.append("\n开始写正文。")
 

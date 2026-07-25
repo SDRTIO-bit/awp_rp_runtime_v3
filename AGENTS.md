@@ -51,11 +51,11 @@
 | Role | Model | Max Tokens | Thinking |
 |------|-------|------------|----------|
 | director | deepseek-v4-pro | 8000 | high |
-| architect | deepseek-v4-flash | 20000 | disabled |
+| architect | deepseek-v4-pro | 20000 | disabled |
 | writer | deepseek-v4-pro | 4000 | medium |
 | brain | deepseek-v4-pro | 2000 | low |
-| continuity_checker | deepseek-v4-flash | 4000 | disabled |
-| ledger_curator | deepseek-v4-flash | 4000 | disabled |
+| continuity_checker | deepseek-v4-pro | 4000 | disabled |
+| ledger_curator | deepseek-v4-pro | 4000 | disabled |
 
 Provider switching via env var `NOVEL_LLM_PROVIDER`:
 - `deepseek` (default) → `DeepSeekAdapter`

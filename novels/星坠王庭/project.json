@@ -1,0 +1,38 @@
+{
+  "project": {
+    "id": "sss-terms-western-fantasy",
+    "title": "穿越西幻：我的词条全是SSS级",
+    "genre": "西方奇幻·穿越·多女主·成长冒险",
+    "core_emotion": "孤身求生→结伴信任→对抗命运",
+    "one_sentence_pitch": "陆遥穿进神权与龙焰并存的世界，发现词条全是SSS级；但每一次越界使用，都会让门后的黑潮更快注意到他。",
+    "target_reader": "18-35岁西幻成长冒险读者",
+    "target_platform": "番茄小说",
+    "config": {
+      "autonomous_profile": {
+        "schema_id": "awp.novel.writing-profile.v1",
+        "schema_version": 1,
+        "mode": "novel",
+        "name": "sss-western-fantasy",
+        "narrative": {"language": "zh-CN", "tone": "克制、明快", "style": "以行动和选择推动人物关系", "objective": "让能力、人物与世界谜团处于同一因果链。"},
+        "world": {"rules": ["词条是灵魂与世界法则的契约", "SSS级词条必有代价", "NPC有独立目标"], "budget": "每章只引入一个新规则"},
+        "history": {"facts": [], "constraints": "仅使用项目已确认事实"},
+        "scene": {"budget": "不超过五项场景约束", "must_include": [], "constraints": ["每章至少出现一个选择与后果"]},
+        "agent_contracts": {"architect": {"role": "architect", "instruction": "维持长篇伏笔与卷末回收。"}, "npc_planner": {"role": "npc_planner", "response_format": "npc_agenda_json", "instruction": "为配角生成独立目标。"}, "director": {"role": "director", "instruction": "控制能力揭示与人物关系节奏。"}, "writer": {"role": "writer", "instruction": "使用具体行动、对话和感官细节。"}}
+      }
+    }
+  },
+  "volume": {
+    "index": 1, "title": "第一卷·灰烬边境", "chapter_start": 1, "chapter_end": 30,
+    "objective": "陆遥在边境活下来，找到第一位同伴，并得知词条的代价。",
+    "key_results": ["建立词条体系", "伊瑟拉从监视到同行", "揭开黑潮与星门的关联"],
+    "core_conflict": "陆遥必须救下被教廷处刑的异端少女，她却是黑潮追索他的钥匙。",
+    "emotional_arc": "警惕→互相利用→信任→共同承担",
+    "major_payoffs": ["第一枚词条觉醒", "边境城反杀", "星门坐标现世"]
+  },
+  "characters": [
+    {"character_id": "lu-yao", "name": "陆遥", "aliases": ["无名者"], "role": "protagonist", "personality": "谨慎、善于观察、不把善意当成理所当然", "voice_style": "思考细密，说话简短，危机时冷静", "pov_eligible": true, "core_motivation": "找出穿越和词条的来源，夺回选择命运的权利", "weakness": "害怕自己成为灾祸", "current_state": {"location": "灰烬边境·断祷镇", "emotion": "戒备"}, "arc_phase": "setup", "first_appearance": 1, "relationships": []},
+    {"character_id": "isera", "name": "伊瑟拉·维恩", "aliases": ["白蔷薇骑士"], "role": "deuteragonist", "personality": "守序、坚韧、对教廷忠诚却不盲从", "voice_style": "措辞克制，战斗时命令简洁", "pov_eligible": true, "core_motivation": "查清姐姐被定为异端的真相", "weakness": "把誓言看得比命重", "current_state": {"location": "断祷镇", "emotion": "怀疑"}, "arc_phase": "setup", "first_appearance": 1, "relationships": []},
+    {"character_id": "seren", "name": "瑟琳·夜烬", "aliases": ["烬月魔女"], "role": "deuteragonist", "personality": "锋利、骄傲、善于伪装虚弱", "voice_style": "带讥讽，情绪越重越轻描淡写", "pov_eligible": true, "core_motivation": "夺回被教廷封存的血脉", "weakness": "不肯请求帮助", "current_state": {"location": "北境囚车", "emotion": "等待"}, "arc_phase": "setup", "first_appearance": 6, "relationships": []},
+    {"character_id": "naya", "name": "娜雅·星枝", "aliases": ["流亡王女"], "role": "deuteragonist", "personality": "温柔、机敏、把恐惧藏在礼貌之后", "voice_style": "语言古雅，偶尔直白惊人", "pov_eligible": true, "core_motivation": "阻止王庭献祭族人", "weakness": "相信自己必须独自承担", "current_state": {"location": "翡翠森林", "emotion": "逃亡"}, "arc_phase": "setup", "first_appearance": 12, "relationships": []}
+  ]
+}

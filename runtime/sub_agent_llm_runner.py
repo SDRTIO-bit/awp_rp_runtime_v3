@@ -13,7 +13,7 @@ from typing import Any
 from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
 
 
-_FLASH_MODEL = "deepseek-v4-flash"
+_DEFAULT_MODEL = "deepseek-v4-pro"
 _EXTRA_DISABLE_THINKING = {"thinking": {"type": "disabled"}}
 _MAX_TOOL_ROUNDS = 2
 
@@ -747,7 +747,7 @@ def run_sub_agent_llm(
         message, _usage = adapter.call_with_tools(
             messages,
             tools=tools,
-            model=_FLASH_MODEL,
+            model=_DEFAULT_MODEL,
             max_tokens=500,
             temperature=0.3,
             extra_body=_EXTRA_DISABLE_THINKING,
@@ -832,7 +832,7 @@ def run_sub_agent_llm(
             message, _usage = adapter.call_with_tools(
                 messages,
                 tools=tools,
-                model=_FLASH_MODEL,
+                model=_DEFAULT_MODEL,
                 max_tokens=300,
                 temperature=0.3,
                 extra_body=_EXTRA_DISABLE_THINKING,
@@ -872,7 +872,7 @@ def _fallback_single_shot(
         user_prompt,
         max_tokens=500,
         provider_role=f"sub_agent_{role}",
-        model=_FLASH_MODEL,
+        model=_DEFAULT_MODEL,
         extra_body=_EXTRA_DISABLE_THINKING,
         trace_id=trace_id,
         turn_id=turn_id,

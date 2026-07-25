@@ -1,0 +1,81 @@
+{
+  "project": {
+    "id": "autonomous-npc-fresh-trial",
+    "title": "雾港遗函",
+    "genre": "东方奇幻、悬疑、女性主角",
+    "core_emotion": "警惕→受压→反制→悬念",
+    "one_sentence_pitch": "抄书人林照在雾港接到亡兄遗函，却发现码头巡检贺岚早已把她的每一步写进自己的账本。",
+    "target_reader": "喜欢角色博弈与悬疑推进的读者",
+    "target_platform": "试跑项目",
+    "config": {
+      "autonomous_profile": {
+        "schema_id": "awp.novel.writing-profile.v1",
+        "schema_version": 1,
+        "mode": "novel",
+        "name": "autonomous-intrigue-trial",
+        "narrative": {
+          "language": "zh-CN",
+          "tone": "克制、紧张，以现场动作和可验证细节推进",
+          "style": "第三人称有限视角，主要跟随林照；每个角色有独立目标",
+          "objective": "在单章内让主角受到来自 NPC 的主动压力，并以一个可见后果留下下一步悬念"
+        },
+        "world": {
+          "rules": [
+            "雾港的通行符、货单和巡检记录都可被查验，不能凭空生效",
+            "幻术只能遮蔽短暂视线，不能制造不存在的物件",
+            "NPC 的资源、风险与行动必须符合其身份和当前位置"
+          ],
+          "budget": "只使用本项目世界与账本事实"
+        },
+        "history": {
+          "facts": ["林照的哥哥三日前在北六码头失踪", "他留下的遗函指向一只铜制潮汐盒"],
+          "constraints": "历史只能通过人物行动、对话或可查物件进入正文"
+        },
+        "scene": {
+          "budget": "本章限定北六码头和巡检亭附近",
+          "must_include": ["被替换过的货单", "一项 NPC 主动制造的可见阻碍"],
+          "constraints": ["结尾必须留下可追查而非巧合解决的后果"]
+        },
+        "agent_contracts": {
+          "architect": {"role": "architect", "instruction": "将人物冲突拆成可执行节拍，并保留 NPC 主动行动的空间。"},
+          "npc_planner": {"role": "npc_planner", "response_format": "npc_agenda_json", "instruction": "当存在候选 NPC 时，必须至少提出一条由非主角发起的 NpcAgenda。议程必须有私密目标、已知事实、资源成本、下一步和落在本章的 VisibleConsequence；不得让主角替 NPC 决策。"},
+          "director": {"role": "director", "instruction": "当收到候选议程时，必须选择至少一条不冲突行动，并将其可见后果嵌入节拍；不得向 Writer 泄露私密目标或推理。"},
+          "writer": {"role": "writer", "instruction": "只根据节拍与可见后果写作。NPC 必须自行做出观察、阻拦、试探或布局，主角只能对已发生的可见事件反应。"}
+        }
+      }
+    }
+  },
+  "volume": {
+    "index": 1,
+    "title": "潮汐账本",
+    "chapter_start": 1,
+    "chapter_end": 6,
+    "objective": "建立林照与贺岚围绕失踪案的互相试探。",
+    "key_results": ["林照确认遗函真实", "贺岚暴露并非旁观者"],
+    "core_conflict": "林照寻找哥哥，贺岚需要在她找到潮汐盒前拿回被藏起的货单。",
+    "emotional_arc": "警惕→压迫→反制",
+    "major_payoffs": ["潮汐盒被调包"]
+  },
+  "characters": [
+    {
+      "character_id": "char-linzhao", "name": "林照", "aliases": [], "role": "protagonist",
+      "personality": "冷静、记性极好，不轻信权威；被逼急时会先观察再反制。",
+      "voice_style": "少说废话，问句直接。", "pov_eligible": true,
+      "core_motivation": "找到失踪的哥哥并确认他没有背叛家族。", "weakness": "对哥哥的事容易把责任揽到自己身上。",
+      "current_state": {"location": "雾港北六码头", "emotion": "压住焦急，准备查遗函"}, "arc_phase": "setup", "first_appearance": 1, "relationships": []
+    },
+    {
+      "character_id": "char-helan", "name": "贺岚", "aliases": ["贺巡检"], "role": "supporting",
+      "personality": "礼貌、耐心、擅长把程序变成陷阱；不低估任何人。",
+      "voice_style": "措辞客气，关键处不让步。", "pov_eligible": false,
+      "core_motivation": "在林照找到潮汐盒前取回能指向自己的货单。", "weakness": "过度相信自己能控制现场流程。",
+      "current_state": {"location": "北六码头巡检亭", "emotion": "准备试探林照是否拿到遗函"}, "arc_phase": "active", "first_appearance": 1, "relationships": []
+    },
+    {
+      "character_id": "char-zhaoye", "name": "赵野", "aliases": ["赵船工"], "role": "supporting",
+      "personality": "嘴硬、熟悉港口暗道，欠林照哥哥一份人情。", "voice_style": "短促，带码头黑话。", "pov_eligible": false,
+      "core_motivation": "还清人情又不被巡检抓住。", "weakness": "遇到巡检会先逃。",
+      "current_state": {"location": "北六码头货栈后巷", "emotion": "想把铜制潮汐盒交给林照"}, "arc_phase": "active", "first_appearance": 1, "relationships": []
+    }
+  ]
+}

@@ -1410,7 +1410,7 @@ class TestModelProfileRegistry:
         from ..nodes.persistent_first_turn_node import AWPV2PersistentFirstTurn
         from ..nodes.writer_v2_node import AWPV2WriterGenerate
 
-        expected_director = "deepseek-v4-flash-director"
+        expected_director = "deepseek-v4-pro-director"
         expected_writer = "deepseek-v4-pro-writer"
 
         for node_cls in (

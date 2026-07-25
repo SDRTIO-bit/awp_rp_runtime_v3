@@ -45,7 +45,7 @@ def test_python_mode_calls_node_directly(monkeypatch):
     assert calls == {
         "session_id": "session-1",
         "player_input": "hello",
-        "director_profile_id": "deepseek-v4-flash-director",
+        "director_profile_id": "deepseek-v4-pro-director",
         "writer_profile_id": "deepseek-v4-pro-writer",
     }
     assert result["success"] is True
@@ -112,7 +112,7 @@ def test_python_continue_uses_real_profiles_by_default(monkeypatch):
     assert result["success"] is True
     assert calls == {
         "session_id": "session-1",
-        "director_profile_id": "deepseek-v4-flash-director",
+        "director_profile_id": "deepseek-v4-pro-director",
         "writer_profile_id": "deepseek-v4-pro-writer",
     }
 

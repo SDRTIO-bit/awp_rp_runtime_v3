@@ -21,6 +21,7 @@ from ..contracts.memory_recall_request import MemoryRecallRequest
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_write_packet_builder import NovelWritePacketBuilder
 from .novel_quality_pipeline import NovelQualityPipeline
+from .novel_style_cleaner import NovelStyleCleaner
 from .novel_profile_compiler import NovelProfileCompiler
 from .novel_npc_agenda_service import NpcAgendaService
 from .novel_npc_agenda_adapter import NovelNpcAgendaAdapter
@@ -98,6 +99,7 @@ class NovelEngine:
         self._profile = profile
         self._packet_builder = NovelWritePacketBuilder(registry)
         self._quality_pipeline = NovelQualityPipeline(registry)
+        self._style_cleaner = NovelStyleCleaner(registry)
         self._callbacks = callbacks or NovelStreamCallbacks()
         # Autonomous-NPC plumbing (profile compiler + agenda lifecycle + Pi planner).
         self._profile_compiler = NovelProfileCompiler()
@@ -183,11 +185,14 @@ class NovelEngine:
         volumes = self._registry.novel_volume_store.list_by_project(project_id)
         volume_plan = volumes[0] if volumes else None
 
-        # Load completed chapters summary
+        # Load completed chapters summary (plan data)
         completed_plans = self._registry.novel_chapter_plan_store.list_by_project(project_id)
         completed_chapters = [
             p.to_dict() for p in completed_plans if p.chapter_index < chapter_index
         ]
+
+        # Load actual chapter text context — 正文才是真正的上文
+        completed_text_context = self._build_global_summaries(project_id, chapter_index)
 
         # Load relevant ledger items
         ledger_items = self._registry.novel_ledger_store.list_by_project(project_id)
@@ -215,10 +220,10 @@ class NovelEngine:
             task_description, architect_prompt_name=architect_prompt_name,
             prev_chapter_ending=prev_chapter_ending,
             prev_ending_design=prev_ending_design,
+            completed_text_context=completed_text_context,
         )
 
         # Clean drumbeat patterns from plan text before storing
-        from .novel_style_cleaner import NovelStyleCleaner
         plan = NovelStyleCleaner.clean_plan(plan)
 
         # Replanning must retain the existing primary key: replacing it would
@@ -389,6 +394,24 @@ class NovelEngine:
 
         self._quality_pipeline.annotate_only(quality_decision)
 
+        # ── 固定执行的四删三改精修后处理 ──
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="polish",
+        ):
+            plot_beats = tuple(
+                b.description for b in (plan.scene_beats or ())
+                if getattr(b, "description", "")
+            )
+            text = self._style_cleaner.polish_chapter_text(
+                text, revision=revision,
+                plot_beats=plot_beats,
+                write_guidance=write_guidance,
+            )
+
         # 降级接受：即便残留 blocking 也存盘，避免 Writer 被无限重抽签烧 token。
         # status 仍如实标记，便于事后筛选。
         verdict_value = quality_decision.verdict.value
@@ -493,6 +516,7 @@ class NovelEngine:
         completed_chapters, ledger_items, character_states,
         task_description, architect_prompt_name="architect",
         prev_chapter_ending="", prev_ending_design=None,
+        completed_text_context="",
     ) -> ChapterPlan:
         """Call Architect agent."""
         from .novel_architect_adapter import NovelArchitectAdapter
@@ -514,6 +538,7 @@ class NovelEngine:
                 task_description=task_description,
                 prev_chapter_ending=prev_chapter_ending,
                 prev_ending_design=prev_ending_design,
+                completed_text_context=completed_text_context,
             )
 
     def _load_autonomous_profile(self, project: NovelProject) -> "NovelWritingProfile":
@@ -606,9 +631,14 @@ class NovelEngine:
         )
         updates_by_id = {item.item_id: item for item in expired_updates}
         updates_by_id.update({item.item_id: item for item in proposed_updates})
+        # Existing agendas are still eligible for the Director.  The planner
+        # may propose new work, but it must not make an unfinished agenda
+        # disappear from the chapter's decision set.
+        candidate_agendas = {agenda.agenda_id: agenda for agenda in active_agendas}
+        candidate_agendas.update({agenda.agenda_id: agenda for agenda in proposed})
         return AutonomousNpcTurn(
             active_agendas=active_agendas,
-            selected_agendas=proposed,
+            selected_agendas=tuple(candidate_agendas.values()),
             agenda_updates=tuple(updates_by_id.values()),
         )
 
@@ -1071,6 +1101,31 @@ class NovelEngine:
             "duration_ms": int((time.time() - t) * 1000),
             "issue_count": len(continuity_issues),
             "issues": continuity_issues[:5],
+        })
+
+        # ── 固定执行的四删三改精修后处理 ──
+        self._safe_on_phase("start", "polish", {"ch": chapter_index})
+        t_polish = time.time()
+        with novel_role_scope(
+            registry=self._registry,
+            project_id=project_id,
+            chapter_index=chapter_index,
+            revision=revision,
+            phase="polish",
+        ):
+            plot_beats = tuple(
+                b.description for b in (plan.scene_beats or ())
+                if getattr(b, "description", "")
+            )
+            text = self._style_cleaner.polish_chapter_text(
+                text, revision=revision,
+                plot_beats=plot_beats,
+                write_guidance=write_guidance,
+            )
+        self._safe_on_phase("end", "polish", {
+            "ch": chapter_index,
+            "duration_ms": int((time.time() - t_polish) * 1000),
+            "char_count": len(text),
         })
 
         verdict_value = quality_decision.verdict.value

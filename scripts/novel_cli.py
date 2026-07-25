@@ -487,7 +487,14 @@ def cmd_init(args: argparse.Namespace) -> None:
     _ensure_dir(novel_dir)
     _ensure_dir(novel_dir / "output")
 
-    (novel_dir / "project.json").write_text(TEMPLATE_NOVEL_JSON.strip(), encoding="utf-8")
+    project_template = json.loads(TEMPLATE_NOVEL_JSON)
+    project_template["project"]["config"][PROFILE_CONFIG_KEY] = (
+        default_autonomous_profile().model_dump(mode="json")
+    )
+    (novel_dir / "project.json").write_text(
+        json.dumps(project_template, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     (novel_dir / "world.md").write_text(TEMPLATE_WORLD_MD.strip(), encoding="utf-8")
     (novel_dir / "outline.md").write_text(TEMPLATE_OUTLINE_MD.strip(), encoding="utf-8")
 
@@ -956,6 +963,116 @@ def cmd_run(args: argparse.Namespace) -> None:
     print(f"\n{GREEN}全部完成!{RESET}")
 
 
+POLISH_PROMPT = """你现在是一位经验丰富的起点/轻小说金牌主编。你的任务是对我提供的初稿进行"去AI味"的深度精修。
+你的核心目标是：增加文本的呼吸感、留白和网感，消除机械的生成痕迹。
+
+请严格遵守以下"四删三改"原则进行精修：
+
+一、 必须删除的内容（四删）
+
+1. 删除"说明书式"动作堆叠：不要连续使用"她皱眉。她咬唇。她深吸一口气"这种机械切片。将微表情融入台词或单一核心动作中。
+
+2. 删除过度解释的旁白：如果角色的动作和台词已经表现了某种情绪（如紧张、愤怒），绝对禁止在后面紧跟一句旁白来解释含义。把阅读理解的权利还给读者。
+
+3. 删除强行升华的抽象总结：绝对禁止在段落或章节结尾使用抽象总结句。用一个具体的动作、一件物品或一句锋利的对白收尾。
+
+4. 删除毫无交互的环境打卡：不要为了写景而写景。只保留与角色当前行为、情绪直接互动的环境细节。
+
+二、 必须调整的结构（三改）
+
+1. 压缩开场与垃圾时间：删减不必要的过渡段落。让场景切换像电影剪辑一样干脆。
+
+2. 合并短句，打乱句式节奏：消除连续的"主谓宾"短句轰炸。多用从句、长短句结合，加入人类口语化的语气词和吐槽。
+
+3. 克制配角的功能性：不要让配角像拥有上帝视角的AI一样说话。点到为止，只需提供一点反常的动作或半句话。
+
+三、 视角红线（不可违背）
+
+必须保持主角陈默的第三人称有限视角。严禁保留或生成陈默离开后的场景。严禁揭示其他角色未被陈默观察到的内心活动。严禁上帝视角旁白。
+
+四、 执行要求
+
+请在保持原剧情走向、核心对白、人物关系和主角视角不变的前提下，根据以上原则输出精修后的文本。要求文字干练、潜台词丰富、具有人类作者的松弛感。直接输出精修后的文本，不要输出任何分析或注释。"""
+
+
+def _call_llm_direct(
+    system_prompt: str,
+    user_prompt: str,
+    model: str = "",
+) -> str:
+    """Make a direct LLM call reusing configured env vars."""
+    from openai import OpenAI
+
+    base_url = os.environ.get(
+        "NOVEL_LLM_BASE_URL",
+        "https://api.deepseek.com/v1",
+    )
+    api_key_env = (
+        os.environ.get("NOVEL_LLM_API_KEY_ENV", "OPENCODE_API_KEY")
+    )
+    api_key = os.environ.get(api_key_env, "")
+    if not api_key:
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    model_name = model or os.environ.get("NOVEL_LLM_MODEL_WRITER", "deepseek-v4-pro")
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    resp = client.chat.completions.create(
+        model=model_name,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=8000,
+        temperature=0.3,
+    )
+    return resp.choices[0].message.content or ""
+
+
+def cmd_polish(args: argparse.Namespace) -> None:
+    """Polish a generated chapter using the '四删三改' post-processing filter."""
+    novel_dir = Path(args.dir).resolve()
+    chapter = int(args.chapter)
+    output_file = novel_dir / "output" / f"chapter_{chapter:02d}.md"
+
+    if not output_file.exists():
+        print(f"{RED}章节文件不存在: {output_file}{RESET}")
+        return
+
+    original = output_file.read_text(encoding="utf-8")
+    print(f"{DIM}读取: {output_file} ({len(original)}字){RESET}")
+
+    # Strip markdown heading for cleaner processing
+    text_lines = original.split("\n")
+    if text_lines and text_lines[0].startswith("# "):
+        text_lines = text_lines[1:]
+    text_content = "\n".join(text_lines).strip()
+
+    print(f"{DIM}正在调用 {_writer_role_connection().provider} / {_writer_role_connection().model} 精修...{RESET}")
+
+    try:
+        polished = _call_llm_direct(
+            system_prompt=POLISH_PROMPT,
+            user_prompt=text_content,
+        )
+    except Exception as exc:
+        print(f"{RED}LLM 调用失败: {exc}{RESET}")
+        return
+
+    if not polished.strip():
+        print(f"{RED}精修返回空文本{RESET}")
+        return
+
+    # Write back
+    output_file.write_text(polished.strip(), encoding="utf-8")
+    print(f"{GREEN}=== 第{chapter}章精修完成: {len(polished)}字 ==={RESET}")
+    print(f"{DIM}已覆盖: {output_file}{RESET}")
+
+    # Show diff stats
+    added = len(polished) - len(text_content)
+    sign = "+" if added >= 0 else ""
+    print(f"{DIM}字数变化: {sign}{added}字{RESET}")
+
+
 def cmd_promote_state(args: argparse.Namespace) -> None:
     """Manually promote an accepted npc_action into a character's current_state."""
     novel_dir = Path(args.dir).resolve()
@@ -1078,6 +1195,11 @@ p_promote_state.add_argument("character_id")
 p_promote_state.add_argument("--source", required=True, help="来源 npc_action 账本项 ID")
 p_promote_state.add_argument("--patch", required=True, help="要合并的 JSON 对象补丁，例如 '{\"injured\": true}'")
 
+# polish (后处理精修)
+p_polish = sub.add_parser("polish", help="对已生成的章节进行降AI率精修（四删三改）")
+p_polish.add_argument("dir")
+p_polish.add_argument("chapter", type=int)
+
 # run (一键)
 p_run = sub.add_parser("run", help="一键 seed → plan → batch → export")
 p_run.add_argument("dir")
@@ -1107,6 +1229,8 @@ def main(argv: list[str]) -> int:
                 cmd_status(args)
             case "promote-state":
                 cmd_promote_state(args)
+            case "polish":
+                cmd_polish(args)
             case "run":
                 cmd_run(args)
             case _:

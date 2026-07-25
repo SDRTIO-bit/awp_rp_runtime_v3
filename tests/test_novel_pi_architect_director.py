@@ -85,6 +85,49 @@ def test_architect_uses_pi_role_runtime(monkeypatch, reg):
     assert plan.scene_beats
 
 
+def test_architect_prefers_fenced_json_after_analysis_with_braces(monkeypatch, reg):
+    plan_json = json.dumps(_plan().to_dict(), ensure_ascii=False)
+    fence = chr(96) * 3
+    runtime = RecordingRoleRuntime(
+        "分析时先记录 {这不是 JSON}，再给出最终结果。\n"
+        f"{fence}json\n{plan_json}\n{fence}"
+    )
+    monkeypatch.setattr(
+        "awp_rp_runtime_v3.runtime.novel_architect_adapter.get_novel_role_runtime",
+        lambda: runtime,
+        raising=False,
+    )
+
+    with novel_role_scope(registry=reg, project_id="p1", chapter_index=1):
+        plan = NovelArchitectAdapter(reg).plan_chapter(
+            "p1", 1, None, [], [], {},
+        )
+
+    assert plan.title == "告白事故"
+
+
+def test_architect_repairs_unescaped_quotes_inside_fenced_json(monkeypatch, reg):
+    plan_data = _plan().to_dict()
+    plan_data["opening_hook"] = '火刑台上写着"异端"二字。'
+    plan_json = json.dumps(plan_data, ensure_ascii=False).replace(
+        '\\"异端\\"', '"异端"',
+    )
+    fence = chr(96) * 3
+    runtime = RecordingRoleRuntime(f"{fence}json\n{plan_json}\n{fence}")
+    monkeypatch.setattr(
+        "awp_rp_runtime_v3.runtime.novel_architect_adapter.get_novel_role_runtime",
+        lambda: runtime,
+        raising=False,
+    )
+
+    with novel_role_scope(registry=reg, project_id="p1", chapter_index=1):
+        plan = NovelArchitectAdapter(reg).plan_chapter(
+            "p1", 1, None, [], [], {},
+        )
+
+    assert "异端" in plan.opening_hook
+
+
 def test_director_uses_task_scoped_pi_session(monkeypatch, reg):
     director_json = json.dumps({
         "beat_details": [{

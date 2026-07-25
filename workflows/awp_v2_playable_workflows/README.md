@@ -29,7 +29,7 @@
 ## 模型配置
 
 默认：
-- Director: `deepseek-v4-flash-director`
+- Director: `deepseek-v4-pro-director`
 - Writer: `deepseek-v4-pro-writer`
 
 离线 / Fake 验证可改为：

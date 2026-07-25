@@ -201,7 +201,7 @@ def main():
             "player_input": "我推开院门，看见一个穿粗布衣裳的年轻女子在井边打水。",
             "turn_id": "turn-001",
             "request_id": "req-turn-001",
-            "director_profile_id": "deepseek-v4-flash-director",
+            "director_profile_id": "deepseek-v4-pro-director",
             "writer_profile_id": "deepseek-v4-pro-writer",
         }),
         # Continue (world advance)
@@ -209,7 +209,7 @@ def main():
             "session_id": "my-session-001",
             "turn_id": "turn-002",
             "request_id": "req-turn-002",
-            "director_profile_id": "deepseek-v4-flash-director",
+            "director_profile_id": "deepseek-v4-pro-director",
             "writer_profile_id": "deepseek-v4-pro-writer",
         }),
         # Output: Turn 1 text
@@ -251,7 +251,7 @@ def main():
             "player_input": "那女子抬起头，竟是周语晴。她眼圈一红：你总算回来了。",
             "turn_id": "turn-003",
             "request_id": "req-turn-003",
-            "director_profile_id": "deepseek-v4-flash-director",
+            "director_profile_id": "deepseek-v4-pro-director",
             "writer_profile_id": "deepseek-v4-pro-writer",
         }),
         # World advance turn
@@ -259,7 +259,7 @@ def main():
             "session_id": "my-session-001",
             "turn_id": "turn-004",
             "request_id": "req-turn-004",
-            "director_profile_id": "deepseek-v4-flash-director",
+            "director_profile_id": "deepseek-v4-pro-director",
             "writer_profile_id": "deepseek-v4-pro-writer",
         }),
         # Outputs

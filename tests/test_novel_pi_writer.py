@@ -11,6 +11,7 @@ from awp_rp_runtime_v3.runtime.novel_role_context import novel_role_scope
 from awp_rp_runtime_v3.runtime.novel_writer_adapter import NovelWriterAdapter
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.runtime.novel_role_context import get_novel_role_context
+from awp_rp_runtime_v3.runtime.prompt_loader import load_prompt
 
 
 class RecordingWriterRuntime:
@@ -124,6 +125,14 @@ def test_writer_empty_pi_result_is_rejected(monkeypatch):
     ):
         with pytest.raises(RuntimeError, match="empty output"):
             NovelWriterAdapter(SimpleNamespace()).generate_chapter(packet)
+
+
+def test_default_writer_prompt_is_genre_neutral():
+    prompt = load_prompt("writer")
+
+    assert "校园恋爱感" not in prompt
+    assert "粉笔灰" not in prompt
+    assert "六比四配比（恋爱喜剧）" not in prompt
 
 
 def test_engine_closes_writer_session_after_chapter_scope(monkeypatch):

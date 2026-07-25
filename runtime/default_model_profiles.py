@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 
-DEFAULT_DIRECTOR_PROFILE_ID = "deepseek-v4-flash-director"
+DEFAULT_DIRECTOR_PROFILE_ID = "deepseek-v4-pro-director"
 DEFAULT_WRITER_PROFILE_ID = "deepseek-v4-pro-writer"
 FAKE_DIRECTOR_PROFILE_ID = "fake-director"
 FAKE_WRITER_PROFILE_ID = "fake-writer"

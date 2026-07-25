@@ -845,11 +845,11 @@ class PersistentTurnEngine:
                 from concurrent.futures import ThreadPoolExecutor, as_completed
                 import os as _os
 
-                # Build a flash-adapter for sub-agent LLM calls
-                flash_model = "deepseek-v4-flash"
+                # Build a DeepSeek Pro adapter for sub-agent LLM calls.
+                analysis_model = "deepseek-v4-pro"
                 try:
-                    flash_profile = ModelProfileRegistry.resolve("deepseek-v4-flash-writer")
-                    api_key_env = flash_profile.api_key_env or "DEEPSEEK_API_KEY"
+                    analysis_profile = ModelProfileRegistry.resolve("deepseek-v4-pro-writer")
+                    api_key_env = analysis_profile.api_key_env or "DEEPSEEK_API_KEY"
                     if _os.environ.get(api_key_env, ""):
                         max_workers = min(len(agent_suggestions), 5)
                         effects["delegation"]["parallelism"] = max_workers
@@ -872,7 +872,7 @@ class PersistentTurnEngine:
                         def _run_one(sug):
                             role = getattr(sug, "role", "") or ""
                             flash_adapter = DeepSeekAdapter(
-                                model=flash_model,
+                                model=analysis_model,
                                 default_max_tokens=500,
                                 timeout_seconds=60,
                                 max_retries=2,

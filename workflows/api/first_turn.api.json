@@ -9,7 +9,7 @@
                              "attempt_id":  "",
                              "request_id":  "req-turn-002",
                              "run_id":  "run-turn-002",
-                             "director_profile_id":  "deepseek-v4-flash-director",
+                             "director_profile_id":  "deepseek-v4-pro-director",
                              "writer_profile_id":  "deepseek-v4-pro-writer",
                              "writer_preset_path":  ""
                          },

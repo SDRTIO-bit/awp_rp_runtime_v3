@@ -149,66 +149,27 @@ class NovelWriterContextCompiler:
 
     @staticmethod
     def _chapter_contract(plan: ChapterPlan, allowed_cast: tuple[str, ...]) -> str:
-        def short(value: str, limit: int) -> str:
-            text = re.sub(r"\s+", " ", value or "").strip()
-            dialogue_replacements = {
-                "说": "简短说明",
-                "问": "追问",
-                "喊": "喊了一声",
-                "宣布": "说明了处理结果",
-                "自嘲": "自嘲了一句",
-                "回应": "简短回应",
-            }
-            text = re.sub(
-                r"(说|问|喊|宣布|自嘲|回应)(?:道)?[：，]?\s*[‘“\"][^’”\"]+[’”\"]",
-                lambda match: dialogue_replacements[match.group(1)] + "，",
-                text,
-            )
-            text = re.sub(r"：\s*[‘“\"][^’”\"]+[’”\"]", "", text)
-            text = re.sub(r"[，；：]+([。！？])", r"\1", text)
-            text = re.sub(r"\s+([，。；：！？])", r"\1", text).strip(" ，；：")
-            text = re.sub(r"([，。；：！？])\s+", r"\1", text)
-            text = text.replace("，同时，", "。同时，")
-            if len(text) <= limit:
-                return text
-            candidate = text[:limit]
-            boundaries = sorted(
-                (index for index, char in enumerate(candidate) if char in "。！？；，"),
-                reverse=True,
-            )
-            dependent_endings = ("时", "后", "却", "但", "并", "而", "因为", "如果", "虽然", "同时")
-            for boundary in boundaries:
-                clause = candidate[:boundary].rstrip()
-                if boundary >= limit // 2 and not clause.endswith(dependent_endings):
-                    ending = candidate[boundary]
-                    return clause + (ending if ending in "。！？" else "。")
-            return candidate.rstrip("，；：") + "。"
+        """Build a lightweight chapter brief — events and direction, not a template."""
 
         summary = plan.content_summary
-        entry = "".join(part for part in (summary.cause, summary.development) if part)
-        relationship = (
-            plan.character_appearance.relationship_changes[0]
-            if plan.character_appearance.relationship_changes
-            else plan.plot_arrangement.emotion_line
-        )
-        lines = [
-            f"标题: {plan.title}",
-            f"目标字数: {plan.target_chars}",
-            f"允许出场角色: {'、'.join(allowed_cast)}",
-            f"写作目标: {short(plan.chapter_position + '；' + plan.target_emotion, 55)}",
-            f"入场与发展: {short(entry, 100)}",
-        ]
+        parts = [f"【本章】{plan.title}　情绪基调：{plan.target_emotion}"]
+
+        if plan.opening_hook:
+            parts.append(f"开篇切入点：{plan.opening_hook}")
+
+        cause_dev = "".join(p for p in (summary.cause, summary.development) if p)
+        if cause_dev:
+            parts.append(f"事件：{cause_dev}")
+
         if summary.turning_point:
-            lines.append(f"局面转折: {short(summary.turning_point, 65)}")
+            parts.append(f"转折：{summary.turning_point}")
+
         if summary.climax:
-            lines.append(f"核心行动: {short(summary.climax, 65)}")
+            parts.append(f"核心场面：{summary.climax}")
         elif plan.main_payoff:
-            lines.append(f"核心行动: {short(plan.main_payoff, 65)}")
-        if relationship:
-            lines.append(f"关系落点: {short(relationship, 60)}")
+            parts.append(f"核心场面：{plan.main_payoff}")
+
         if summary.ending:
-            lines.append(f"章末状态: {short(summary.ending, 65)}")
-        ending = plan.ending_design
-        if ending.next_chapter_push:
-            lines.append(f"禁止提前展开: {short(ending.next_chapter_push, 40)}")
-        return "\n".join(line for line in lines if not line.endswith(": "))
+            parts.append(f"收尾方向：{summary.ending}")
+
+        return "\n".join(parts)

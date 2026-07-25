@@ -1,0 +1,673 @@
+{
+  "project": {
+    "id": "daily-high-school",
+    "title": "搞笑役的我怎么会受女生欢迎",
+    "genre": "现实校园、多女主恋爱喜剧、轻小说式长篇",
+    "core_fantasy": "一个平时承担搞笑角色、看起来不太正经的普通高中男生，因为可靠、尊重人和善于察觉细节，依次走进多名漂亮且性格各异的女孩的生活。",
+    "content_ratio": {
+      "realistic_school_daily": 0.6,
+      "multi_heroine_romance_payoff": 0.4
+    },
+    "core_emotion": "轻松搞笑→温暖羁绊→自我察觉→认真选择",
+    "one_sentence_pitch": "陈默把女生们的关心理解成班长负责、队友情谊和旧友习惯；读者却先一步看见，这个习惯拿玩笑当盾牌的高中生，正被不同的人认真放进心里。",
+    "target_reader": "16—25岁校园恋爱喜剧读者",
+    "target_platform": "番茄长篇",
+    "ending_policy": "最终单选",
+    "narrative_structure": {
+      "mode": "螺旋式女主篇章",
+      "heroine_arc_length": "每15—25章一名女孩承担主场，约占该阶段六成篇幅",
+      "continuity_rule": "完成主场篇章的女孩不退场，继续参与班级、社团、活动和普通日常",
+      "collision_rule": "每完成两到三个女孩篇，安排一次大型校园事件，让已登场关系集中碰撞",
+      "relationship_rule": "新女孩不是被攻略，而是因具体事件与陈默形成独有相处方式",
+      "male_lead_awareness": [
+        "前期确实没有看懂，把关心理解成班长负责、队友情谊或旧友习惯",
+        "中期察觉气氛不对，却不敢相信自己会同时被多人喜欢",
+        "后期发现玩笑无法回避所有问题，必须认真回应并作出选择"
+      ]
+    },
+    "hard_limits": [
+      "禁止悬疑调查主线",
+      "禁止所有女主开局围绕男主",
+      "禁止无理由倒贴",
+      "禁止长期依靠装傻拖延关系",
+      "禁止过度苦情家庭背景",
+      "陈默可以误判好感，但不能被写成愚蠢；每次误判都必须有合理的日常解释",
+      "每名女孩必须因为陈默不同的一面而心动",
+      "禁止反复使用他在女孩哭时陪着她作为通用心动模板"
+    ],
+    "style_rules": [
+      "每章以读者能想象的校园小事为落点，不用抽象情绪代替场景",
+      "优先使用动作、物件、对话和可验证的现场细节",
+      "避免AI式排比总结、怪异比喻和无效心理说明",
+      "保留抄作业、值日、食堂排队、班群消息、体育器材、放学遇雨等日常",
+      "王磊和顾远持续参与，避免故事变成陈默与女主轮流单独相处的展示会"
+    ],
+    "config": {
+      "writer_prompt": "writer_romcom",
+      "architect_prompt": "architect_romcom",
+      "story_bible": "story_bible.md",
+      "canon_priority": [
+        "本project.json中的已定稿字段",
+        "story_bible.md",
+        "world.md",
+        "后续经用户明确确认的新设定"
+      ],
+      "runtime_state_policy": "角色定稿与章节运行状态分离；不得把自动生成的recent_summary反写成永久人物设定"
+    }
+  },
+  "volume": {
+    "index": 1,
+    "title": "第一卷：离谱的新学期",
+    "chapter_start": 1,
+    "chapter_end": 41,
+    "main_heroines": [
+      "char-shenxi",
+      "char-zhaoxiaomai"
+    ],
+    "end_hook_character": "char-sunian",
+    "functional_appearance_character": "char-luxingchen",
+    "objective": "建立沈溪与赵小麦两种不可互换的相处模式，让苏念在卷末以旧友身份回归；陈默尚未意识到感情选择已经开始。",
+    "core_conflict": "陈默习惯把自己放在关系外，用玩笑避免认真；他擅长看见别人难堪与真正卡住的问题，并用行动替人保留体面。女孩们先后看见他的可靠，而他的玩笑也会在真正重要的关系里造成伤害。",
+    "emotional_arc": "轻松→温暖→微妙→不安→期待",
+    "chapter_blocks": [
+      {
+        "range": "1—14",
+        "title": "沈溪篇",
+        "relationship_change": "他很烦→他虽然烦但确实可靠→为什么偏偏只有他看见真正的我",
+        "anchor_events": [
+          "教材危机闭环",
+          "班级杂务搭档",
+          "文具店采购",
+          "雨伞",
+          "运动会报名",
+          "楼梯尽头",
+          "奶茶条约",
+          "赵小麦秒表交接"
+        ]
+      },
+      {
+        "range": "15—33",
+        "title": "赵小麦篇",
+        "relationship_change": "强行拉入接力队→真正成为队友→形成你跑我计时的长期暗号",
+        "anchor_events": [
+          "正式测试与放水",
+          "交棒训练",
+          "第一次争执",
+          "雨天教室训练",
+          "队员退出",
+          "十圈之后",
+          "换棒次",
+          "第一次小胜",
+          "你跑我计时"
+        ]
+      },
+      {
+        "range": "34—41",
+        "title": "第一卷收束",
+        "relationship_change": "沈溪与赵小麦的在意开始并行碰撞；陆星辰留下功能性印象；苏念以旧称呼重新进入陈默生活",
+        "anchor_events": [
+          "两个人都说有事",
+          "运动会照片",
+          "学生会长点名",
+          "联谊排练",
+          "实验中学抵达",
+          "陈小默"
+        ]
+      }
+    ],
+    "key_results": [
+      "沈溪已经允许陈默看见自己的不完美，但尚未承认喜欢",
+      "赵小麦已经习惯首先寻找陈默，但仍将其解释为队友情谊",
+      "陈默开始察觉两人的态度不只是普通同学，却认为自己想多了",
+      "陆星辰记住陈默是一个会破坏流程、也能修好现场的人",
+      "苏念重新出现，迫使陈默面对三年前被玩笑掩盖的遗憾"
+    ],
+    "major_payoffs": [
+      "沈溪奶茶条约",
+      "混合接力完整跑完全程并进入下一轮",
+      "赵小麦的你跑我计时",
+      "苏念克制重逢"
+    ],
+    "volume_rules": [
+      "沈溪篇结束后只到特殊在意，不明确告白",
+      "赵小麦篇结束后只形成习惯，不明确告白",
+      "陆星辰仅作学生会长的功能性露面，不在本卷开启专属感情篇",
+      "苏念重逢不拥抱、不哭诉、不当场解释三年前全部矛盾"
+    ]
+  },
+  "characters": [
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-chenmo",
+      "project_id": "daily-high-school",
+      "name": "陈默",
+      "aliases": [
+        "默哥",
+        "陈小默（仅苏念旧称）"
+      ],
+      "role": "protagonist",
+      "narrative_tier": "male_lead",
+      "age": 17,
+      "school": "江城一中",
+      "class": "高二（3）班",
+      "pov_eligible": true,
+      "first_appearance": 1,
+      "appearance": {
+        "height_cm": 178,
+        "build": "偏瘦、长腿，现实高中生体型",
+        "hair": "黑色乱翘短发",
+        "eyes": "深棕眼",
+        "face": "五官清爽耐看",
+        "clothing": "校服总有一点不规整，常穿旧跑鞋",
+        "visual_tell": "平时笑得懒散，认真时眼神会突然安静"
+      },
+      "personality": "嘴快、观察细、行动可靠。习惯把关心伪装成玩笑，也习惯用玩笑保护自己。能察觉别人没说出口的难处，但不会当众拆穿；帮忙时先动手，不站在旁边讲道理。",
+      "voice_style": "平时吐槽快、会自嘲兜底；认真时句子明显变短，不再绕弯。",
+      "ability_boundaries": [
+        "成绩中等偏上，不是学霸",
+        "短跑不错但不是体育特长生",
+        "擅长观察和处理实际问题，但不是隐藏型全能人物"
+      ],
+      "core_motivation": "成为值得别人托付的人。",
+      "weakness": "不愿承认自己也需要被理解；遇到真正重要的问题时，会下意识用玩笑后退。",
+      "attraction_basis": [
+        "看见别人没有说出口的难处，但不公开拆穿",
+        "面对漂亮女生不刻意讨好，把她们当普通、完整的人",
+        "用玩笑化解尴尬",
+        "同样的玩笑能力在逃避认真时也会造成伤害"
+      ],
+      "arc_phase": "setup",
+      "current_state": {
+        "location": "江城一中高二（3）班",
+        "emotion": "新学期只想平稳混过去，还没意识到关系正在改变"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-shenxi",
+          "target_name": "沈溪",
+          "relation_type": "班长与重点管教对象",
+          "current_reading": "认为她只是责任心太强"
+        },
+        {
+          "target_character_id": "char-zhaoxiaomai",
+          "target_name": "赵小麦",
+          "relation_type": "同班体委与接力队友",
+          "current_reading": "认为她只把自己当可靠队友"
+        },
+        {
+          "target_character_id": "char-sunian",
+          "target_name": "苏念",
+          "relation_type": "三年未好好联系的青梅旧友",
+          "current_reading": "把未解决的遗憾压在玩笑下面"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-shenxi",
+      "project_id": "daily-high-school",
+      "name": "沈溪",
+      "aliases": [
+        "班长大人",
+        "沈老师"
+      ],
+      "role": "heroine",
+      "narrative_tier": "core",
+      "age": 17,
+      "school": "江城一中",
+      "class": "高二（3）班",
+      "identity": "班长、优等生",
+      "pov_eligible": false,
+      "first_appearance": 1,
+      "appearance": {
+        "height_cm": 163,
+        "skin": "肤色白",
+        "hair": "黑长直高马尾",
+        "eyes": "清秀偏冷的眼型",
+        "build": "纤细挺拔",
+        "signature_items": [
+          "暗红细发绳",
+          "永远整齐的制服"
+        ],
+        "visual_tell": "嘴硬或窘迫时耳尖先红"
+      },
+      "archetype": [
+        "外冷内热",
+        "克制型嘴硬",
+        "优等生班长"
+      ],
+      "personal_contrast": "教训陈默时很强势，面对自己的喜欢却笨拙；偷偷看恋爱小说，却完全不会处理现实恋爱。",
+      "personality": "严谨、自律、规则感强，习惯把班级责任揽到自己身上。她的冷来自守规矩与不擅长示弱，不是刻薄，也不是完整傲娇。",
+      "voice_style": "用词正式、条理清楚，教训人像小老师；察觉语气太重时会不自然地放低声音。窘迫时会试图用规则和记录掩饰。",
+      "core_motivation": "把班长职责做好，不辜负别人对她的信任，同时渴望有人看见身份之外的自己。",
+      "weakness": "不会示弱，什么都往自己身上扛；害怕失控和让人失望。",
+      "why_she_likes_chenmo": "陈默看见她失控，却不把她当成需要照顾的弱者，也不把她的脆弱拿去换取亲近。",
+      "relationship_direction": "从管教到依赖",
+      "anti_overlap": "她的冷是守规矩；完整的傲娇属性留给夏染。",
+      "arc_phase": "setup",
+      "current_state": {
+        "location": "江城一中高二（3）班",
+        "emotion": "新学期干劲十足，也暗暗担心自己做不好班长"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "重点管教对象→可靠搭档→特殊在意",
+          "description": "起初认为陈默只会扰乱秩序，随后发现他会把最麻烦的活默默做完，也能在她撑不住时保留体面。",
+          "volume_1_limit": "只形成特殊在意和依赖，不明确承认喜欢"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-zhaoxiaomai",
+      "project_id": "daily-high-school",
+      "name": "赵小麦",
+      "aliases": [
+        "小麦",
+        "体委"
+      ],
+      "role": "heroine",
+      "narrative_tier": "core",
+      "age": 17,
+      "school": "江城一中",
+      "class": "高二（3）班",
+      "identity": "体委",
+      "pov_eligible": false,
+      "first_appearance": 5,
+      "formal_story_entry": 15,
+      "appearance": {
+        "height_cm": 158,
+        "skin": "健康小麦肤色",
+        "hair": "黑色高马尾",
+        "eyes": "圆而明亮的深棕眼睛",
+        "build": "运动型紧实身材，肩背舒展但不过度肌肉化",
+        "signature_items": [
+          "橙色发圈",
+          "黑色秒表",
+          "蓝色记录夹",
+          "白色跑鞋"
+        ],
+        "visual_tell": "笑容爽朗，运动后脸颊自然红润，行动时总像下一秒就会跑过来"
+      },
+      "archetype": [
+        "元气少女",
+        "天然系",
+        "无意识直球"
+      ],
+      "personal_contrast": "敢当众拉陈默的手、共用水杯，却真心觉得只是队友情；开始吃醋后还以为自己训练状态不好。",
+      "personality": "热情、直接、行动力强，习惯用跑步和训练解决问题。她不是笨，只是对恋爱缺少概念；对团队责任很认真，也容易把自己的速度当成所有人的速度。",
+      "voice_style": "声音明亮，喜欢直呼全名，句子短而直接；兴奋时语速快，但不必每句话都机械加感叹号。",
+      "core_motivation": "让队伍里的每个人都能跑到终点，并留下真正属于大家的校园记忆。",
+      "weakness": "容易用自己的热情和标准推着别人前进，不擅长察觉别人已经跟不上；对自身心动极其迟钝。",
+      "why_she_likes_chenmo": "陈默愿意陪她往前冲，也会在她逞强或只顾速度时让她停下来，看见队友和自己。",
+      "relationship_direction": "从队友到心动",
+      "anti_overlap": "她的亲近来自天然与队友意识，不是主动撩拨，也不是装傻。",
+      "arc_phase": "setup",
+      "current_state": {
+        "location": "江城一中高二（3）班与操场",
+        "emotion": "把新学期和运动会当成新的集体目标"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "同班同学→混合接力队友→优先寻找的人",
+          "description": "高二重新分班后才正式认识。她先看中陈默的短跑能力，随后把他视为关键时刻不会逃的队友。",
+          "volume_1_limit": "形成你跑我计时的长期暗号和晨跑习惯，但仍解释为队友情谊"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-sunian",
+      "project_id": "daily-high-school",
+      "name": "苏念",
+      "aliases": [
+        "念念",
+        "陈小默的旧友"
+      ],
+      "role": "heroine",
+      "narrative_tier": "core",
+      "age": 17,
+      "school": "市实验中学",
+      "class": null,
+      "identity": "陈默的重逢青梅",
+      "pov_eligible": false,
+      "first_appearance": 40,
+      "formal_story_entry": 41,
+      "appearance": {
+        "height_cm": 165,
+        "hair": "齐下巴黑色短发",
+        "eyes": "明亮锐利，面对陈默时会不自觉变软",
+        "build": "匀称利落",
+        "signature_items": [
+          "实验中学校服",
+          "旧编织手环"
+        ]
+      },
+      "archetype": [
+        "重逢青梅",
+        "主动系",
+        "轻微占有欲"
+      ],
+      "personal_contrast": "表面比谁都直接，真正问到三年前的感情时反而会退缩；她害怕的不是忘不掉过去，而是陈默已经不再需要她。",
+      "personality": "比三年前更利落直接，不愿再把重要的话一直拖下去；但越接近真正的旧伤，越难保持表面的从容。",
+      "voice_style": "平时直接、有一点锋利；真正认真时声音会变轻，旧称呼和熟悉语气会自然冒出来。",
+      "core_motivation": "解开初三那次没有说完的争吵，确认十七岁的两个人是否还能重新选择彼此。",
+      "weakness": "她对陈默的理解停留在十四岁，需要放下旧日默认关系，重新认识现在的他。",
+      "why_she_likes_chenmo": "她必须越过共同长大的惯性，确认自己喜欢的是十七岁的陈默，而不只是十四岁的记忆。",
+      "relationship_direction": "从旧关系到重新选择",
+      "shared_past": {
+        "event": "初三毕业前，苏念告诉陈默自己可能搬走，并试探他会不会舍不得。陈默慌乱之下说走呗，以后终于没人管我了。苏念第一次没有接他的玩笑，两人争吵后谁也没有道歉，苏念又比原计划更早离开江城。",
+        "contact_truth": "所谓失联三年并非没有联系手段，而是两个人都等着对方先迈出第一步。",
+        "theme_function": "这段过去直接对应陈默的核心缺点：他以为玩笑能让难过变轻，却第一次因此失去重要的人。"
+      },
+      "arc_phase": "pre_entry",
+      "current_state": {
+        "location": "市实验中学",
+        "emotion": "对两校联谊抱有克制的期待，也不确定重逢后该说什么"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "一起长大的旧友→三年僵持→重新认识",
+          "description": "两人不是失去联系方式，而是谁也没有先低头。卷末重逢只打开问题，不立即解决。",
+          "volume_1_limit": "不拥抱、不哭诉、不当场解释全部旧事"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-xiaran",
+      "project_id": "daily-high-school",
+      "name": "夏染",
+      "aliases": [
+        "夏染"
+      ],
+      "role": "heroine",
+      "narrative_tier": "core",
+      "age": 17,
+      "school": null,
+      "class": null,
+      "identity": "后续卷核心女主，音乐相关背景待后续卷定稿",
+      "pov_eligible": false,
+      "first_appearance": 0,
+      "appearance": {
+        "height_cm": 164,
+        "skin": "暖白偏麦",
+        "hair": "深棕狼尾短发",
+        "eyes": "狭长琥珀棕眼",
+        "signature_items": [
+          "旧吉他包",
+          "黑色高帮鞋",
+          "拨片项链"
+        ],
+        "clothing_detail": "衣服和随身物有真实使用痕迹，不做舞台偶像式华丽造型"
+      },
+      "archetype": [
+        "野猫系傲娇",
+        "口嫌体正直",
+        "酷女孩"
+      ],
+      "personal_contrast": "嘴上嫌陈默烦，遇到麻烦第一个想到他；看似最成熟独立，实际最不懂怎样接受别人对她好。",
+      "personality": "独立、警惕、自尊心强，不喜欢被人居高临下地帮助。完整傲娇属性由她承担，但不能写成无缘无故辱骂男主。",
+      "voice_style": "干脆、略带刺，常用短句；真正接受好意时会先否认，再用行动还回去。",
+      "core_motivation": "保住自己的选择权和尊严，不让别人替她定义需要什么。",
+      "weakness": "把接受帮助误解为被怜悯或失去独立，因而容易拒绝真正需要的支持。",
+      "why_she_likes_chenmo": "陈默帮助她，却不怜悯、说教或试图拯救她。",
+      "relationship_direction": "从互怼到信任",
+      "anti_overlap": "她是唯一承担完整傲娇主属性的女主。",
+      "arc_phase": "planned",
+      "current_state": {
+        "location": "待后续卷确定",
+        "emotion": "未登场"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "尚未结识",
+          "description": "具体初遇事件待对应卷规划，不沿用未经确认的旧草案。"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-jiangwan",
+      "project_id": "daily-high-school",
+      "name": "姜晚",
+      "aliases": [
+        "姜晚"
+      ],
+      "role": "heroine",
+      "narrative_tier": "secondary_core",
+      "age": 17,
+      "school": null,
+      "class": null,
+      "identity": "后续卷次核心女主，具体入场身份待定",
+      "pov_eligible": false,
+      "first_appearance": 0,
+      "appearance": {
+        "height_cm": 166,
+        "skin": "冷白肤色",
+        "hair": "齐肩黑发、薄刘海",
+        "eyes": "灰黑色眼睛",
+        "signature_items": [
+          "简洁银色发夹",
+          "常抱在胸前的书"
+        ],
+        "visual_tell": "笑意很少，出现时通常只停在嘴角"
+      },
+      "archetype": [
+        "三无",
+        "冰山",
+        "冷幽默"
+      ],
+      "personal_contrast": "平时惜字如金，内心活动丰富；会记住陈默说过的烂梗，在意的人面前做出极小但明显的主动。",
+      "personality": "外在低反应、沉默，不代表冷漠。她对群体互动消耗较大，但能敏锐捕捉细节，并有自然的冷幽默。",
+      "voice_style": "短句、少字、精准；偶尔一本正经说出冷幽默，自己不解释笑点。",
+      "core_motivation": "在不被强迫改变自己的前提下，与人建立舒服、低消耗的联系。",
+      "weakness": "不擅长表达需要，容易让别人误以为她不在意。",
+      "why_she_likes_chenmo": "陈默不逼她说话，也不把沉默当成尴尬。",
+      "relationship_direction": "明确心动，但发现较晚",
+      "anti_overlap": "她的冷是低反应，不是沈溪的规则感，也不是陆星辰的体面。",
+      "arc_phase": "planned",
+      "current_state": {
+        "location": "待后续卷确定",
+        "emotion": "未登场"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "尚未结识",
+          "description": "具体入场事件待后续卷规划，不保留旧版本的转学生与实验班设定。"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-luxingchen",
+      "project_id": "daily-high-school",
+      "name": "陆星辰",
+      "aliases": [
+        "星辰会长",
+        "陆会长"
+      ],
+      "role": "heroine",
+      "narrative_tier": "secondary_core",
+      "age": 17,
+      "school": "江城一中",
+      "class": null,
+      "identity": "学生会长",
+      "pov_eligible": false,
+      "first_appearance": 36,
+      "appearance": {
+        "height_cm": 168,
+        "hair": "长直深棕发，常束低马尾",
+        "face": "五官端正精致，成熟但保留学生感",
+        "signature_items": [
+          "学生会袖章",
+          "细银表",
+          "没有褶皱的制服"
+        ]
+      },
+      "archetype": [
+        "高岭之花",
+        "完美女神",
+        "反差萌"
+      ],
+      "personal_contrast": "在学校维持可靠、得体的学生会长形象，私下却想穿睡衣看狗血剧、吃零食，也会因消息发错而慌张撤回。",
+      "personality": "自律、体面、流程意识强。她的距离感来自维持公共形象，不是看不起同学。私下渴望不必一直优秀的普通生活。",
+      "voice_style": "公开场合清楚正式；私下放松后会出现普通高中女生的吐槽、语气词和撤回消息。",
+      "core_motivation": "在可靠的公共身份与真实的普通少女生活之间找到可以呼吸的空间。",
+      "weakness": "不允许自己出错，也不习惯别人越过成绩和身份关心她本人。",
+      "why_she_likes_chenmo": "陈默不崇拜她的优秀，只在意她累不累、开不开心。",
+      "relationship_direction": "喜欢过，也主动争取过",
+      "anti_overlap": "她的冷是保持体面，不是沈溪的守规矩，也不是姜晚的低反应。",
+      "arc_phase": "functional_appearance",
+      "current_state": {
+        "location": "江城一中学生会办公室",
+        "emotion": "筹备两校联谊，追求流程稳定"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "不稳定因素→勉强可用的人",
+          "description": "第一卷只因联谊工作认识他，记住他既会破坏流程，也能在现场出错时补上漏洞。",
+          "volume_1_limit": "不开启完整恋爱线，不与苏念同时争夺主场"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-yezhiqiu",
+      "project_id": "daily-high-school",
+      "name": "叶知秋",
+      "aliases": [
+        "叶学姐"
+      ],
+      "role": "heroine",
+      "narrative_tier": "special_line",
+      "age": 18,
+      "school": "江城一中",
+      "class": "高三（具体班级待定）",
+      "identity": "温柔学姐、绘画方向人物",
+      "pov_eligible": false,
+      "first_appearance": 0,
+      "appearance": {
+        "height_cm": 167,
+        "hair": "柔软微卷黑发，松松束起",
+        "eyes": "眉眼温柔",
+        "build": "修长",
+        "signature_items": [
+          "米色针织衫",
+          "袖口颜料痕",
+          "耳后素描铅笔"
+        ]
+      },
+      "archetype": [
+        "温柔学姐",
+        "文艺系",
+        "轻腹黑"
+      ],
+      "personal_contrast": "看起来成熟通透，偶尔会故意逗陈默看他慌张；她能看透别人的喜欢，却不愿直视自己的留恋。",
+      "personality": "温和、敏锐、懂得留白，偶尔带一点不伤人的捉弄。她能理解情绪，但不会把自己摆成全知的情感导师。",
+      "voice_style": "语速偏慢，表达克制；会谈画面与感受，但避免堆砌故作高深的比喻。",
+      "core_motivation": "诚实面对自己的创作与留恋，在毕业前完成一次不逃避的表达。",
+      "weakness": "习惯看懂别人，却回避自己真正舍不得什么。",
+      "why_she_likes_chenmo": "陈默看懂画里的情绪，却不自以为懂她的人生。",
+      "relationship_direction": "一段有结束感的青春插曲",
+      "anti_overlap": "她不是最终竞争线，也不能写成神秘、全知或负责开导所有人的工具人。",
+      "arc_phase": "planned",
+      "current_state": {
+        "location": "江城一中美术教室",
+        "emotion": "未进入主线"
+      },
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "尚未结识",
+          "description": "具体相遇与画作内容待对应卷定稿，不沿用看穿三年秘密等过强巧合。"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-wanglei",
+      "project_id": "daily-high-school",
+      "name": "王磊",
+      "aliases": [],
+      "role": "supporting",
+      "narrative_tier": "classmate_support",
+      "school": "江城一中",
+      "class": "高二（3）班",
+      "identity": "陈默同桌",
+      "personality": "嘴快、爱吃、喜欢凑热闹，恋爱雷达灵敏但经常判断得太早。不是只会起哄的工具人，也会参加班级事务。",
+      "voice_style": "大嗓门、爱接梗，情绪直接。",
+      "pov_eligible": false,
+      "core_motivation": "让高中生活热闹，也不让朋友一个人扛事。",
+      "weakness": "藏不住话，容易把尚未成形的暧昧喊破。",
+      "current_state": {
+        "location": "江城一中高二（3）班",
+        "emotion": "等着看热闹，也愿意真帮忙"
+      },
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "同桌与损友",
+          "description": "负责接梗、参与日常和在关键时刻提供同龄人视角。"
+        }
+      ]
+    },
+    {
+      "schema_id": "awp.novel.character.v1",
+      "schema_version": 1,
+      "character_id": "char-guyuan",
+      "project_id": "daily-high-school",
+      "name": "顾远",
+      "aliases": [],
+      "role": "supporting",
+      "narrative_tier": "classmate_support",
+      "school": "江城一中",
+      "class": "高二（3）班",
+      "identity": "学习委员",
+      "personality": "冷静、精准、偶尔毒舌，观察力强但不抢主角功能。关心往往藏在纠正错误、递资料和补漏洞里。",
+      "voice_style": "短句、一针见血，很少重复。",
+      "pov_eligible": false,
+      "core_motivation": "把事情看清楚，也让班级事务别因为情绪失控。",
+      "weakness": "太晚才把关心说出口，容易显得只是在挑错。",
+      "current_state": {
+        "location": "江城一中高二（3）班",
+        "emotion": "安静观察新班级的人际变化"
+      },
+      "arc_phase": "setup",
+      "first_appearance": 1,
+      "relationships": [
+        {
+          "target_character_id": "char-chenmo",
+          "target_name": "陈默",
+          "relation_type": "同学与互补型朋友",
+          "description": "陈默负责把人拉进来，顾远负责把事情校准。"
+        }
+      ]
+    }
+  ]
+}

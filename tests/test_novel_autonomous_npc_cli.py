@@ -13,6 +13,7 @@ from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter
 from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan
 from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.contracts.novel_profile import default_autonomous_profile
 from awp_rp_runtime_v3.scripts import novel_cli
 
 
@@ -52,6 +53,17 @@ def _add_npc_action_ledger_item(novel_dir: Path) -> str:
     )
     engine._registry.novel_ledger_store.upsert(item)
     return item.item_id
+
+
+def test_init_writes_the_complete_default_autonomous_profile(tmp_path: Path) -> None:
+    novel_dir = tmp_path / "initialized-novel"
+
+    novel_cli.cmd_init(Namespace(dir=str(novel_dir)))
+
+    project = json.loads((novel_dir / "project.json").read_text(encoding="utf-8"))["project"]
+    assert project["config"]["autonomous_profile"] == (
+        default_autonomous_profile().model_dump(mode="json")
+    )
 
 
 def test_promote_state_cli_updates_character_state(novel_dir: Path, capsys) -> None:
