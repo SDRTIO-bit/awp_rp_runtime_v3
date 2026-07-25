@@ -36,7 +36,9 @@ ROLE_CONFIGS = {
     # ── 三段式 Polish 管线专用角色 ──
     "polish_audit":      {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
     "polish_repair":     {"model": "deepseek-v4-pro",   "max_tokens": 16000, "thinking": THINKING_DISABLED},
-    "polish_verify":     {"model": "deepseek-v4-flash",  "max_tokens": 4000, "thinking": THINKING_DISABLED},
+    "polish_verify":     {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
+    # ── V4: 精确补丁生成，不需要强推理，走 Writer 同款模型节省 DeepSeek 配额 ──
+    "mechanical_patch":  {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_DISABLED},
     # ── V3 新增：Writer Low + DESIGN 审计 ──
     "writer_low":        {"model": "deepseek-v4-pro",   "max_tokens": 4000, "thinking": THINKING_DISABLED},
     "design_audit":      {"model": "deepseek-v4-pro",   "max_tokens": 8000, "thinking": THINKING_HIGH},
@@ -187,6 +189,9 @@ class NovelLLMFactory:
         # 2026-07-05: max 长程一致性暴露问题（8K 输出窗内同句重复、48h→72h 自相矛盾），
         # 且单次调用价格是 plus 的数倍。短篇/中篇 plus 实测更稳。
         # max 仍可通过 NOVEL_LLM_MODEL_WRITER=qwen3.7-max 显式覆盖。
+        # V4: ledger_curator and mechanical_patch use gemini (via opencode) to
+        # save DeepSeek quota. They don't need strong reasoning — structured
+        # extraction and mechanical patching are sufficient.
         default_map = {
             "director":           "qwen3.7-plus",
             "architect":          "qwen3.7-plus",
@@ -194,6 +199,7 @@ class NovelLLMFactory:
             "continuity_checker": "qwen3.7-plus",
             "style_cleaner":      "qwen3.7-plus",
             "ledger_curator":     "qwen3.7-plus",
+            "mechanical_patch":   "qwen3.7-plus",
         }
         model_id = (
             os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}")

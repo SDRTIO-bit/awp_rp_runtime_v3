@@ -21,7 +21,7 @@ from ..contracts.memory_recall_request import MemoryRecallRequest
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_write_packet_builder import NovelWritePacketBuilder
 from .novel_quality_pipeline import NovelQualityPipeline
-from .novel_style_cleaner import NovelStyleCleaner
+from .novel_mechanical_gate import NovelMechanicalGate
 from .novel_profile_compiler import NovelProfileCompiler
 from .novel_npc_agenda_service import NpcAgendaService
 from .novel_npc_agenda_adapter import NovelNpcAgendaAdapter
@@ -99,7 +99,7 @@ class NovelEngine:
         self._profile = profile
         self._packet_builder = NovelWritePacketBuilder(registry)
         self._quality_pipeline = NovelQualityPipeline(registry)
-        self._style_cleaner = NovelStyleCleaner(registry)
+        self._mechanical_gate = NovelMechanicalGate(registry)
         self._callbacks = callbacks or NovelStreamCallbacks()
         # Autonomous-NPC plumbing (profile compiler + agenda lifecycle + Pi planner).
         self._profile_compiler = NovelProfileCompiler()
@@ -113,6 +113,17 @@ class NovelEngine:
 
     def _safe_on_chunk(self, text: str) -> None:
         safe_on_chunk(self._callbacks.on_chunk, text)
+
+    # Backward-compat: old code may still reference engine._style_cleaner
+    @property
+    def _style_cleaner(self):
+        import warnings
+        warnings.warn(
+            "engine._style_cleaner is deprecated; use engine._mechanical_gate",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._mechanical_gate
 
     def _safe_on_error(self, phase: str, message: str) -> None:
         safe_on_error(self._callbacks.on_error, phase, message)
@@ -224,7 +235,7 @@ class NovelEngine:
         )
 
         # Clean drumbeat patterns from plan text before storing
-        plan = NovelStyleCleaner.clean_plan(plan)
+        plan = NovelMechanicalGate.clean_plan(plan)
 
         # Replanning must retain the existing primary key: replacing it would
         # delete the parent row and violate the foreign key held by old drafts.
@@ -355,19 +366,6 @@ class NovelEngine:
                 text, plan, skip_drumbeat_check=skip_drumbeat
             )
 
-        # Continuity check: 检查遗忘的伏笔/承诺、断层、角色矛盾。
-        # 结果作为 informational warnings 注入，不阻塞存盘。
-        continuity_issues = self._check_continuity(
-            text=text,
-            chapter_plan=plan,
-            ledger_items=ledger_items,
-            character_states=character_states,
-            prev_chapter_ending=prev_chapter_ending,
-            revision=revision,
-        )
-        if continuity_issues:
-            quality_decision.warnings.extend(continuity_issues)
-
         self._merge_plan_adherence(
             decision=quality_decision,
             plan=plan,
@@ -393,7 +391,7 @@ class NovelEngine:
                 b.description for b in (plan.scene_beats or ())
                 if getattr(b, "description", "")
             )
-            text = self._style_cleaner.polish_chapter_text(
+            text = self._mechanical_gate.polish_chapter_text(
                 text, revision=revision,
                 plot_beats=plot_beats,
                 write_guidance=write_guidance,
@@ -1064,16 +1062,9 @@ class NovelEngine:
             "warnings": [w[:120] for w in getattr(quality_decision, "warnings", [])],
         })
 
-        # Phase: continuity
+        # Phase: continuity → merged into Mechanical Audit (V4)
         self._safe_on_phase("start", "continuity", {"ch": chapter_index})
         t = time.time()
-        continuity_issues = self._check_continuity(
-            text=text, chapter_plan=plan, ledger_items=ledger_items,
-            character_states=character_states, prev_chapter_ending=prev_chapter_ending,
-            revision=revision,
-        )
-        if continuity_issues:
-            quality_decision.warnings.extend(continuity_issues)
         self._merge_plan_adherence(
             decision=quality_decision,
             plan=plan,
@@ -1089,8 +1080,7 @@ class NovelEngine:
         self._safe_on_phase("end", "continuity", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - t) * 1000),
-            "issue_count": len(continuity_issues),
-            "issues": continuity_issues[:5],
+            "issue_count": 0,
         })
 
         # ── 固定执行的四删三改精修后处理 ──
@@ -1107,7 +1097,7 @@ class NovelEngine:
                 b.description for b in (plan.scene_beats or ())
                 if getattr(b, "description", "")
             )
-            text = self._style_cleaner.polish_chapter_text(
+            text = self._mechanical_gate.polish_chapter_text(
                 text, revision=revision,
                 plot_beats=plot_beats,
                 write_guidance=write_guidance,
@@ -1188,20 +1178,12 @@ class NovelEngine:
             )
             if previous_draft:
                 previous_ending = previous_draft.text[-500:]
-        continuity_issues = self._check_continuity(
-            text=draft.text,
-            chapter_plan=plan,
-            ledger_items=ledger_items,
-            character_states=character_states,
-            prev_chapter_ending=previous_ending,
-            revision=draft.revision,
-        )
         return {
             "chapter": chapter_index,
             "verdict": quality_decision.verdict.value,
             "blocking_reasons": list(quality_decision.blocking_reasons),
             "warnings": list(quality_decision.warnings),
-            "continuity_issues": continuity_issues,
+            "continuity_issues": [],  # V4: continuity merged into Mechanical Audit
         }
 
     def _recall_novel_memory(

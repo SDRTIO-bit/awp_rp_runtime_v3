@@ -1076,6 +1076,8 @@ def cmd_polish(args: argparse.Namespace) -> None:
 def cmd_audit_design(args: argparse.Namespace) -> None:
     """V4: 设计过载审计 — 只报告，不修改正文。"""
     import json as _json
+    from awp_rp_runtime_v3.runtime.novel_style_cleaner import NovelStyleCleaner
+
     novel_dir = Path(args.dir).resolve()
     chapter = int(args.chapter)
     output_file = novel_dir / "output" / f"chapter_{chapter:02d}.md"
@@ -1089,13 +1091,16 @@ def cmd_audit_design(args: argparse.Namespace) -> None:
     text = "\n".join(text_lines).strip()
 
     engine = _get_engine(str(novel_dir / "novel.db"))
-    report = engine._style_cleaner._run_design_audit(text)
+    legacy_cleaner = NovelStyleCleaner(engine._registry)
+    report = legacy_cleaner._run_design_audit(text)
     print(_json.dumps(report, ensure_ascii=False, indent=2) if report else "{}")
 
 
 def cmd_audit_style(args: argparse.Namespace) -> None:
     """V4: AI味审计 — 只报告，不修改正文。"""
     import json as _json
+    from awp_rp_runtime_v3.runtime.novel_style_cleaner import NovelStyleCleaner
+
     novel_dir = Path(args.dir).resolve()
     chapter = int(args.chapter)
     output_file = novel_dir / "output" / f"chapter_{chapter:02d}.md"
@@ -1109,7 +1114,8 @@ def cmd_audit_style(args: argparse.Namespace) -> None:
     text = "\n".join(text_lines).strip()
 
     engine = _get_engine(str(novel_dir / "novel.db"))
-    report = engine._style_cleaner._run_audit(text, audit_mode="STYLE")
+    legacy_cleaner = NovelStyleCleaner(engine._registry)
+    report = legacy_cleaner._run_style_audit(text)
     print(_json.dumps(report, ensure_ascii=False, indent=2) if report else "{}")
 
 
