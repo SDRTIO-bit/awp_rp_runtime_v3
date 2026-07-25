@@ -116,15 +116,8 @@ class NovelWriterAdapter:
         """
         parts: list[str] = []
 
-        # ═══ 1. STYLE BENCHMARK — 文风参考 ═══
-        benchmark = _get_style_benchmark(
-            project_root=packet.project_root,
-            project_id=packet.project_id,
-        )
-        if benchmark:
-            parts.append(benchmark)
-
-        # ═══ 2. 本章世界约束 ═══
+        # V4: 移除运行时参考标杆 — benchmark 和松弛度统计退出默认生成链路
+        # ═══ 本章世界约束 ═══
         if packet.world_constraints:
             parts.append(
                 "\n=== 本章世界约束 ===\n"
@@ -216,11 +209,7 @@ class NovelWriterAdapter:
             "- 叙述者不替读者感受。不写'她全都知道''他自己都没意识到'这类上帝视角",
         ]
 
-        # Style benchmark (稳定，读文件，缓存命中)
-        benchmark = _get_style_benchmark(project_id=packet.project_id)
-        if benchmark:
-            parts.append(benchmark)
-
+        # V4: 移除运行时标杆加载
         # Global summaries (缓慢增长，前缀缓存大部分命中)
         if packet.global_summaries:
             parts.append(f"\n=== STORY SO FAR ===\n{packet.global_summaries}")

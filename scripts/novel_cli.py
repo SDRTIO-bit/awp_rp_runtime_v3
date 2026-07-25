@@ -1073,6 +1073,46 @@ def cmd_polish(args: argparse.Namespace) -> None:
     print(f"{DIM}字数变化: {sign}{added}字{RESET}")
 
 
+def cmd_audit_design(args: argparse.Namespace) -> None:
+    """V4: 设计过载审计 — 只报告，不修改正文。"""
+    import json as _json
+    novel_dir = Path(args.dir).resolve()
+    chapter = int(args.chapter)
+    output_file = novel_dir / "output" / f"chapter_{chapter:02d}.md"
+    if not output_file.exists():
+        print(f"{RED}章节文件不存在: {output_file}{RESET}")
+        return
+    text = output_file.read_text(encoding="utf-8")
+    text_lines = text.split("\n")
+    if text_lines and text_lines[0].startswith("# "):
+        text_lines = text_lines[1:]
+    text = "\n".join(text_lines).strip()
+
+    engine = _get_engine(str(novel_dir / "novel.db"))
+    report = engine._style_cleaner._run_design_audit(text)
+    print(_json.dumps(report, ensure_ascii=False, indent=2) if report else "{}")
+
+
+def cmd_audit_style(args: argparse.Namespace) -> None:
+    """V4: AI味审计 — 只报告，不修改正文。"""
+    import json as _json
+    novel_dir = Path(args.dir).resolve()
+    chapter = int(args.chapter)
+    output_file = novel_dir / "output" / f"chapter_{chapter:02d}.md"
+    if not output_file.exists():
+        print(f"{RED}章节文件不存在: {output_file}{RESET}")
+        return
+    text = output_file.read_text(encoding="utf-8")
+    text_lines = text.split("\n")
+    if text_lines and text_lines[0].startswith("# "):
+        text_lines = text_lines[1:]
+    text = "\n".join(text_lines).strip()
+
+    engine = _get_engine(str(novel_dir / "novel.db"))
+    report = engine._style_cleaner._run_audit(text, audit_mode="STYLE")
+    print(_json.dumps(report, ensure_ascii=False, indent=2) if report else "{}")
+
+
 def cmd_promote_state(args: argparse.Namespace) -> None:
     """Manually promote an accepted npc_action into a character's current_state."""
     novel_dir = Path(args.dir).resolve()
@@ -1200,6 +1240,15 @@ p_polish = sub.add_parser("polish", help="对已生成的章节进行降AI率精
 p_polish.add_argument("dir")
 p_polish.add_argument("chapter", type=int)
 
+# V4: audit-design / audit-style — 只生成报告，不修改正文
+p_audit_design = sub.add_parser("audit-design", help="检查章节设计过载 (D1-D5)，只报告不修改")
+p_audit_design.add_argument("dir")
+p_audit_design.add_argument("chapter", type=int)
+
+p_audit_style = sub.add_parser("audit-style", help="检查章节AI味 (S1-S7)，只报告不修改")
+p_audit_style.add_argument("dir")
+p_audit_style.add_argument("chapter", type=int)
+
 # run (一键)
 p_run = sub.add_parser("run", help="一键 seed → plan → batch → export")
 p_run.add_argument("dir")
@@ -1231,6 +1280,10 @@ def main(argv: list[str]) -> int:
                 cmd_promote_state(args)
             case "polish":
                 cmd_polish(args)
+            case "audit-design":
+                cmd_audit_design(args)
+            case "audit-style":
+                cmd_audit_style(args)
             case "run":
                 cmd_run(args)
             case _:

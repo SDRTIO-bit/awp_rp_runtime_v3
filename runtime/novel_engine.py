@@ -298,9 +298,8 @@ class NovelEngine:
         # Build global chapter summaries (lightweight, no plan detail)
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        # Autonomous NPC pipeline (Profile → agendas → planner). Runs in turn
-        # memory only; the Pi planner proposes candidate agendas the Director
-        # then validates and exposes as Writer-safe visible consequences.
+        # V4: Director removed — Architect skeleton goes directly to Writer.
+        # NPC pipeline still runs but only for agenda visibility in context.
         npc_turn = self._prepare_autonomous_npc_turn(
             project,
             plan,
@@ -311,23 +310,9 @@ class NovelEngine:
             revision=revision,
         )
 
-        # Director expands the structural plan inside its own task-scoped Pi session.
-        director_guidance = self._call_director(
-            project_id,
-            plan,
-            ledger_items,
-            character_states,
-            prev_chapter_ending,
-            completed_chapters_summary=global_summaries,
-            foreshadowing_list=[
-                item for item in ledger_items if item.section == "foreshadowing"
-            ],
-            subplot_status=[
-                item for item in ledger_items if item.section == "subplot"
-            ],
-            revision=revision,
-            candidate_agendas=npc_turn.selected_agendas,
-        )
+        # Build writer packet WITHOUT director_guidance.
+        # V4: Writer gets world facts + ledger + prev ending + chapter skeleton only.
+        director_guidance = DirectorGuidance()  # V4: empty, no Director call
         packet = self._packet_builder.build(
             chapter_plan=plan,
             ledger_items=ledger_items,
@@ -339,7 +324,7 @@ class NovelEngine:
             director_guidance=director_guidance,
         )
 
-        # Single-pass 生成（不再分 beat）
+        # Single-pass 生成
         with self._writer_session(packet, revision=revision):
             text = self._generate_with_beats(
                 plan,
@@ -354,6 +339,8 @@ class NovelEngine:
             )
         if not text or not text.strip():
             raise RuntimeError("Writer returned empty output")
+
+        raw_text = text  # V4: save raw Writer output before any post-processing
 
         # Quality gate + targeted rewrite loop (no more whole-chapter re-rolls).
         # 检测 → 命中硬错误则定向改写 → 复检，最多 2 轮，仍命中则降级接受。
@@ -394,7 +381,7 @@ class NovelEngine:
 
         self._quality_pipeline.annotate_only(quality_decision)
 
-        # ── 固定执行的四删三改精修后处理 ──
+        # ── V4：仅 HARD 连续性审计 + 局部补丁 ──
         with novel_role_scope(
             registry=self._registry,
             project_id=project_id,
@@ -421,7 +408,7 @@ class NovelEngine:
             #（仍存盘，不丢弃）
             status = "rejected"
 
-        # Persist draft
+        # Persist draft — V4: save both raw_text and final_text
         draft = ChapterDraft(
             draft_id=f"draft-{plan.chapter_id}-r{revision}",
             chapter_id=plan.chapter_id,
@@ -432,6 +419,9 @@ class NovelEngine:
             quality_decision_id=quality_decision.trace_id,
             quality_annotations=tuple(quality_decision.checks),
         )
+        # V4: 附 raw text 到 annotations 方便后续对比
+        if raw_text != text:
+            draft.raw_text = raw_text
         self._registry.novel_chapter_draft_store.save(draft)
 
         self._update_ledger(

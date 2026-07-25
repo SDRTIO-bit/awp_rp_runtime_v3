@@ -815,28 +815,17 @@ D5_NARRATIVE_VOICE_SHIFT
                             revision: int = 1,
                             plot_beats: tuple[str, ...] = (),
                             write_guidance: str = "") -> str:
-        """V3 三阶段精修：HARD → DESIGN → STYLE。
+        """V4：仅 HARD 连续性审计 + 局部补丁。
 
-        硬逻辑修复与设计过载审计分开执行。
-        STYLE 失败回退到 HARD 通过版本（非原始 Writer 输出）。
-        任何阶段失败均降级保留原文，不阻塞存盘。
+        DESIGN 和 STYLE 移出热路径，改为 CLI 旁路报告工具。
         """
         if not text or not text.strip():
             return text
         text = self._strip_boilerplate(text)
         orig_len = len(text)
 
-        # ── 回路一：硬逻辑修复 ──
+        # ── HARD audit → patch → verify ──
         text = self._run_hard_loop(text, orig_len, plot_beats=plot_beats)
-        hard_passed_text = text  # baseline for STYLE rollback
-
-        # ── 回路二：设计过载审计（不自动补丁） ──
-        design_report = self._run_design_audit(text, plot_beats=plot_beats)
-        _ = design_report  # 记录但暂不触发 REGENERATE_SCENE（TODO）
-
-        # ── 回路三：AI味删除 ──
-        text = self._run_style_loop(text, orig_len, plot_beats=plot_beats,
-                                     hard_passed_text=hard_passed_text)
 
         return text.strip()
 

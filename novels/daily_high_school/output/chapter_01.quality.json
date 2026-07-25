@@ -3,7 +3,7 @@
   "chapter_id": "ch-daily-high-school-1",
   "revision": 1,
   "status": "accepted",
-  "quality_decision_id": "qd-ch-daily-high-school-1-b09e6045",
+  "quality_decision_id": "qd-ch-daily-high-school-1-df51e6bc",
   "annotations": [
     {
       "schema_id": "awp.rp.quality-issue.v1",
@@ -12,7 +12,7 @@
       "gate_name": "banned_words",
       "category": "style",
       "severity": "warning",
-      "description": "一级禁用词 '一抹' 出现 1 次",
+      "description": "一级禁用词 '些许' 出现 1 次",
       "evidence": "",
       "fixable": true,
       "fix_guidance": "替换为更具体的描写"
@@ -24,19 +24,7 @@
       "gate_name": "banned_words",
       "category": "style",
       "severity": "warning",
-      "description": "一级禁用词 '一丝' 出现 2 次",
-      "evidence": "",
-      "fixable": true,
-      "fix_guidance": "替换为更具体的描写"
-    },
-    {
-      "schema_id": "awp.rp.quality-issue.v1",
-      "schema_version": 1,
-      "issue_id": "",
-      "gate_name": "banned_words",
-      "category": "style",
-      "severity": "warning",
-      "description": "一级禁用词 '轻轻' 出现 1 次",
+      "description": "一级禁用词 '眉头微皱' 出现 1 次",
       "evidence": "",
       "fixable": true,
       "fix_guidance": "替换为更具体的描写"
@@ -60,7 +48,7 @@
       "gate_name": "banned_words",
       "category": "style",
       "severity": "warning",
-      "description": "二级禁用词 '突然' 出现 3 次（高频）",
+      "description": "一级禁用词 '一丝' 出现 2 次",
       "evidence": "",
       "fixable": true,
       "fix_guidance": "替换为更具体的描写"
@@ -69,25 +57,13 @@
       "schema_id": "awp.rp.quality-issue.v1",
       "schema_version": 1,
       "issue_id": "",
-      "gate_name": "banned_patterns",
+      "gate_name": "banned_words",
       "category": "style",
       "severity": "warning",
-      "description": "禁用句式: 不是.{1,20}，而是，匹配: ['不是那种张扬的美，而是']",
+      "description": "一级禁用词 '几分' 出现 1 次",
       "evidence": "",
       "fixable": true,
-      "fix_guidance": "拆短句或换动作"
-    },
-    {
-      "schema_id": "awp.rp.quality-issue.v1",
-      "schema_version": 1,
-      "issue_id": "",
-      "gate_name": "banned_patterns",
-      "category": "style",
-      "severity": "warning",
-      "description": "禁用句式: ，带着[一几分些]，匹配: ['，带着一']",
-      "evidence": "",
-      "fixable": true,
-      "fix_guidance": "拆短句或换动作"
+      "fix_guidance": "替换为更具体的描写"
     },
     {
       "gate_name": "plan_adherence",
