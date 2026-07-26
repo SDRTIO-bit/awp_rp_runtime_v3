@@ -28,6 +28,7 @@ test("host initializes Pi with closed project and editor tools", async () => {
   assert.equal(options.project_root, "C:/novel");
   assert.deepEqual(NOVEL_TOOL_NAMES, [
     "read", "ls", "find", "grep", "write", "edit", "bash",
+    "delegate_project_task",
     "project_status", "read_chapter", "audit_chapter",
     "read_authoring_context", "capture_author_material", "save_author_plan",
     "approve_author_plan", "execute_author_plan",

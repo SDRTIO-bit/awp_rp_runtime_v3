@@ -14,6 +14,7 @@ test("only sandboxed project and authoring tools exist", () => {
     "write",
     "edit",
     "bash",
+    "delegate_project_task",
     "project_status",
     "read_chapter",
     "audit_chapter",

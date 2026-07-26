@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { createNovelTools } from "./novel_tools.mjs";
+import { createProjectWorkerAgent } from "./novel_worker_agent.mjs";
 
 export const NOVEL_TOOL_NAMES = Object.freeze([
   "read",
@@ -24,6 +25,7 @@ export const NOVEL_TOOL_NAMES = Object.freeze([
   "write",
   "edit",
   "bash",
+  "delegate_project_task",
   "project_status",
   "read_chapter",
   "audit_chapter",
@@ -100,6 +102,21 @@ export async function createNovelAgentSession(
     throw new Error(`Pi model was not registered: ${connection.provider}/${connection.model}`);
   }
 
+  let workerActive = false;
+  const delegateProjectTask = async (args) => {
+    if (workerActive) throw new Error("a project worker is already active");
+    workerActive = true;
+    try {
+      const worker = await createProjectWorkerAgent(
+        initPayload,
+        requestPython,
+      );
+      return await worker.run(args);
+    } finally {
+      workerActive = false;
+    }
+  };
+
   return createSession({
     cwd: initPayload.project_root,
     agentDir: initPayload.session_dir,
@@ -112,7 +129,7 @@ export async function createNovelAgentSession(
     resourceLoader: createClosedResourceLoader(resourcesDir, initPayload.project_root),
     noTools: "all",
     tools: NOVEL_TOOL_NAMES,
-    customTools: createNovelTools(requestPython),
+    customTools: createNovelTools(requestPython, { delegateProjectTask }),
   });
 }
 

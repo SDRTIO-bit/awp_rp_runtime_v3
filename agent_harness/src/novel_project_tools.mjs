@@ -25,7 +25,14 @@ function rpcTool(requestPython, name, description, parameters) {
 }
 
 
-export function createNovelProjectTools(requestPython) {
+export function createNovelProjectTools(
+  requestPython,
+  {
+    delegateProjectTask = async () => {
+      throw new Error("project worker is not configured");
+    },
+  } = {},
+) {
   return [
     rpcTool(
       requestPython,
@@ -105,5 +112,26 @@ export function createNovelProjectTools(requestPython) {
         timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 30 })),
       }, strict),
     ),
+    defineTool({
+      name: "delegate_project_task",
+      label: "delegate_project_task",
+      description: "委派一个隔离的只读 Worker Agent 跨文件检索和核对，并返回带路径行号的证据。",
+      parameters: Type.Object({
+        task: Type.String({ minLength: 1, maxLength: 8000 }),
+        focus_paths: Type.Optional(
+          Type.Array(pathText, { maxItems: 20 }),
+        ),
+        max_files: Type.Optional(
+          Type.Integer({ minimum: 1, maximum: 100 }),
+        ),
+      }, strict),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const text = await delegateProjectTask(params);
+        return {
+          content: [{ type: "text", text: String(text ?? "") }],
+        };
+      },
+    }),
   ];
 }

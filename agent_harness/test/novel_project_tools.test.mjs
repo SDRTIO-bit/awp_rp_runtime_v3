@@ -13,7 +13,7 @@ test("project tool schemas expose coding names through Python RPC", async () => 
 
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ["read", "ls", "find", "grep", "write", "edit", "bash"],
+    ["read", "ls", "find", "grep", "write", "edit", "bash", "delegate_project_task"],
   );
   const read = tools.find((tool) => tool.name === "read");
   const result = await read.execute("t1", { path: "outline.md" });
