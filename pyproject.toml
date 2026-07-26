@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "awp-rp-runtime-v3"
-version = "0.1.0"
-description = "ComfyUI RP Runtime V3: Dual-Master-Agent + Controlled Dynamic Sub-Agent + Deterministic CardState + Three-Layer Memory"
+name = "awp-novel-runtime-v3"
+version = "0.2.0"
+description = "Author-led novel writing runtime with embedded Pi agents"
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0",
@@ -25,15 +25,10 @@ packages = [
     "awp_rp_runtime_v3.adapters",
     "awp_rp_runtime_v3.adapters.llm",
     "awp_rp_runtime_v3.contracts",
-    "awp_rp_runtime_v3.nodes",
-    "awp_rp_runtime_v3.policies",
     "awp_rp_runtime_v3.runtime",
     "awp_rp_runtime_v3.scripts",
-    "awp_rp_runtime_v3.services",
     "awp_rp_runtime_v3.storage",
     "awp_rp_runtime_v3.storage.sqlite",
-    "awp_rp_runtime_v3.testing",
-    "awp_rp_runtime_v3.testing.fakes",
 ]
 
 [tool.setuptools.package-dir]

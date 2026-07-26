@@ -44,6 +44,12 @@ env/
 
 # Node dependencies for the embedded Pi novel harness
 agent_harness/node_modules/
+web/node_modules/
+web/dist/
+
+# Project-local Pi conversation sessions
+novels/**/.awp/pi-sessions/
+novels/**/.awp/pi-role-sessions/
 
 # Logs and traces
 *.log
