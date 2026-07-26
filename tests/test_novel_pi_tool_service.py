@@ -1,8 +1,9 @@
 import pytest
 
 from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan
-from awp_rp_runtime_v3.contracts.novel_draft import ChapterDraft
+from awp_rp_runtime_v3.contracts.novel_authoring import AuthorChapterPlan
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.runtime.novel_authoring_service import NovelAuthoringService
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
 from awp_rp_runtime_v3.runtime.novel_pi_tool_service import NovelPiToolService
 from awp_rp_runtime_v3.storage.sqlite.database import Database
@@ -21,32 +22,71 @@ def reg(tmp_path):
     return registry
 
 
-def test_write_routes_through_streaming_engine(monkeypatch, reg):
-    calls = []
+def test_default_tool_service_cannot_bypass_author_plan(reg, tmp_path):
+    service = NovelPiToolService(reg, project_id="p1", project_dir=tmp_path)
 
+    assert "plan_chapter" not in service.ALLOWED_TOOLS
+    assert "write_chapter" not in service.ALLOWED_TOOLS
+
+
+def test_execute_author_plan_uses_compiler_then_streaming_engine(monkeypatch, reg, tmp_path):
+    calls = []
+    authoring = NovelAuthoringService(tmp_path, "p1")
+    pending = authoring.save_plan(
+        AuthorChapterPlan.model_validate(
+            {
+                "plan_id": "author-ch1",
+                "project_id": "p1",
+                "chapter_index": 1,
+                "purpose": "让人物作出选择",
+                "confirmed_events": ["人物回到教室"],
+                "scenes": [
+                    {
+                        "scene_id": "s1",
+                        "summary": "人物回到教室",
+                        "change": "人物决定留下",
+                    }
+                ],
+                "proposal_turn": 1,
+                "status": "pending_confirmation",
+            }
+        )
+    )
+    authoring.approve_plan(
+        pending.plan_id, pending.revision, 2, "m2", "这个摘要准确，确认。", "确认"
+    )
     monkeypatch.setattr(
         NovelEngine,
         "write_chapter_stream",
         lambda self, **kwargs: calls.append(kwargs)
-        or ChapterDraft(text="正文", char_count=2, status="accepted"),
+        or type("Draft", (), {"char_count": 2, "status": "accepted"})(),
     )
-
-    result = NovelPiToolService(reg, project_id="p1").execute(
-        "write_chapter", {"chapter": 1}
+    service = NovelPiToolService(
+        reg,
+        project_id="p1",
+        project_dir=tmp_path,
+        current_turn=3,
+        current_message_id="m3",
+        current_author_message="现在交给管线写第一章。",
+    )
+    result = service.execute(
+        "execute_author_plan",
+        {"plan_id": pending.plan_id, "revision": pending.revision, "confirmation_quote": "交给管线写"},
     )
 
     assert result["ok"] is True
     assert calls == [{"project_id": "p1", "chapter_index": 1, "write_guidance": ""}]
+    assert reg.novel_chapter_plan_store.load_by_index("p1", 1) is not None
 
 
-def test_audit_does_not_create_draft(monkeypatch, reg):
+def test_audit_does_not_create_draft(monkeypatch, reg, tmp_path):
     monkeypatch.setattr(
         NovelEngine,
         "audit_chapter",
         lambda self, **kwargs: {"chapter": kwargs["chapter_index"], "verdict": "accept"},
     )
 
-    result = NovelPiToolService(reg, project_id="p1").execute(
+    result = NovelPiToolService(reg, project_id="p1", project_dir=tmp_path).execute(
         "audit_chapter", {"chapter": 1}
     )
 
@@ -54,8 +94,8 @@ def test_audit_does_not_create_draft(monkeypatch, reg):
     assert reg.novel_chapter_draft_store.load_latest("ch1") is None
 
 
-def test_service_refuses_unbound_or_unapproved_tool(reg):
-    service = NovelPiToolService(reg, project_id="p1")
+def test_service_refuses_unbound_or_unapproved_tool(reg, tmp_path):
+    service = NovelPiToolService(reg, project_id="p1", project_dir=tmp_path)
 
     with pytest.raises(ValueError, match="not allowed"):
         service.execute("fetch_url", {"url": "https://example.invalid"})

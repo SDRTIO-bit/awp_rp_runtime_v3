@@ -62,6 +62,9 @@ def test_bridge_answers_tool_call_and_forwards_delta(tmp_path, reg):
 
     assert chat == ["已检查"]
     assert bridge.sent_tool_results[0]["payload"]["tool_call_id"] == "tool-1"
+    journal_files = list((tmp_path / ".awp" / "authoring" / "journal").glob("*.jsonl"))
+    assert len(journal_files) == 1
+    assert "看状态" in journal_files[0].read_text(encoding="utf-8")
 
 
 def test_bridge_rejects_malformed_host_frame(tmp_path, reg):

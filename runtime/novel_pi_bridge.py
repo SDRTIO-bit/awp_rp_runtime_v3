@@ -20,6 +20,7 @@ from ..contracts.novel_pi_protocol import (
 )
 from .novel_llm_factory import NovelLLMFactory
 from .novel_pi_tool_service import NovelPiToolService
+from .novel_authoring_service import NovelAuthoringService
 
 
 class NovelPiBridgeError(RuntimeError):
@@ -52,6 +53,10 @@ class NovelPiBridge:
         self._write_lock = threading.Lock()
         self._turn_lock = threading.Lock()
         self._active_request_id = ""
+        self._session_id = f"pi-editor-{uuid.uuid4().hex}"
+        self._turn_counter = 0
+        self._current_message_id = ""
+        self._current_author_message = ""
         self.sent_tool_results: list[dict[str, Any]] = []
         self._start()
 
@@ -61,6 +66,15 @@ class NovelPiBridge:
 
     def handle_message(self, text: str) -> str:
         with self._turn_lock:
+            self._turn_counter += 1
+            self._current_author_message = text
+            self._current_message_id = NovelAuthoringService(
+                self._project_dir, self._project_id
+            ).record_author_message(
+                text,
+                self._session_id,
+                self._turn_counter,
+            )
             request_id = uuid.uuid4().hex
             self._active_request_id = request_id
             try:
@@ -84,6 +98,8 @@ class NovelPiBridge:
                         raise NovelPiBridgeError(f"unexpected Pi frame during turn: {frame.kind}")
             finally:
                 self._active_request_id = ""
+                self._current_message_id = ""
+                self._current_author_message = ""
 
     def abort(self) -> None:
         request_id = self._active_request_id
@@ -192,7 +208,11 @@ class NovelPiBridge:
         service = NovelPiToolService(
             self._registry,
             project_id=self._project_id,
+            project_dir=self._project_dir,
             callbacks=self._callbacks,
+            current_turn=self._turn_counter,
+            current_message_id=self._current_message_id,
+            current_author_message=self._current_author_message,
         )
         try:
             result = service.execute(name, arguments)

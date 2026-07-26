@@ -19,9 +19,12 @@ import { createNovelTools } from "./novel_tools.mjs";
 export const NOVEL_TOOL_NAMES = Object.freeze([
   "project_status",
   "read_chapter",
-  "plan_chapter",
-  "write_chapter",
   "audit_chapter",
+  "read_authoring_context",
+  "capture_author_material",
+  "save_author_plan",
+  "approve_author_plan",
+  "execute_author_plan",
 ]);
 
 function createClosedResourceLoader(resourcesDir) {
