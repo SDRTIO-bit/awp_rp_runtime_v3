@@ -26,6 +26,7 @@ from .novel_document_service import (
 from .novel_planner_adapter import NovelPlannerAdapter
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_workspace_catalog import NovelWorkspaceCatalog
+from .novel_prompt_service import NovelPromptService
 
 RegistryFactory = Callable[[], SessionRuntimeStoreRegistry]
 
@@ -68,6 +69,139 @@ class NovelApiHandlers:
             workspace,
             self._workspace_catalog.registry(project_id),
         )
+
+    def _prompt_service(self, project_id: str) -> NovelPromptService:
+        if self._workspace_catalog is None:
+            raise KeyError("workspace catalog is unavailable")
+        return NovelPromptService(
+            self._workspace_catalog.require(project_id)
+        )
+
+    async def list_prompts(self, request: web.Request) -> web.Response:
+        try:
+            prompts = await asyncio.to_thread(
+                self._prompt_service(
+                    request.match_info["project_id"]
+                ).list_roles
+            )
+            return _json(
+                [item.model_dump(mode="json") for item in prompts]
+            )
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def get_prompt(self, request: web.Request) -> web.Response:
+        try:
+            prompt = await asyncio.to_thread(
+                self._prompt_service(
+                    request.match_info["project_id"]
+                ).resolve,
+                request.match_info["role"],
+            )
+            return _json(prompt.model_dump(mode="json"))
+        except ValueError as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def save_prompt(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            content = body.get("content")
+            expected = body.get("expected_revision")
+            if not isinstance(content, str) or not isinstance(expected, int):
+                raise ValueError(
+                    "content and integer expected_revision are required"
+                )
+            prompt = await asyncio.to_thread(
+                self._prompt_service(
+                    request.match_info["project_id"]
+                ).save_override,
+                request.match_info["role"],
+                content,
+                expected,
+            )
+            return _json(prompt.model_dump(mode="json"))
+        except DocumentConflictError as exc:
+            return _json(
+                {
+                    "error": str(exc),
+                    "current_revision": exc.current_revision,
+                },
+                409,
+            )
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def list_prompt_versions(
+        self, request: web.Request
+    ) -> web.Response:
+        try:
+            versions = await asyncio.to_thread(
+                self._prompt_service(
+                    request.match_info["project_id"]
+                ).list_versions,
+                request.match_info["role"],
+            )
+            return _json(
+                [item.model_dump(mode="json") for item in versions]
+            )
+        except ValueError as exc:
+            return _json({"error": str(exc)}, 400)
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def prompt_diff(self, request: web.Request) -> web.Response:
+        try:
+            raw_revision = request.query.get("revision")
+            revision = (
+                None if raw_revision in (None, "") else int(raw_revision)
+            )
+            diff = await asyncio.to_thread(
+                self._prompt_service(
+                    request.match_info["project_id"]
+                ).diff,
+                request.match_info["role"],
+                revision,
+            )
+            return _json({"diff": diff})
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def restore_prompt(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            revision = body.get("revision")
+            expected = body.get("expected_revision")
+            if (
+                not isinstance(revision, int)
+                or not isinstance(expected, int)
+            ):
+                raise ValueError(
+                    "revision and expected_revision must be integers"
+                )
+            prompt = await asyncio.to_thread(
+                self._prompt_service(
+                    request.match_info["project_id"]
+                ).restore,
+                request.match_info["role"],
+                revision,
+                expected,
+            )
+            return _json(prompt.model_dump(mode="json"))
+        except DocumentConflictError as exc:
+            return _json(
+                {"error": str(exc), "current_revision": exc.current_revision},
+                409,
+            )
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
 
     async def get_document(self, request: web.Request) -> web.Response:
         try:
@@ -458,6 +592,30 @@ def register_novel_routes(
     app.router.add_get(prefix, handlers.list_projects)
     app.router.add_post(prefix, handlers.create_project)
     app.router.add_post(f"{prefix}/plan", handlers.plan_from_concept)
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/prompts",
+        handlers.list_prompts,
+    )
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/prompts/{{role}}/versions",
+        handlers.list_prompt_versions,
+    )
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/prompts/{{role}}/diff",
+        handlers.prompt_diff,
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/prompts/{{role}}/restore",
+        handlers.restore_prompt,
+    )
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/prompts/{{role}}",
+        handlers.get_prompt,
+    )
+    app.router.add_put(
+        f"{prefix}/{{project_id}}/prompts/{{role}}",
+        handlers.save_prompt,
+    )
     app.router.add_get(
         f"{prefix}/{{project_id}}/documents/{{kind}}/versions/{{revision}}",
         handlers.get_document_version,

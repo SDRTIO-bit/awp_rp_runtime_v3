@@ -27,8 +27,14 @@ export const NOVEL_TOOL_NAMES = Object.freeze([
   "execute_author_plan",
 ]);
 
-function createClosedResourceLoader(resourcesDir) {
-  const systemPrompt = fs.readFileSync(path.join(resourcesDir, "system-prompt.md"), "utf8");
+function createClosedResourceLoader(resourcesDir, projectRoot) {
+  const projectOverride = path.join(projectRoot, ".awp", "prompts", "editor.md");
+  const systemPrompt = fs.readFileSync(
+    fs.existsSync(projectOverride)
+      ? projectOverride
+      : path.join(resourcesDir, "system-prompt.md"),
+    "utf8",
+  );
   const skillsDir = path.join(resourcesDir, "skills");
   const skills = fs.readdirSync(skillsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -96,7 +102,7 @@ export async function createNovelAgentSession(
     modelRegistry,
     settingsManager: SettingsManager.inMemory(),
     sessionManager: SessionManager.continueRecent(initPayload.project_root, initPayload.session_dir),
-    resourceLoader: createClosedResourceLoader(resourcesDir),
+    resourceLoader: createClosedResourceLoader(resourcesDir, initPayload.project_root),
     noTools: "all",
     tools: NOVEL_TOOL_NAMES,
     customTools: createNovelTools(requestPython),

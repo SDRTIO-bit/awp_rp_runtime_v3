@@ -17,6 +17,7 @@ from .novel_brain import BrainCallbacks
 from .novel_conversation_store import NovelConversationStore
 from .novel_authoring_service import NovelAuthoringService
 from .novel_pi_tool_service import NovelPiToolService
+from .novel_prompt_service import NovelPromptService
 from .novel_trace import NovelPipelineCancelled, NovelStreamCallbacks
 from .novel_workspace_catalog import NovelWorkspaceCatalog
 
@@ -330,6 +331,16 @@ class EditorSessionManager:
                 ),
                 should_cancel=session.action_cancel.is_set,
             )
+            prompt_snapshot_id = ""
+            if action == "execute_plan":
+                prompt_snapshot_id = NovelPromptService(workspace).snapshot(
+                    {
+                        "writer",
+                        "continuity_checker",
+                        "style_cleaner",
+                        "ledger_curator",
+                    }
+                ).snapshot_id
 
             def execute_action() -> dict[str, object]:
                 service = NovelPiToolService(
@@ -340,6 +351,7 @@ class EditorSessionManager:
                     current_turn=turn,
                     current_message_id=message_id,
                     current_author_message=author_text,
+                    prompt_snapshot_id=prompt_snapshot_id,
                 )
                 return service.execute(
                     tool_name,

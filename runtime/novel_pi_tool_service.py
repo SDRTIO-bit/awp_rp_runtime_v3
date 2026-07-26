@@ -42,6 +42,7 @@ class NovelPiToolService:
         current_turn: int = 0,
         current_message_id: str = "",
         current_author_message: str = "",
+        prompt_snapshot_id: str = "",
     ):
         self._registry = registry
         self._project_id = project_id
@@ -50,6 +51,7 @@ class NovelPiToolService:
         self._current_turn = current_turn
         self._current_message_id = current_message_id
         self._current_author_message = current_author_message
+        self._prompt_snapshot_id = prompt_snapshot_id
 
     def execute(self, name: str, args: dict[str, Any]) -> dict[str, object]:
         if name not in self.ALLOWED_TOOLS:
@@ -210,6 +212,7 @@ class NovelPiToolService:
         callbacks = self._callbacks
         return NovelEngine(
             self._registry,
+            prompt_snapshot_id=self._prompt_snapshot_id,
             callbacks=NovelStreamCallbacks(
                 on_phase=getattr(callbacks, "on_phase", None),
                 on_beat=getattr(callbacks, "on_beat", None),

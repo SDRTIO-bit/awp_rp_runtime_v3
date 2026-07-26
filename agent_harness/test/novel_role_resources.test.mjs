@@ -54,3 +54,18 @@ test("loader rejects unknown role", () => {
   );
 });
 
+test("loader uses a project prompt override without changing built-in resources", () => {
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awp-role-prompt-"));
+  try {
+    const override = path.join(projectRoot, ".awp", "prompts", "writer.md");
+    fs.mkdirSync(path.dirname(override), { recursive: true });
+    fs.writeFileSync(override, "Project Writer with AUTHOR-APPROVED contract.");
+
+    const loader = createRoleResourceLoader("writer", resourcesRoot, projectRoot);
+
+    assert.equal(loader.getSystemPrompt(), "Project Writer with AUTHOR-APPROVED contract.");
+  } finally {
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+

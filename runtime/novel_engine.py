@@ -78,14 +78,20 @@ class NovelEngine:
             return plan
         return replace(plan, scene_beats=beats)
 
-    def __init__(self, registry: SessionRuntimeStoreRegistry, profile: str = "production",
-                 callbacks: NovelStreamCallbacks | None = None):
+    def __init__(
+        self,
+        registry: SessionRuntimeStoreRegistry,
+        profile: str = "production",
+        callbacks: NovelStreamCallbacks | None = None,
+        prompt_snapshot_id: str = "",
+    ):
         self._registry = registry
         self._profile = profile
         self._packet_builder = NovelWritePacketBuilder(registry)
         self._quality_pipeline = NovelQualityPipeline(registry)
         self._mechanical_gate = NovelMechanicalGate(registry)
         self._callbacks = callbacks or NovelStreamCallbacks()
+        self._prompt_snapshot_id = prompt_snapshot_id
         # Autonomous-NPC plumbing (profile compiler + agenda lifecycle + Pi planner).
         self._profile_compiler = NovelProfileCompiler()
         self._agenda_service = NpcAgendaService()
@@ -425,6 +431,7 @@ class NovelEngine:
             raw_text=raw_text if raw_text != text else "",
             char_count=len(text),
             status=status,
+            prompt_snapshot_id=self._prompt_snapshot_id,
             quality_decision_id=quality_decision.trace_id,
             quality_annotations=tuple(quality_decision.checks),
         )

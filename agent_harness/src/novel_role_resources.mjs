@@ -43,7 +43,11 @@ export function createRoleResourceLoader(role, resourcesRoot, projectRoot) {
   if (!fs.existsSync(systemPromptPath)) {
     throw new Error(`missing Pi role system prompt: ${role}`);
   }
-  const systemPrompt = fs.readFileSync(systemPromptPath, "utf8");
+  const projectOverride = path.join(projectRoot, ".awp", "prompts", `${role}.md`);
+  const systemPrompt = fs.readFileSync(
+    fs.existsSync(projectOverride) ? projectOverride : systemPromptPath,
+    "utf8",
+  );
   const builtInSkills = loadSkills(path.join(roleRoot, "skills"), `awp-role:${role}`);
   const projectSkills = loadSkills(
     path.join(projectRoot, "agent", "skills"),

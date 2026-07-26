@@ -27,6 +27,7 @@ class ChapterDraft:
     char_count: int = 0
     status: str = "draft"       # draft / accepted / rejected / superseded
     source: str = "writer"
+    prompt_snapshot_id: str = ""
     quality_decision_id: str = ""
     quality_annotations: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     created_at: str = ""
@@ -44,6 +45,7 @@ class ChapterDraft:
             "char_count": self.char_count,
             "status": self.status,
             "source": self.source,
+            "prompt_snapshot_id": self.prompt_snapshot_id,
             "quality_decision_id": self.quality_decision_id,
             "quality_annotations": list(self.quality_annotations),
             "created_at": self.created_at,
@@ -63,6 +65,7 @@ class ChapterDraft:
             char_count=data.get("char_count", 0),
             status=data.get("status", "draft"),
             source=data.get("source", "writer"),
+            prompt_snapshot_id=data.get("prompt_snapshot_id", ""),
             quality_decision_id=data.get("quality_decision_id", ""),
             quality_annotations=tuple(data.get("quality_annotations", []) or []),
             created_at=data.get("created_at", ""),

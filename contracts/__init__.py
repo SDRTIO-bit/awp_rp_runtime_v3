@@ -14,6 +14,12 @@ from .novel_authoring import (
 )
 from .novel_web_event import NovelRoomId, NovelWebEvent
 from .novel_document import NovelDocumentKind, NovelDocumentVersion
+from .novel_prompt_version import (
+    NovelPromptSnapshot,
+    NovelPromptVersion,
+    PromptRole,
+    ResolvedPrompt,
+)
 
 __all__ = [
     "AuthorApproval",
@@ -26,4 +32,8 @@ __all__ = [
     "NovelWebEvent",
     "NovelDocumentKind",
     "NovelDocumentVersion",
+    "NovelPromptSnapshot",
+    "NovelPromptVersion",
+    "PromptRole",
+    "ResolvedPrompt",
 ]
