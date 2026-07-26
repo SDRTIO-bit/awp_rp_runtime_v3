@@ -21,7 +21,7 @@ from ..contracts.memory_commit_plan import (
 from ..contracts.quality_decision import QualityDecision
 from ..contracts.active_memory import ActiveMemoryStatus
 from ..contracts.memory_retention_decision import MemoryRetentionResult
-from ..policies.memory_policy import MemoryPolicy
+from .novel_memory_policy import MemoryPolicy
 from ..storage.interfaces import ActiveMemoryStore, RetentionDecisionStore
 
 

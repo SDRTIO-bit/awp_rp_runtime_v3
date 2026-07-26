@@ -15,7 +15,7 @@ from ..contracts.memory_commit_plan import (
 )
 from ..contracts.quality_decision import QualityDecision
 from ..contracts.rag_memory import RagMemoryScope
-from ..policies.memory_policy import MemoryPolicy
+from .novel_memory_policy import MemoryPolicy
 from ..storage.interfaces import RagMemoryStore
 
 

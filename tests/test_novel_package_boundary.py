@@ -48,3 +48,31 @@ def test_setuptools_excludes_retired_rp_packages() -> None:
         "awp_rp_runtime_v3.testing",
     ):
         assert f'"{retired}"' not in text
+
+
+def test_retired_rp_source_trees_are_absent() -> None:
+    for retired in ("nodes", "policies", "services", "testing", "workflows"):
+        root = PROJECT_ROOT / retired
+        assert not root.exists() or not any(root.rglob("*.py"))
+
+
+def test_novel_product_source_has_no_retired_rp_imports() -> None:
+    forbidden = (
+        "awp_rp_runtime_v3.nodes",
+        "awp_rp_runtime_v3.policies",
+        "awp_rp_runtime_v3.services",
+        "awp_rp_runtime_v3.testing",
+        "runtime.persistent_turn_engine",
+        "runtime.execution_dispatcher",
+        "runtime.management_api",
+    )
+    roots = (
+        PROJECT_ROOT / "runtime",
+        PROJECT_ROOT / "contracts",
+        PROJECT_ROOT / "scripts",
+    )
+
+    for root in roots:
+        for path in root.glob("novel_*.py"):
+            text = path.read_text(encoding="utf-8")
+            assert not any(name in text for name in forbidden), path

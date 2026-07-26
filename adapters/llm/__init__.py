@@ -1,7 +1,7 @@
-"""LLM adapters for RP Runtime V2."""
+"""LLM provider adapters used by the novel pipeline."""
 
 from .base import BaseLlmAdapter
-from .fake import FakeLlmAdapter
-from .provider_config import ProviderConfig
+from .deepseek_adapter import DeepSeekAdapter
+from .openai_compatible import OpenAICompatibleAdapter
 
-__all__ = ["BaseLlmAdapter", "FakeLlmAdapter", "ProviderConfig"]
+__all__ = ["BaseLlmAdapter", "DeepSeekAdapter", "OpenAICompatibleAdapter"]
