@@ -12,6 +12,7 @@ from ..contracts.novel_authoring import AuthorChapterPlan
 from .novel_author_plan_compiler import AuthorPlanCompiler
 from .novel_authoring_service import NovelAuthoringService
 from .novel_engine import NovelEngine
+from .novel_project_sandbox import NovelProjectSandbox
 from .novel_trace import NovelStreamCallbacks
 
 
@@ -20,6 +21,13 @@ class NovelPiToolService:
 
     ALLOWED_TOOLS = frozenset(
         {
+            "read",
+            "ls",
+            "find",
+            "grep",
+            "write",
+            "edit",
+            "bash",
             "project_status",
             "read_chapter",
             "audit_chapter",
@@ -48,6 +56,7 @@ class NovelPiToolService:
         self._project_id = project_id
         self._callbacks = callbacks
         self._authoring = NovelAuthoringService(project_dir, project_id)
+        self._project_sandbox = NovelProjectSandbox(project_dir)
         self._current_turn = current_turn
         self._current_message_id = current_message_id
         self._current_author_message = current_author_message
@@ -56,6 +65,8 @@ class NovelPiToolService:
     def execute(self, name: str, args: dict[str, Any]) -> dict[str, object]:
         if name not in self.ALLOWED_TOOLS:
             raise ValueError(f"Pi tool is not allowed: {name}")
+        if name in {"read", "ls", "find", "grep", "write", "edit", "bash"}:
+            return self._execute_project_tool(name, args)
         if name == "project_status":
             return {"ok": True, "content": self._status()}
         if name == "read_authoring_context":
@@ -130,6 +141,64 @@ class NovelPiToolService:
             chapter_index=chapter,
         )
         return {"ok": True, "content": json.dumps(report, ensure_ascii=False)}
+
+    def _execute_project_tool(
+        self, name: str, args: dict[str, Any]
+    ) -> dict[str, object]:
+        request = self._project_sandbox.classify(name, args)
+        self._notify_tool(
+            {
+                "status": "checking",
+                **request.model_dump(mode="json"),
+            }
+        )
+        if request.risk == "hard_deny":
+            self._notify_tool(
+                {
+                    "status": "denied",
+                    **request.model_dump(mode="json"),
+                }
+            )
+            raise ValueError(request.reason)
+        if request.risk == "important":
+            approval = getattr(
+                self._callbacks, "request_tool_approval", None
+            )
+            decision = (
+                approval(request.model_dump(mode="json"))
+                if callable(approval)
+                else "deny"
+            )
+            if decision != "allow":
+                self._notify_tool(
+                    {
+                        "status": "denied",
+                        **request.model_dump(mode="json"),
+                    }
+                )
+                raise ValueError("tool call denied by author approval policy")
+        self._notify_tool(
+            {
+                "status": "running",
+                **request.model_dump(mode="json"),
+            }
+        )
+        if name in {"read", "ls", "find", "grep"}:
+            content = self._project_sandbox.execute_read(name, args)
+        else:
+            content = self._project_sandbox.execute_write(name, args)
+        self._notify_tool(
+            {
+                "status": "completed",
+                **request.model_dump(mode="json"),
+            }
+        )
+        return {"ok": True, "content": content}
+
+    def _notify_tool(self, payload: dict[str, Any]) -> None:
+        callback = getattr(self._callbacks, "on_tool_event", None)
+        if callable(callback):
+            callback(payload)
 
     def _execute_author_plan(self, args: dict[str, Any]) -> dict[str, object]:
         self._require_turn_context()

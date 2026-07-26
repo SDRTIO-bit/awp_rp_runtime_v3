@@ -99,3 +99,48 @@ def test_service_refuses_unbound_or_unapproved_tool(reg, tmp_path):
 
     with pytest.raises(ValueError, match="not allowed"):
         service.execute("fetch_url", {"url": "https://example.invalid"})
+
+
+def test_coding_tools_route_through_project_sandbox(reg, tmp_path):
+    (tmp_path / "outline.md").write_text("第一章", encoding="utf-8")
+    service = NovelPiToolService(reg, project_id="p1", project_dir=tmp_path)
+
+    read = service.execute("read", {"path": "outline.md"})
+    written = service.execute(
+        "write", {"path": "notes/editor.md", "content": "需要核对时间线"}
+    )
+
+    assert read["ok"] is True
+    assert "第一章" in read["content"]
+    assert written["ok"] is True
+    assert (tmp_path / "notes" / "editor.md").read_text(
+        encoding="utf-8"
+    ) == "需要核对时间线"
+
+
+def test_important_project_write_requires_approval_callback(reg, tmp_path):
+    requested = []
+    callbacks = type(
+        "Callbacks",
+        (),
+        {
+            "request_tool_approval": lambda self, payload: (
+                requested.append(payload) or "deny"
+            )
+        },
+    )()
+    service = NovelPiToolService(
+        reg,
+        project_id="p1",
+        project_dir=tmp_path,
+        callbacks=callbacks,
+    )
+
+    with pytest.raises(ValueError, match="denied"):
+        service.execute(
+            "write",
+            {"path": "output/chapter_02.md", "content": "不应写入"},
+        )
+
+    assert requested[0]["tool"] == "write"
+    assert not (tmp_path / "output" / "chapter_02.md").exists()

@@ -17,6 +17,13 @@ import {
 import { createNovelTools } from "./novel_tools.mjs";
 
 export const NOVEL_TOOL_NAMES = Object.freeze([
+  "read",
+  "ls",
+  "find",
+  "grep",
+  "write",
+  "edit",
+  "bash",
   "project_status",
   "read_chapter",
   "audit_chapter",

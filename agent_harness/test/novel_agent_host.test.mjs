@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { createNovelAgentSession, NOVEL_TOOL_NAMES, NovelAgentHost } from "../src/novel_agent_host.mjs";
 
-test("host initializes Pi with no builtins and only editor tools", async () => {
+test("host initializes Pi with closed project and editor tools", async () => {
   let options;
   const frames = [];
   const fakeSession = {
@@ -27,6 +27,7 @@ test("host initializes Pi with no builtins and only editor tools", async () => {
 
   assert.equal(options.project_root, "C:/novel");
   assert.deepEqual(NOVEL_TOOL_NAMES, [
+    "read", "ls", "find", "grep", "write", "edit", "bash",
     "project_status", "read_chapter", "audit_chapter",
     "read_authoring_context", "capture_author_material", "save_author_plan",
     "approve_author_plan", "execute_author_plan",

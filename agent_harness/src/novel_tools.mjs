@@ -1,6 +1,8 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
+import { createNovelProjectTools } from "./novel_project_tools.mjs";
+
 const strict = { additionalProperties: false };
 const shortText = Type.String({ minLength: 1, maxLength: 4000 });
 const textList = Type.Array(shortText, { maxItems: 100 });
@@ -73,6 +75,7 @@ function createRpcTool(requestPython, name, description, parameters) {
 
 export function createNovelTools(requestPython) {
   return [
+    ...createNovelProjectTools(requestPython),
     createRpcTool(requestPython, "project_status", "读取当前小说项目状态。", Type.Object({}, strict)),
     createRpcTool(requestPython, "read_chapter", "读取当前项目中已生成的一章。", chapterParameters),
     createRpcTool(requestPython, "audit_chapter", "只读审计当前项目中已生成的一章。", chapterParameters),
