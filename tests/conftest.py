@@ -13,6 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT.parent))
 
 from awp_rp_runtime_v3.contracts.novel_pi_role_protocol import NovelPiRoleResult
+from awp_rp_runtime_v3.runtime.novel_mechanical_gate import NovelMechanicalGate
 from awp_rp_runtime_v3.runtime.novel_role_runtime import novel_role_runtime_override
 
 
@@ -111,7 +112,12 @@ class DeterministicNovelRoleRuntime:
 
 
 @pytest.fixture
-def fake_novel_role_runtime():
+def fake_novel_role_runtime(monkeypatch):
     runtime = DeterministicNovelRoleRuntime()
+    monkeypatch.setattr(
+        NovelMechanicalGate,
+        "_call_llm_json",
+        lambda self, *args, **kwargs: None,
+    )
     with novel_role_runtime_override(runtime):
         yield runtime

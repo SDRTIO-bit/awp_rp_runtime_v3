@@ -81,3 +81,37 @@ def test_bridge_rejects_malformed_host_frame(tmp_path, reg):
             bridge.handle_message("看状态")
     finally:
         bridge.close()
+
+
+def test_bridge_turn_sequence_survives_process_restart(tmp_path, reg):
+    host = _write_host(tmp_path)
+    first = NovelPiBridge(
+        reg,
+        BrainCallbacks(),
+        project_dir=tmp_path,
+        project_id="p1",
+        host_command=[sys.executable, str(host)],
+    )
+    try:
+        first.handle_message("第一轮")
+    finally:
+        first.close()
+
+    second = NovelPiBridge(
+        reg,
+        BrainCallbacks(),
+        project_dir=tmp_path,
+        project_id="p1",
+        host_command=[sys.executable, str(host)],
+    )
+    try:
+        second.handle_message("重启后的第二轮")
+    finally:
+        second.close()
+
+    journal = next((tmp_path / ".awp" / "authoring" / "journal").glob("*.jsonl"))
+    turns = [
+        json.loads(line)["turn"]
+        for line in journal.read_text(encoding="utf-8").splitlines()
+    ]
+    assert turns == [1, 2]

@@ -46,6 +46,7 @@ env/
 agent_harness/node_modules/
 web/node_modules/
 web/dist/
+*.tsbuildinfo
 
 # Project-local Pi conversation sessions
 novels/**/.awp/pi-sessions/

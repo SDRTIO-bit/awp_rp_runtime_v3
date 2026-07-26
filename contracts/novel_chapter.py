@@ -236,6 +236,9 @@ class ChapterPlan:
     scene_beats: tuple[BeatDetail, ...] = ()
     ending_design: EndingDesign = field(default_factory=EndingDesign)
     cost_and_reward: str = ""
+    author_plan_id: str = ""
+    author_plan_revision: int = 0
+    author_plan_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -257,6 +260,9 @@ class ChapterPlan:
             "scene_beats": [b.to_dict() for b in self.scene_beats],
             "ending_design": self.ending_design.to_dict(),
             "cost_and_reward": self.cost_and_reward,
+            "author_plan_id": self.author_plan_id,
+            "author_plan_revision": self.author_plan_revision,
+            "author_plan_hash": self.author_plan_hash,
         }
 
     @staticmethod
@@ -350,4 +356,7 @@ class ChapterPlan:
             scene_beats=tuple(BeatDetail.from_dict(b) for b in sb_raw),
             ending_design=EndingDesign.from_dict(ending_design_raw),
             cost_and_reward=data.get("cost_and_reward", "") or "",
+            author_plan_id=str(data.get("author_plan_id", "") or ""),
+            author_plan_revision=int(data.get("author_plan_revision", 0) or 0),
+            author_plan_hash=str(data.get("author_plan_hash", "") or ""),
         )

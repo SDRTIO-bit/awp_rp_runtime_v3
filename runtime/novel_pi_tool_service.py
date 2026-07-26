@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -140,6 +141,7 @@ class NovelPiToolService:
             self._current_author_message,
             confirmation_quote,
         )
+        self._bind_project_root()
         chapter = AuthorPlanCompiler().compile_and_save(plan, self._registry)
         draft = self._engine().write_chapter_stream(
             project_id=self._project_id,
@@ -161,6 +163,23 @@ class NovelPiToolService:
                 f"{draft.char_count}字，{draft.status}"
             ),
         }
+
+    def _bind_project_root(self) -> None:
+        """Bind Writer provenance lookup to this already project-scoped service."""
+
+        project = self._registry.novel_project_store.load(self._project_id)
+        if project is None:
+            raise ValueError(f"Project not found: {self._project_id}")
+        config = dict(getattr(project, "config", {}) or {})
+        expected = self._authoring.project_root
+        configured = str(config.get("novel_dir", "") or "")
+        if configured and Path(configured).resolve() != expected:
+            raise ValueError("project root does not match the authoring workspace")
+        if not configured:
+            config["novel_dir"] = str(expected)
+            self._registry.novel_project_store.update(
+                replace(project, config=config)
+            )
 
     def _require_turn_context(self) -> None:
         if (

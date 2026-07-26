@@ -48,6 +48,9 @@ def _approved_plan() -> AuthorChapterPlan:
 def test_compiler_preserves_scene_order_and_language():
     chapter = AuthorPlanCompiler().compile(_approved_plan())
 
+    assert chapter.author_plan_id == "author-ch3"
+    assert chapter.author_plan_revision == 1
+    assert chapter.author_plan_hash == "abc"
     assert [beat.description for beat in chapter.scene_beats] == [
         "她返回空教室；变化：她决定交出钥匙",
         "他拒绝追问；变化：两人暂时合作",

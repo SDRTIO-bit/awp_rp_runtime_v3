@@ -1,7 +1,4 @@
-"""NovelEngine — Novel chapter generation engine.
-
-Independent from PersistentTurnEngine, shares infrastructure (LLM adapters, storage, contracts).
-"""
+"""NovelEngine — novel chapter generation engine."""
 
 from __future__ import annotations
 
@@ -65,21 +62,7 @@ class AutonomousNpcTurn:
 
 
 class NovelEngine:
-    """小说章节生成引擎。独立于 PersistentTurnEngine，共享底层基础设施。
-
-    共享的基础设施：
-    - SessionRuntimeStoreRegistry（存储层）
-    - RuntimeStoreFactory（工厂）
-    - DeepSeekAdapter（LLM 调用）
-    - ModelProfileRegistry（profile 管理）
-    - QualityIssue / QualityDecision（质量契约）
-
-    不共享的：
-    - PersistentTurnEngine（RP 专用单体引擎）
-    - QualityPipelineRuntime（RP 专用门控逻辑）
-    - WriterInputBundleV2Builder（RP 专用 bundle 构建）
-    - SubAgentLLMRunner（RP 的 thinking 被硬编码禁用）
-    """
+    """小说章节生成主引擎。"""
 
     @staticmethod
     def _normalize_plan_beats(plan: ChapterPlan) -> ChapterPlan:
@@ -311,14 +294,19 @@ class NovelEngine:
 
         # V4: Director removed — Architect skeleton goes directly to Writer.
         # NPC pipeline still runs but only for agenda visibility in context.
-        npc_turn = self._prepare_autonomous_npc_turn(
-            project,
-            plan,
-            ledger_items,
-            characters,
-            history=global_summaries,
-            previous_ending=prev_chapter_ending,
-            revision=revision,
+        author_led = self._packet_builder.has_approved_author_plan(plan)
+        npc_turn = (
+            AutonomousNpcTurn()
+            if author_led
+            else self._prepare_autonomous_npc_turn(
+                project,
+                plan,
+                ledger_items,
+                characters,
+                history=global_summaries,
+                previous_ending=prev_chapter_ending,
+                revision=revision,
+            )
         )
 
         # Build writer packet WITHOUT director_guidance.
@@ -412,14 +400,12 @@ class NovelEngine:
             chapter_id=plan.chapter_id,
             revision=revision,
             text=text,
+            raw_text=raw_text if raw_text != text else "",
             char_count=len(text),
             status=status,
             quality_decision_id=quality_decision.trace_id,
             quality_annotations=tuple(quality_decision.checks),
         )
-        # V4: 附 raw text 到 annotations 方便后续对比
-        if raw_text != text:
-            draft.raw_text = raw_text
         self._registry.novel_chapter_draft_store.save(draft)
 
         self._update_ledger(
@@ -973,39 +959,48 @@ class NovelEngine:
 
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
-        npc_turn = self._prepare_autonomous_npc_turn(
-            project,
-            plan,
-            ledger_items,
-            characters,
-            history=global_summaries,
-            previous_ending=prev_chapter_ending,
-            revision=revision,
+        author_led = self._packet_builder.has_approved_author_plan(plan)
+        npc_turn = (
+            AutonomousNpcTurn()
+            if author_led
+            else self._prepare_autonomous_npc_turn(
+                project,
+                plan,
+                ledger_items,
+                characters,
+                history=global_summaries,
+                previous_ending=prev_chapter_ending,
+                revision=revision,
+            )
         )
 
         # Phase: director — separate task-scoped Pi Agent Session.
         self._safe_on_phase("start", "director", {"ch": chapter_index})
         director_started = time.time()
-        director_guidance = self._call_director(
-            project_id,
-            plan,
-            ledger_items,
-            character_states,
-            prev_chapter_ending,
-            completed_chapters_summary=global_summaries,
-            foreshadowing_list=[
-                item for item in ledger_items if item.section == "foreshadowing"
-            ],
-            subplot_status=[
-                item for item in ledger_items if item.section == "subplot"
-            ],
-            revision=revision,
-            candidate_agendas=npc_turn.selected_agendas,
-        )
+        if author_led:
+            director_guidance = DirectorGuidance()
+        else:
+            director_guidance = self._call_director(
+                project_id,
+                plan,
+                ledger_items,
+                character_states,
+                prev_chapter_ending,
+                completed_chapters_summary=global_summaries,
+                foreshadowing_list=[
+                    item for item in ledger_items if item.section == "foreshadowing"
+                ],
+                subplot_status=[
+                    item for item in ledger_items if item.section == "subplot"
+                ],
+                revision=revision,
+                candidate_agendas=npc_turn.selected_agendas,
+            )
         self._safe_on_phase("end", "director", {
             "ch": chapter_index,
             "duration_ms": int((time.time() - director_started) * 1000),
             "beats": len(director_guidance.beat_details),
+            "skipped": author_led,
         })
 
         packet = self._packet_builder.build(

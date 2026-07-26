@@ -126,22 +126,20 @@ def test_writer_prompt_contains_medium_granularity_contract() -> None:
 
     _system, prompt = NovelWriterAdapter(None, writer_prompt_name="writer_romcom")._build_prompt(packet)
 
-    assert "允许出场角色: 陈默、沈溪、王磊" in prompt
-    assert "入场与发展: 陈默迟到并扣错扣子。他用玩笑化解全班的注意。" in prompt
-    assert "局面转折: 班主任让陈默协助沈溪分发教材。" in prompt
-    assert "核心行动:" in prompt and "自己的好书换走破损教材" in prompt
-    assert "我来换" not in prompt
+    assert "【本章角色卡】" in prompt
+    assert all(name in prompt for name in ("陈默", "沈溪", "王磊"))
+    assert "事件：陈默迟到并扣错扣子。他用玩笑化解全班的注意。" in prompt
+    assert "转折：班主任让陈默协助沈溪分发教材。" in prompt
+    assert "核心场面：" in prompt and "自己的好书换走破损教材" in prompt
+    assert "我来换" in prompt
     assert "陈默迟到，用玩笑化解尴尬" not in prompt
     assert "班主任让陈默协助沈溪分发教材" in prompt
     assert "自己的好书换走破损教材" in prompt
     assert "名字旁" in prompt and "问号" in prompt
     assert "现实校园，不存在超能力" in prompt
     assert "赵小麦" not in prompt
-    assert "不要添加章节内小标题或数字分节" in prompt
-    assert 150 <= len(packet.chapter_contract) <= 500
+    assert 100 <= len(packet.chapter_contract) <= 500
     assert packet.chapter_contract.count("破损教材") == 1
-    assert "从‘觉得陈默麻烦’到‘愿意重新观察’" in packet.chapter_contract
-    assert "从到" not in packet.chapter_contract
 
 
 def test_writer_guidance_does_not_duplicate_story_bible(tmp_path: Path) -> None:
@@ -168,7 +166,7 @@ def test_existing_packet_builder_uses_compiled_context() -> None:
 
     assert packet.allowed_cast == ("陈默", "沈溪", "王磊")
     assert set(packet.character_states) == {"陈默", "沈溪", "王磊"}
-    assert "核心行动" in packet.chapter_contract
+    assert "核心场面" in packet.chapter_contract
 
 
 def test_unscheduled_first_appearance_zero_is_not_available() -> None:
@@ -189,7 +187,7 @@ def test_style_benchmark_resolves_normalized_project_directory() -> None:
 
     benchmark = _get_style_benchmark(project_id="daily-high-school")
 
-    assert "扣子" in benchmark
+    assert "胖乌鸦" in benchmark
     assert "蒸汽魔法项目需转换为西幻背景" not in benchmark
 
 

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import json
-import sys
 from dataclasses import replace
-from types import SimpleNamespace
 
 import pytest
 
@@ -13,29 +10,9 @@ from awp_rp_runtime_v3.contracts.novel_character import NovelCharacter
 from awp_rp_runtime_v3.contracts.novel_ledger import LedgerItem
 from awp_rp_runtime_v3.contracts.novel_npc_agenda import NpcAgenda, VisibleConsequence
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
+from awp_rp_runtime_v3.runtime.novel_api import NovelApiHandlers
 from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from awp_rp_runtime_v3.storage.sqlite.database import Database
-
-
-class _Routes:
-    def __init__(self) -> None:
-        self.handlers = {}
-
-    def get(self, path):
-        return self._register("GET", path)
-
-    def post(self, path):
-        return self._register("POST", path)
-
-    def delete(self, path):
-        return self._register("DELETE", path)
-
-    def _register(self, method, path):
-        def deco(func):
-            self.handlers[(method, path)] = func
-            return func
-
-        return deco
 
 
 class _Request:
@@ -46,20 +23,6 @@ class _Request:
 
     async def json(self):
         return self._body
-
-
-def _load_api(monkeypatch):
-    routes = _Routes()
-    fake_server = SimpleNamespace(
-        PromptServer=SimpleNamespace(instance=SimpleNamespace(routes=routes))
-    )
-    monkeypatch.setitem(sys.modules, "server", fake_server)
-    module_name = "awp_rp_runtime_v3.runtime.management_api"
-    if module_name in sys.modules:
-        module = importlib.reload(sys.modules[module_name])
-    else:
-        module = importlib.import_module(module_name)
-    return module, routes
 
 
 def _registry(tmp_path):
@@ -160,14 +123,30 @@ def _hash(text: str) -> str:
 
 
 @pytest.fixture
-def autonomy_setup(tmp_path, monkeypatch):
-    module, routes = _load_api(monkeypatch)
+def autonomy_setup(tmp_path):
     reg = _registry(tmp_path)
     pid = _project_id()
     _make_project(reg, pid)
     char = _make_character(reg, pid, "char-1", "沈砚")
-    monkeypatch.setattr(module, "_factory", lambda: SimpleNamespace(registry=reg))
-    return module, routes, reg, pid, char
+    api = NovelApiHandlers(lambda: reg)
+    routes = type(
+        "Routes",
+        (),
+        {
+            "handlers": {
+                (
+                    "GET",
+                    "/awp/api/v1/novels/{project_id}/autonomy-summary",
+                ): api.autonomy_summary,
+                (
+                    "POST",
+                    "/awp/api/v1/novels/{project_id}/characters/"
+                    "{character_id}/state-promotions",
+                ): api.promote_character_state,
+            }
+        },
+    )()
+    return api, routes, reg, pid, char
 
 
 def test_autonomy_summary_counts_active_and_stale(autonomy_setup):

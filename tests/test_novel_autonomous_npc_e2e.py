@@ -199,7 +199,9 @@ def _ledger_count(reg, section: str) -> int:
     return len(reg.novel_ledger_store.list_by_project("p1", section))
 
 
-def test_two_chapter_chain_uses_profile_and_recovers_consequence(reg, engine):
+def test_two_chapter_nonstreaming_chain_stages_agendas_without_private_leakage(
+    reg, engine, fake_novel_role_runtime
+):
     _setup_two_chapter_project(reg)
 
     runtime = OrderedRoleRuntime()
@@ -216,20 +218,19 @@ def test_two_chapter_chain_uses_profile_and_recovers_consequence(reg, engine):
     assert first.status == "accepted"
     assert second.status == "accepted"
 
-    # The visible consequence survived into the ledger; the private plan did not.
-    assert _ledger_count(reg, NpcAction.LEDGER_SECTION) >= 1
+    # The non-streaming V4 path has no Director selection phase. It may stage
+    # an agenda, but must not promote it to a confirmed action by itself.
+    assert _ledger_count(reg, NpcAction.LEDGER_SECTION) == 0
+    assert _ledger_count(reg, "npc_agenda") >= 1
     assert "截走药材" in second.text
     assert "私密目标" not in second.text
     # The Writer never saw the Planner/Director private agenda either.
     assert "万能钥匙" not in second.text
     assert "被巡夜撞见" not in second.text
 
-    # Exact role order per chapter: architect → npc_planner → director → writer
-    # → continuity_checker → ledger_curator (quality/style runs in-process;
-    # quality precedes continuity but emits no Pi role call).
+    # Exact non-streaming V4 role order: no Director or continuity role.
     expected_ch1 = [
-        "architect", "npc_planner", "director", "writer",
-        "continuity_checker", "ledger_curator",
+        "architect", "npc_planner", "writer", "ledger_curator",
     ]
     assert runtime.calls == expected_ch1 + expected_ch1
 

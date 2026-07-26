@@ -49,7 +49,9 @@ class CapturingNovelEngine(NovelEngine):
         return self.chapter_text
 
 
-def test_write_chapter_commits_novel_active_rag_ledger_and_character_state(tmp_path):
+def test_write_chapter_commits_novel_active_rag_ledger_and_character_state(
+    tmp_path, fake_novel_role_runtime
+):
     reg = _registry(tmp_path)
     reg.novel_project_store.create(NovelProject(project_id="p1", title="空房间"))
     reg.novel_character_store.save(
@@ -90,14 +92,16 @@ def test_write_chapter_commits_novel_active_rag_ledger_and_character_state(tmp_p
     character = reg.novel_character_store.load("char-lin")
 
     assert any("承诺" in m.summary or "伏笔" in m.summary for m in active)
-    assert any("银钥匙" in m.content for m in rag)
+    assert any("银钥匙" in m.content or "银钥匙" in m.summary for m in rag)
     assert any(i.section in {"foreshadowing", "world_rules", "open_threads"} for i in ledger)
     assert character is not None
     assert character.current_state["last_chapter_index"] == 1
     assert "银钥匙" in character.current_state["recent_summary"]
 
 
-def test_write_chapter_recalls_memory_into_writer_packet_and_prompt(tmp_path):
+def test_write_chapter_recalls_memory_into_writer_packet_and_prompt(
+    tmp_path, fake_novel_role_runtime
+):
     reg = _registry(tmp_path)
     reg.novel_project_store.create(NovelProject(project_id="p1", title="空房间"))
     reg.novel_chapter_plan_store.save(

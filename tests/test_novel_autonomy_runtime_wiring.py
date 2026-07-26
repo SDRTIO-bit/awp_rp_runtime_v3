@@ -138,10 +138,10 @@ def _setup_real_path_project(reg):
     )
 
 
-def test_real_write_path_calls_planner_and_director(
+def test_nonstreaming_write_path_calls_planner_without_director(
     monkeypatch, reg, engine, fake_novel_role_runtime,
 ):
-    """Both write_chapter paths must invoke the Pi planner then the Director selection."""
+    """The V4 non-streaming path stages agendas without a Director selection."""
     _setup_real_path_project(reg)
 
     calls: list[str] = []
@@ -160,7 +160,7 @@ def test_real_write_path_calls_planner_and_director(
     monkeypatch.setattr(NovelDirectorAdapter, "select_npc_actions", _select)
 
     engine.write_chapter(project_id="p1", chapter_index=1)
-    assert calls == ["planner", "director"]
+    assert calls == ["planner"]
 
 
 def test_real_stream_path_calls_planner_and_director(
@@ -203,7 +203,7 @@ _FORBIDDEN_PACKET_FIELDS = (
 
 
 def _packet_after_real_selection(monkeypatch, reg, engine):
-    """Run the real write path with deterministic planner/director and capture
+    """Run the streaming write path with deterministic planner/director and capture
     the packet the Writer actually receives."""
     _setup_real_path_project(reg)
 
@@ -219,14 +219,14 @@ def _packet_after_real_selection(monkeypatch, reg, engine):
     monkeypatch.setattr(NovelDirectorAdapter, "select_npc_actions", _select)
 
     captured: dict = {}
-    original_call_writer = engine._call_writer
+    original_call_writer = engine._call_writer_stream
 
-    def capture_call_writer(packet, **kwargs):
+    def capture_call_writer(packet, on_chunk, **kwargs):
         captured["packet"] = packet
-        return original_call_writer(packet, **kwargs)
+        return original_call_writer(packet, on_chunk, **kwargs)
 
-    monkeypatch.setattr(engine, "_call_writer", capture_call_writer)
-    engine.write_chapter(project_id="p1", chapter_index=1)
+    monkeypatch.setattr(engine, "_call_writer_stream", capture_call_writer)
+    engine.write_chapter_stream(project_id="p1", chapter_index=1)
     return captured["packet"]
 
 
@@ -275,7 +275,7 @@ def test_rejected_chapter_writes_no_autonomy_items(
 
     monkeypatch.setattr(engine._quality_pipeline, "run_chapter", _reject)
 
-    engine.write_chapter(project_id="p1", chapter_index=1)
+    engine.write_chapter_stream(project_id="p1", chapter_index=1)
     assert reg.novel_ledger_store.list_by_project("p1", NpcAction.LEDGER_SECTION) == []
     assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
 

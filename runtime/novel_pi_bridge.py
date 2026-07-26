@@ -66,11 +66,12 @@ class NovelPiBridge:
 
     def handle_message(self, text: str) -> str:
         with self._turn_lock:
-            self._turn_counter += 1
-            self._current_author_message = text
-            self._current_message_id = NovelAuthoringService(
+            authoring = NovelAuthoringService(
                 self._project_dir, self._project_id
-            ).record_author_message(
+            )
+            self._turn_counter = authoring.next_turn()
+            self._current_author_message = text
+            self._current_message_id = authoring.record_author_message(
                 text,
                 self._session_id,
                 self._turn_counter,

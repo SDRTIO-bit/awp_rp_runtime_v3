@@ -23,6 +23,7 @@ class ChapterDraft:
     revision: int = 1
     source_plan_revision: int = 1
     text: str = ""
+    raw_text: str = ""
     char_count: int = 0
     status: str = "draft"       # draft / accepted / rejected / superseded
     quality_decision_id: str = ""
@@ -38,6 +39,7 @@ class ChapterDraft:
             "revision": self.revision,
             "source_plan_revision": self.source_plan_revision,
             "text": self.text,
+            "raw_text": self.raw_text,
             "char_count": self.char_count,
             "status": self.status,
             "quality_decision_id": self.quality_decision_id,
@@ -55,6 +57,7 @@ class ChapterDraft:
             revision=data.get("revision", 1),
             source_plan_revision=data.get("source_plan_revision", 1),
             text=data.get("text", ""),
+            raw_text=data.get("raw_text", ""),
             char_count=data.get("char_count", 0),
             status=data.get("status", "draft"),
             quality_decision_id=data.get("quality_decision_id", ""),

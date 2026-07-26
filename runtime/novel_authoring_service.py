@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -26,27 +27,61 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _explicit_approval(text: str) -> bool:
-    normalized = text.strip().lower()
-    return any(
-        phrase in normalized
-        for phrase in ("确认", "批准", "同意", "就按这个", "摘要准确", "approve")
+_CLAUSE_SEPARATOR = re.compile(r"[，。！？；,!?;]+")
+_CHAPTER_SUFFIX = r"(?:第?[0-9一二三四五六七八九十百千万两]+章)?"
+_APPROVAL_CLAUSES = (
+    re.compile(
+        r"(?:我)?(?:明确)?(?:确认|批准|同意)"
+        r"(?:(?:这个|本)(?:计划|摘要|版本))?"
+    ),
+    re.compile(
+        r"(?:(?:这个|本)(?:计划|摘要|版本))(?:我)?(?:确认|批准|同意)"
+    ),
+    re.compile(r"就按这个(?:计划|摘要|版本)?"),
+    re.compile(r"(?:i\s+)?approve(?:\s+this\s+(?:plan|summary|version))?"),
+)
+_EXECUTION_CLAUSES = (
+    re.compile(
+        rf"(?:现在)?(?:请)?(?:交给|让)(?:项目)?管线(?:开始)?写{_CHAPTER_SUFFIX}"
+    ),
+    re.compile(rf"(?:现在)?(?:请)?开始写{_CHAPTER_SUFFIX}"),
+    re.compile(rf"现在写{_CHAPTER_SUFFIX}"),
+    re.compile(r"(?:现在)?执行写作"),
+    re.compile(r"(?:现在)?执行这个计划"),
+    re.compile(rf"按这个(?:计划)?写{_CHAPTER_SUFFIX}"),
+    re.compile(r"execute(?:\s+this\s+plan)?"),
+)
+
+
+def _has_explicit_consent_clause(
+    text: str,
+    confirmation_quote: str,
+    patterns: tuple[re.Pattern[str], ...],
+) -> bool:
+    """Accept only a final, complete, allowlisted clause containing the audit quote."""
+
+    normalized_quote = confirmation_quote.strip().lower().strip("，。！？；,!?; ")
+    if not normalized_quote:
+        return False
+    clauses = [
+        raw_clause.strip()
+        for raw_clause in _CLAUSE_SEPARATOR.split(text.strip().lower())
+        if raw_clause.strip()
+    ]
+    if not clauses:
+        return False
+    final_clause = clauses[-1]
+    return normalized_quote in final_clause and any(
+        pattern.fullmatch(final_clause) for pattern in patterns
     )
 
 
-def _explicit_execution(text: str) -> bool:
-    normalized = text.strip().lower()
-    return any(
-        phrase in normalized
-        for phrase in (
-            "交给管线写",
-            "开始写",
-            "现在写",
-            "执行写作",
-            "按这个写",
-            "execute",
-        )
-    )
+def _explicit_approval(text: str, confirmation_quote: str) -> bool:
+    return _has_explicit_consent_clause(text, confirmation_quote, _APPROVAL_CLAUSES)
+
+
+def _explicit_execution(text: str, confirmation_quote: str) -> bool:
+    return _has_explicit_consent_clause(text, confirmation_quote, _EXECUTION_CLAUSES)
 
 
 class NovelAuthoringService:
@@ -87,6 +122,16 @@ class NovelAuthoringService:
         )
         return message_id
 
+    def next_turn(self) -> int:
+        """Allocate a durable project-level author turn sequence."""
+
+        with self._lock:
+            index = self._read_index()
+            turn = int(index.get("last_turn", 0) or 0) + 1
+            index["last_turn"] = turn
+            self._atomic_json(self.index_path, index)
+            return turn
+
     def capture_material(
         self,
         summary: str,
@@ -103,6 +148,26 @@ class NovelAuthoringService:
         )
         self._append_jsonl(self.inbox_path, material.model_dump(mode="json"))
         return material
+
+    @staticmethod
+    def approval_content_hash(plan: AuthorChapterPlan) -> str:
+        """Hash only the author-approved content, excluding approval/execution metadata."""
+
+        unsigned = plan.model_copy(
+            update={
+                "status": AuthorPlanStatus.PENDING_CONFIRMATION,
+                "approval": None,
+                "executed_at": "",
+                "execution_message_id": "",
+            }
+        )
+        return hashlib.sha256(
+            json.dumps(
+                unsigned.model_dump(mode="json"),
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
 
     def save_plan(self, plan: AuthorChapterPlan) -> AuthorChapterPlan:
         if plan.project_id != self.project_id:
@@ -160,17 +225,11 @@ class NovelAuthoringService:
                 raise ValueError("approval requires a later author turn")
             if not confirmation_quote or confirmation_quote not in current_author_message:
                 raise ValueError("confirmation quote must occur in the author message")
-            if not _explicit_approval(current_author_message):
+            if not _explicit_approval(current_author_message, confirmation_quote):
                 raise ValueError("author message is not an explicit approval")
             if plan.unresolved_questions:
                 raise ValueError("cannot approve a plan with unresolved questions")
-            digest = hashlib.sha256(
-                json.dumps(
-                    plan.model_dump(mode="json"),
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ).encode("utf-8")
-            ).hexdigest()
+            digest = self.approval_content_hash(plan)
             approved = plan.model_copy(
                 update={
                     "status": AuthorPlanStatus.APPROVED,
@@ -232,7 +291,7 @@ class NovelAuthoringService:
             raise ValueError("execution requires a later author turn")
         if not confirmation_quote or confirmation_quote not in current_author_message:
             raise ValueError("execution quote must occur in the author message")
-        if not _explicit_execution(current_author_message):
+        if not _explicit_execution(current_author_message, confirmation_quote):
             raise ValueError("author message is not an explicit execution request")
         return plan
 

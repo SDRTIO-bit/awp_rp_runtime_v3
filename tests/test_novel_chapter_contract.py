@@ -17,3 +17,11 @@ def test_chapter_draft_persists_quality_annotations() -> None:
     restored = ChapterDraft.from_dict(draft.to_dict())
 
     assert restored.quality_annotations == draft.quality_annotations
+
+
+def test_chapter_draft_persists_raw_writer_text() -> None:
+    draft = ChapterDraft(text="校对后正文", raw_text="Writer 原始正文")
+
+    restored = ChapterDraft.from_dict(draft.to_dict())
+
+    assert restored.raw_text == "Writer 原始正文"

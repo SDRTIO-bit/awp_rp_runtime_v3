@@ -9,8 +9,12 @@
 - 编辑忠于作品与目标读者，不使用空洞奉承，并主动质疑人物、因果、信息和套路风险。
 - 素材、计划、批准都有本地来源记录；计划实质修订只增版本、不覆盖历史。
 - 计划提出、作者批准、启动 Writer 必须来自三个不同作者轮次。
+- 作者轮次使用项目级持久序列；重启 TUI 后不会归零。
+- 否定、拒绝、引用命令或含糊表述不能作为批准/执行授权。
 - 默认 Pi 没有 Architect 规划或直接写章的绕过工具。
 - `AuthorPlanCompiler` 不调用 LLM，不增删场景，只把作者批准计划映射到 `ChapterPlan`。
+- 编译章节绑定精确的作者计划 ID、版本和批准哈希；来源缺失、错配或篡改时中止执行。
+- author-led 管线不调用 Architect、Director 或自主 NPC 规划，Writer 直接消费作者批准契约。
 - Writer 的钩子、对白比例等通用公式在 author-led 模式失效；作者契约优先。
 
 ## 工具
@@ -28,9 +32,9 @@
 - Writer 失败时批准计划仍保留，不自动改剧情重试。
 - Pi Host 失败不回退 legacy；只有显式 `NOVEL_AGENT_RUNTIME=legacy` 才使用旧 NovelBrain。
 
-## 定向验证
+## 验证
 
-- Author contracts/service/compiler/rules/E2E/runtime：15 项通过。
-- Pi tool/bridge：6 项通过。
+- Python 全量：235 项通过，3 项真实凭据验收跳过。
 - Node Harness：17 项通过。
-- 新模块 `py_compile` 通过。
+- 小说前端生产构建通过。
+- `git diff --check` 与变更 Python 文件 `py_compile` 通过。

@@ -9,7 +9,6 @@ from typing import Any
 
 from ..contracts.novel_write_packet import NovelWritePacket
 from ..contracts.novel_chapter import ChapterPlan
-from ..contracts.novel_authoring import AuthorChapterPlan
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
 from .novel_writer_context import NovelWriterContextCompiler
@@ -173,27 +172,55 @@ class NovelWritePacketBuilder:
         except (AttributeError, TypeError):
             return ""
 
+    def has_approved_author_plan(self, chapter_plan: ChapterPlan) -> bool:
+        """Return whether this chapter is governed by an author-approved plan."""
+
+        return bool(
+            self._approved_author_contract(
+                chapter_plan,
+                self._project_root(chapter_plan),
+            )
+        )
+
     @staticmethod
     def _approved_author_contract(
         chapter_plan: ChapterPlan, project_root: str
     ) -> str:
-        if not project_root:
+        binding = (
+            chapter_plan.author_plan_id,
+            chapter_plan.author_plan_revision,
+            chapter_plan.author_plan_hash,
+        )
+        if not any(binding):
             return ""
+        if (
+            not project_root
+            or not chapter_plan.author_plan_id
+            or chapter_plan.author_plan_revision < 1
+            or not chapter_plan.author_plan_hash
+        ):
+            raise ValueError("author plan provenance is incomplete")
         try:
-            context = NovelAuthoringService(
-                project_root, chapter_plan.project_id
-            ).authoring_context(chapter_plan.chapter_index)
-            candidates = [
-                AuthorChapterPlan.model_validate(raw)
-                for raw in context["plans"]
-                if raw.get("status") in {"approved", "executed"}
-            ]
-            if not candidates:
-                return ""
-            latest = max(candidates, key=lambda item: item.revision)
-            return AuthorPlanCompiler().render_writer_contract(latest)
-        except (FileNotFoundError, OSError, ValueError, KeyError, TypeError):
-            return ""
+            service = NovelAuthoringService(project_root, chapter_plan.project_id)
+            bound = service.get_plan(
+                chapter_plan.author_plan_id,
+                chapter_plan.author_plan_revision,
+            )
+            if (
+                bound.project_id != chapter_plan.project_id
+                or bound.chapter_index != chapter_plan.chapter_index
+                or bound.status.value not in {"approved", "executed"}
+                or bound.approval is None
+                or bound.approval.content_hash != chapter_plan.author_plan_hash
+                or service.approval_content_hash(bound)
+                != chapter_plan.author_plan_hash
+            ):
+                raise ValueError("author plan provenance could not be verified")
+            return AuthorPlanCompiler().render_writer_contract(bound)
+        except (FileNotFoundError, OSError, KeyError, TypeError) as exc:
+            raise ValueError(
+                "author plan provenance could not be verified"
+            ) from exc
 
     def _filter_relevant_ledger(
         self, plan: ChapterPlan, items: list[LedgerItem],

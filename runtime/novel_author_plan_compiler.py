@@ -84,6 +84,11 @@ class AuthorPlanCompiler:
                 hook_detail="",
                 hook_strength="weak",
             ),
+            author_plan_id=plan.plan_id,
+            author_plan_revision=plan.revision,
+            author_plan_hash=(
+                plan.approval.content_hash if plan.approval is not None else ""
+            ),
         )
 
     def compile_and_save(self, plan: AuthorChapterPlan, registry) -> ChapterPlan:

@@ -30,19 +30,69 @@ for raw in sys.stdin:
     if kind == "init":
         print(json.dumps({"kind": "event", "request_id": request_id,
                           "payload": {"type": "ready"}}), flush=True)
-    elif kind == "prompt":
-        print(json.dumps({"kind": "tool_call", "request_id": request_id,
-                          "payload": {"tool_call_id": "plan-1", "name": "plan_chapter",
-                                      "arguments": {"chapter": 1,
-                                                    "task_description": "告白字幕事故"}}}), flush=True)
-    elif kind == "tool_result" and stage == 0:
+    elif kind == "prompt" and stage == 0:
         stage = 1
-        print(json.dumps({"kind": "tool_call", "request_id": request_id,
-                          "payload": {"tool_call_id": "write-1", "name": "write_chapter",
-                                      "arguments": {"chapter": 1}}}), flush=True)
+        print(json.dumps({
+            "kind": "tool_call", "request_id": request_id,
+            "payload": {
+                "tool_call_id": "save-1", "name": "save_author_plan",
+                "arguments": {
+                    "plan_id": "author-ch1", "chapter_index": 1,
+                    "title": "告白字幕停不下来", "target_chars": 120,
+                    "purpose": "让唐梨和陈默在事故中被迫合作",
+                    "confirmed_events": ["告白字幕当众失控", "真正的告白对象离场"],
+                    "scenes": [{
+                        "scene_id": "s1",
+                        "summary": "两人争夺遥控器并发现告白对象离场",
+                        "change": "两人从互相甩锅转为共同收场",
+                        "characters": ["唐梨", "陈默"]
+                    }],
+                    "character_intents": [
+                        {"character": "唐梨", "new_character": True},
+                        {"character": "陈默", "new_character": True}
+                    ]
+                }
+            }
+        }, ensure_ascii=False), flush=True)
     elif kind == "tool_result" and stage == 1:
+        stage = 2
         print(json.dumps({"kind": "turn_end", "request_id": request_id,
-                          "payload": {"text": "规划与写作均已完成"}}), flush=True)
+                          "payload": {"text": "作者计划已整理，等待确认"}}),
+              flush=True)
+    elif kind == "prompt" and stage == 2:
+        stage = 3
+        print(json.dumps({
+            "kind": "tool_call", "request_id": request_id,
+            "payload": {
+                "tool_call_id": "approve-1", "name": "approve_author_plan",
+                "arguments": {
+                    "plan_id": "author-ch1", "revision": 1,
+                    "confirmation_quote": "我确认"
+                }
+            }
+        }, ensure_ascii=False), flush=True)
+    elif kind == "tool_result" and stage == 3:
+        stage = 4
+        print(json.dumps({"kind": "turn_end", "request_id": request_id,
+                          "payload": {"text": "作者计划已确认，等待执行指令"}}),
+              flush=True)
+    elif kind == "prompt" and stage == 4:
+        stage = 5
+        print(json.dumps({
+            "kind": "tool_call", "request_id": request_id,
+            "payload": {
+                "tool_call_id": "execute-1", "name": "execute_author_plan",
+                "arguments": {
+                    "plan_id": "author-ch1", "revision": 1,
+                    "confirmation_quote": "执行这个计划"
+                }
+            }
+        }, ensure_ascii=False), flush=True)
+    elif kind == "tool_result" and stage == 5:
+        stage = 6
+        print(json.dumps({"kind": "turn_end", "request_id": request_id,
+                          "payload": {"text": "作者批准的计划已由管线完成"}}),
+              flush=True)
     elif kind == "shutdown":
         break
 '''
@@ -123,7 +173,9 @@ def _write_script(path: Path, name: str, source: str) -> Path:
     return script
 
 
-def test_top_level_pi_can_plan_and_write_via_separate_role_host(tmp_path):
+def test_top_level_pi_executes_author_approved_plan_via_separate_role_host(
+    tmp_path, fake_novel_role_runtime
+):
     db = Database(str(tmp_path / "novel.db"))
     db.initialize()
     registry = SessionRuntimeStoreRegistry(db)
@@ -153,15 +205,18 @@ def test_top_level_pi_can_plan_and_write_via_separate_role_host(tmp_path):
     )
     try:
         with novel_role_runtime_override(role_runtime):
-            result = top_bridge.handle_message("规划并写第一章")
+            proposed = top_bridge.handle_message("第一章按告白字幕事故来写。")
+            approved = top_bridge.handle_message("这个计划准确，我确认。")
+            result = top_bridge.handle_message("现在执行这个计划。")
     finally:
         top_bridge.close()
         role_runtime.close()
 
     roles = role_log.read_text(encoding="utf-8").splitlines()
-    assert result == "规划与写作均已完成"
-    assert roles == [
-        "architect", "director", "writer", "continuity_checker", "ledger_curator"
-    ]
+    assert proposed == "作者计划已整理，等待确认"
+    assert approved == "作者计划已确认，等待执行指令"
+    assert result == "作者批准的计划已由管线完成"
+    assert roles == ["writer", "ledger_curator"]
     plan = registry.novel_chapter_plan_store.load_by_index("p1", 1)
+    assert plan.title == "告白字幕停不下来"
     assert registry.novel_chapter_draft_store.load_latest(plan.chapter_id)

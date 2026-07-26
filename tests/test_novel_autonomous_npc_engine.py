@@ -131,7 +131,7 @@ def test_rejection_has_zero_autonomy_side_effects(
     monkeypatch.setattr(engine, "_update_ledger", recording_update_ledger)
     monkeypatch.setattr(engine._quality_pipeline, "run_chapter", lambda *args, **kwargs: (_rejected_decision(), args[0]))
 
-    engine.write_chapter(project_id="p1", chapter_index=1)
+    engine.write_chapter_stream(project_id="p1", chapter_index=1)
 
     # Rejected chapters must not propagate selected NPC actions into the ledger.
     assert all(
@@ -142,7 +142,7 @@ def test_rejection_has_zero_autonomy_side_effects(
     assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
 
 
-def test_accepted_chapter_persists_npc_action(
+def test_nonstreaming_chapter_does_not_promote_unselected_npc_action(
     reg, engine, monkeypatch, fake_novel_role_runtime,
 ):
     _setup_project(reg)
@@ -151,9 +151,7 @@ def test_accepted_chapter_persists_npc_action(
     engine.write_chapter(project_id="p1", chapter_index=1)
 
     actions = reg.novel_ledger_store.list_by_project("p1", NpcAction.LEDGER_SECTION)
-    assert len(actions) == 1
-    assert actions[0].entity == _selected_action().character_name
-    assert "observable event" in actions[0].content
+    assert actions == []
 
 
 def test_accepted_chapter_persists_proposed_npc_agenda(
@@ -172,7 +170,7 @@ def test_accepted_chapter_persists_proposed_npc_agenda(
     )
     monkeypatch.setattr(engine, "_call_director", lambda *args, **kwargs: _guidance_with_npc())
 
-    engine.write_chapter(project_id="p1", chapter_index=1)
+    engine.write_chapter_stream(project_id="p1", chapter_index=1)
 
     agendas = reg.novel_ledger_store.list_by_project("p1", "npc_agenda")
     assert len(agendas) == 1
@@ -200,7 +198,7 @@ def test_rejected_chapter_discards_staged_npc_agenda(
         lambda *args, **kwargs: (_rejected_decision(), args[0]),
     )
 
-    engine.write_chapter(project_id="p1", chapter_index=1)
+    engine.write_chapter_stream(project_id="p1", chapter_index=1)
 
     assert reg.novel_ledger_store.list_by_project("p1", "npc_agenda") == []
     assert reg.novel_ledger_store.list_by_project("p1", NpcAction.LEDGER_SECTION) == []
@@ -264,15 +262,15 @@ def test_writer_packet_exposes_visible_consequence_not_private_plan(
 
     captured: dict[str, Any] = {}
 
-    original_call_writer = engine._call_writer
+    original_call_writer = engine._call_writer_stream
 
-    def capture_call_writer(packet, **kwargs):
+    def capture_call_writer(packet, on_chunk, **kwargs):
         captured["packet"] = packet
-        return original_call_writer(packet, **kwargs)
+        return original_call_writer(packet, on_chunk, **kwargs)
 
-    monkeypatch.setattr(engine, "_call_writer", capture_call_writer)
+    monkeypatch.setattr(engine, "_call_writer_stream", capture_call_writer)
 
-    engine.write_chapter(project_id="p1", chapter_index=1)
+    engine.write_chapter_stream(project_id="p1", chapter_index=1)
 
     packet = captured["packet"]
     assert packet is not None
