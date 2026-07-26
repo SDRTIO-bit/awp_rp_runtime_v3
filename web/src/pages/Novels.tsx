@@ -89,7 +89,7 @@ export default function Novels() {
           dataSource={projects}
           renderItem={(project) => (
             <List.Item
-              onClick={() => navigate(`/novels/${project.project_id}`)}
+              onClick={() => navigate(`/novels/${project.project_id}/workspace/book`)}
               style={{ cursor: "pointer", padding: "12px 16px" }}
               extra={
                 <Space onClick={(e) => e.stopPropagation()}>

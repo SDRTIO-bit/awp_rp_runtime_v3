@@ -9,6 +9,8 @@ import "./styles/global.css";
 
 const Novels = lazy(() => import("./pages/Novels"));
 const NovelDetail = lazy(() => import("./pages/NovelDetail"));
+const NovelWorkspace = lazy(() => import("./pages/NovelWorkspace"));
+const PromptStudio = lazy(() => import("./pages/PromptStudio"));
 
 const routeFallback = (
   <div style={{ padding: 24, color: "#666" }}>
@@ -27,6 +29,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<Navigate to="/novels" replace />} />
               <Route path="/novels" element={<Novels />} />
               <Route path="/novels/:id" element={<NovelDetail />} />
+              <Route path="/novels/:id/workspace/:room?" element={<NovelWorkspace />} />
+              <Route path="/novels/:id/prompts" element={<PromptStudio />} />
               <Route path="*" element={<Navigate to="/novels" replace />} />
             </Route>
           </Routes>

@@ -1,44 +1,33 @@
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Layout, Menu } from "antd";
-import { BookOutlined } from "@ant-design/icons";
+import { Outlet, useNavigate } from "react-router-dom";
+import { useWorkspaceTheme, WorkspaceTheme } from "./workspace/ThemeProvider";
 
-const { Sider, Content } = Layout;
+const labels: Record<WorkspaceTheme, string> = {
+  paper: "墨与纸",
+  graphite: "石墨",
+  studio: "纯净白",
+};
 
 export default function AppLayout() {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const selectedKey = location.pathname.startsWith("/novels") ? "/novels" : "";
-
+  const { theme, setTheme } = useWorkspaceTheme();
   return (
-    <Layout style={{ height: "100vh", minHeight: 0, overflow: "hidden" }}>
-      <Sider width={200} theme="light" style={{ height: "100vh", overflow: "auto" }}>
-        <div style={{ padding: "16px", fontWeight: "bold", fontSize: 16, textAlign: "center" }}>
-          AWP 小说
+    <div className="app-frame">
+      <header className="app-header">
+        <button className="brand" onClick={() => navigate("/novels")}>
+          <span className="brand-mark">文</span>
+          <span><strong>Novel Coding</strong><small>专属写作工作区</small></span>
+        </button>
+        <div className="theme-switcher" aria-label="主题">
+          {(Object.keys(labels) as WorkspaceTheme[]).map((item) => (
+            <button
+              key={item}
+              className={theme === item ? "active" : ""}
+              onClick={() => setTheme(item)}
+            >{labels[item]}</button>
+          ))}
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={[
-            { key: "/novels", icon: <BookOutlined />, label: "小说" },
-          ]}
-          onClick={({ key }) => navigate(key)}
-        />
-      </Sider>
-      <Layout style={{ minHeight: 0 }}>
-        <Content
-          style={{
-            padding: 24,
-            background: "#f5f5f5",
-            height: "100vh",
-            minHeight: 0,
-            overflow: "hidden",
-            boxSizing: "border-box",
-          }}
-        >
-          <Outlet />
-        </Content>
-      </Layout>
-    </Layout>
+      </header>
+      <div className="app-content"><Outlet /></div>
+    </div>
   );
 }

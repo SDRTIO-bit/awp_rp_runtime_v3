@@ -249,6 +249,24 @@ class EditorSessionManager:
                 key.room, message_id, result
             )
             self._broadcast(session, completed)
+            chapter_index = (
+                int(key.room.split(":", 1)[1])
+                if key.room.startswith("chapter:")
+                else None
+            )
+            context = NovelAuthoringService(
+                session.project_dir, key.project_id
+            ).authoring_context(chapter_index)
+            for plan in context["plans"]:
+                if plan["status"] in {
+                    "draft",
+                    "pending_confirmation",
+                    "approved",
+                }:
+                    plan_event = session.store.append(
+                        key.room, "author_plan_saved", plan
+                    )
+                    self._broadcast(session, plan_event)
 
     async def handle_author_action(
         self,

@@ -58,7 +58,9 @@ class NovelApiHandlers:
         self._registry_factory = registry_factory
         self._workspace_catalog = workspace_catalog
 
-    def _registry(self) -> SessionRuntimeStoreRegistry:
+    def _registry(self, project_id: str = "") -> SessionRuntimeStoreRegistry:
+        if self._workspace_catalog is not None and project_id:
+            return self._workspace_catalog.registry(project_id)
         return self._registry_factory()
 
     def _document_service(self, project_id: str) -> NovelDocumentService:
@@ -313,6 +315,22 @@ class NovelApiHandlers:
 
     async def list_projects(self, _request: web.Request) -> web.Response:
         try:
+            if self._workspace_catalog is not None:
+                projects = []
+                for workspace in self._workspace_catalog.list():
+                    project = self._workspace_catalog.registry(
+                        workspace.project_id
+                    ).novel_project_store.load(workspace.project_id)
+                    projects.append(
+                        project.to_dict()
+                        if project is not None
+                        else {
+                            "project_id": workspace.project_id,
+                            "title": workspace.root.name,
+                            "status": "local",
+                        }
+                    )
+                return _json(projects)
             projects = self._registry().novel_project_store.list_all()
             return _json([project.to_dict() for project in projects])
         except Exception as exc:
@@ -320,9 +338,13 @@ class NovelApiHandlers:
 
     async def get_project(self, request: web.Request) -> web.Response:
         try:
-            project = self._registry().novel_project_store.load(
-                request.match_info["project_id"]
+            project_id = request.match_info["project_id"]
+            registry = (
+                self._workspace_catalog.registry(project_id)
+                if self._workspace_catalog is not None
+                else self._registry()
             )
+            project = registry.novel_project_store.load(project_id)
             if project is None:
                 return _json({"error": "Project not found"}, 404)
             return _json(project.to_dict())
@@ -341,9 +363,8 @@ class NovelApiHandlers:
 
     async def get_outline(self, request: web.Request) -> web.Response:
         try:
-            plan = self._registry().novel_plan_store.load(
-                request.match_info["project_id"]
-            )
+            project_id = request.match_info["project_id"]
+            plan = self._registry(project_id).novel_plan_store.load(project_id)
             if plan is None:
                 return _json({"error": "Outline not found for this project"}, 404)
             return _json(plan.to_dict())
@@ -352,9 +373,8 @@ class NovelApiHandlers:
 
     async def list_chapters(self, request: web.Request) -> web.Response:
         try:
-            plans = self._registry().novel_chapter_plan_store.list_by_project(
-                request.match_info["project_id"]
-            )
+            project_id = request.match_info["project_id"]
+            plans = self._registry(project_id).novel_chapter_plan_store.list_by_project(project_id)
             return _json([plan.to_dict() for plan in plans])
         except Exception as exc:
             return _json({"error": str(exc)[:200]}, 500)
@@ -381,9 +401,8 @@ class NovelApiHandlers:
         if idx is None:
             return _json({"error": "Invalid chapter index"}, 400)
         try:
-            plan = self._registry().novel_chapter_plan_store.load_by_index(
-                request.match_info["project_id"], idx
-            )
+            project_id = request.match_info["project_id"]
+            plan = self._registry(project_id).novel_chapter_plan_store.load_by_index(project_id, idx)
             if plan is None:
                 return _json({"error": "Plan not found"}, 404)
             return _json(plan.to_dict())
@@ -409,7 +428,7 @@ class NovelApiHandlers:
         if idx is None:
             return _json({"error": "Invalid chapter index"}, 400)
         try:
-            registry = self._registry()
+            registry = self._registry(request.match_info["project_id"])
             plan = registry.novel_chapter_plan_store.load_by_index(
                 request.match_info["project_id"], idx
             )
@@ -462,18 +481,16 @@ class NovelApiHandlers:
 
     async def list_ledger(self, request: web.Request) -> web.Response:
         try:
-            items = self._registry().novel_ledger_store.list_by_project(
-                request.match_info["project_id"], request.query.get("section", "")
-            )
+            project_id = request.match_info["project_id"]
+            items = self._registry(project_id).novel_ledger_store.list_by_project(project_id, request.query.get("section", ""))
             return _json([item.to_dict() for item in items])
         except Exception as exc:
             return _json({"error": str(exc)[:200]}, 500)
 
     async def list_characters(self, request: web.Request) -> web.Response:
         try:
-            characters = self._registry().novel_character_store.list_by_project(
-                request.match_info["project_id"]
-            )
+            project_id = request.match_info["project_id"]
+            characters = self._registry(project_id).novel_character_store.list_by_project(project_id)
             return _json([character.to_dict() for character in characters])
         except Exception as exc:
             return _json({"error": str(exc)[:200]}, 500)
