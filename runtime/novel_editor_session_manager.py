@@ -101,6 +101,12 @@ class EditorSubscription:
 
 
 @dataclass
+class _PendingToolApproval:
+    future: asyncio.Future[str]
+    signature: str
+
+
+@dataclass
 class _RoomSession:
     key: EditorRoomKey
     store: NovelConversationStore
@@ -114,6 +120,10 @@ class _RoomSession:
     turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     runtime_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     subscriptions: set[EditorSubscription] = field(default_factory=set)
+    pending_approvals: dict[str, _PendingToolApproval] = field(
+        default_factory=dict
+    )
+    remembered_tool_approvals: set[str] = field(default_factory=set)
 
 
 class EditorSessionManager:
@@ -124,9 +134,11 @@ class EditorSessionManager:
         catalog: NovelWorkspaceCatalog,
         *,
         runtime_factory: Callable[..., Any] = create_novel_agent_runtime,
+        tool_approval_timeout: float = 120.0,
     ):
         self.catalog = catalog
         self._runtime_factory = runtime_factory
+        self._tool_approval_timeout = tool_approval_timeout
         self._sessions: dict[EditorRoomKey, _RoomSession] = {}
         self._closed = False
 
@@ -177,6 +189,13 @@ class EditorSessionManager:
             callbacks = BrainCallbacks(
                 on_chat=lambda text: self._from_worker(
                     loop, self._emit_delta(key, text)
+                ),
+                on_tool_event=lambda payload: self._from_worker(
+                    loop,
+                    self._emit_event(key, "tool_activity", payload),
+                ),
+                request_tool_approval=lambda payload: (
+                    self._approval_from_worker(loop, key, payload)
                 ),
             )
             workspace = self.catalog.require(key.project_id)
@@ -416,6 +435,7 @@ class EditorSessionManager:
 
     async def cancel(self, key: EditorRoomKey) -> None:
         session = self._require_session(key)
+        self._deny_pending_approvals(session)
         if session.active_action:
             if session.action_commit_started:
                 raise RuntimeError(
@@ -437,11 +457,29 @@ class EditorSessionManager:
         self._closed = True
         sessions = list(self._sessions.values())
         for session in sessions:
+            self._deny_pending_approvals(session)
             for subscription in list(session.subscriptions):
                 await subscription.close()
             if session.runtime is not None:
                 await asyncio.to_thread(session.runtime.close)
         self._sessions.clear()
+
+    async def resolve_tool_approval(
+        self,
+        key: EditorRoomKey,
+        approval_id: str,
+        decision: str,
+        remember: bool,
+    ) -> None:
+        if decision not in {"allow", "deny"}:
+            raise ValueError("invalid tool approval decision")
+        session = self._require_session(key)
+        pending = session.pending_approvals.get(approval_id)
+        if pending is None or pending.future.done():
+            raise ValueError("unknown or already resolved tool approval")
+        if remember and decision == "allow":
+            session.remembered_tool_approvals.add(pending.signature)
+        pending.future.set_result(decision)
 
     async def _emit_delta(
         self,
@@ -460,6 +498,71 @@ class EditorSessionManager:
             },
         )
         self._broadcast(session, event)
+
+    def _approval_from_worker(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        key: EditorRoomKey,
+        payload: dict[str, Any],
+    ) -> str:
+        future = asyncio.run_coroutine_threadsafe(
+            self._request_tool_approval(key, payload),
+            loop,
+        )
+        try:
+            return future.result(timeout=self._tool_approval_timeout + 10)
+        except Exception:
+            future.cancel()
+            return "deny"
+
+    async def _request_tool_approval(
+        self,
+        key: EditorRoomKey,
+        payload: dict[str, Any],
+    ) -> str:
+        session = self._require_session(key)
+        approval_id = str(payload.get("approval_id", ""))
+        signature = str(payload.get("signature", ""))
+        if not approval_id or not signature:
+            return "deny"
+        if signature in session.remembered_tool_approvals:
+            await self._emit_event(
+                key,
+                "tool_approval_resolved",
+                {
+                    "approval_id": approval_id,
+                    "decision": "allow",
+                    "remembered": True,
+                },
+            )
+            return "allow"
+        if approval_id in session.pending_approvals:
+            return "deny"
+        decision_future = asyncio.get_running_loop().create_future()
+        session.pending_approvals[approval_id] = _PendingToolApproval(
+            future=decision_future,
+            signature=signature,
+        )
+        await self._emit_event(key, "tool_approval_requested", payload)
+        try:
+            decision = await asyncio.wait_for(
+                decision_future,
+                timeout=self._tool_approval_timeout,
+            )
+        except (TimeoutError, asyncio.CancelledError):
+            decision = "deny"
+        finally:
+            session.pending_approvals.pop(approval_id, None)
+        await self._emit_event(
+            key,
+            "tool_approval_resolved",
+            {
+                "approval_id": approval_id,
+                "decision": decision,
+                "remembered": False,
+            },
+        )
+        return decision
 
     async def _emit_pipeline_phase(
         self,
@@ -518,6 +621,12 @@ class EditorSessionManager:
     ) -> None:
         future = asyncio.run_coroutine_threadsafe(coroutine, loop)
         future.result(timeout=30)
+
+    @staticmethod
+    def _deny_pending_approvals(session: _RoomSession) -> None:
+        for pending in session.pending_approvals.values():
+            if not pending.future.done():
+                pending.future.set_result("deny")
 
     def _require_session(self, key: EditorRoomKey) -> _RoomSession:
         if self._closed:

@@ -123,6 +123,33 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
                     )
                     tasks.add(task)
                     task.add_done_callback(tasks.discard)
+                elif frame_type == "tool_approval_decision":
+                    if set(frame) != {
+                        "type",
+                        "approval_id",
+                        "decision",
+                        "remember",
+                    }:
+                        raise ValueError(
+                            "invalid tool_approval_decision frame"
+                        )
+                    approval_id = frame["approval_id"]
+                    decision = frame["decision"]
+                    remember = frame["remember"]
+                    if (
+                        not isinstance(approval_id, str)
+                        or not approval_id.strip()
+                        or len(approval_id) > 128
+                        or decision not in {"allow", "deny"}
+                        or not isinstance(remember, bool)
+                    ):
+                        raise ValueError("invalid tool approval decision")
+                    await manager.resolve_tool_approval(
+                        key,
+                        approval_id,
+                        decision,
+                        remember,
+                    )
                 else:
                     raise ValueError("unknown editor frame type")
             except (

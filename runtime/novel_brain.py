@@ -29,6 +29,12 @@ class BrainCallbacks:
     on_chunk: Callable[[str], None] = field(default=lambda t: None)
     on_error: Callable[[str, str], None] = field(default=lambda ph, msg: None)
     on_chat: Callable[[str], None] = field(default=lambda msg: None)
+    on_tool_event: Callable[[dict[str, Any]], None] = field(
+        default=lambda payload: None
+    )
+    request_tool_approval: Callable[[dict[str, Any]], str] = field(
+        default=lambda payload: "deny"
+    )
 
 
 # ── Tool definitions (OpenAI function-calling format) ──
