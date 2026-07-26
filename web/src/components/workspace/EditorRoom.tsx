@@ -3,12 +3,15 @@ import { useEditorSocket } from "../../hooks/useEditorSocket";
 import { MessageComposer } from "./MessageComposer";
 import { AuthorPlanCard } from "./AuthorPlanCard";
 import { PipelineTimeline } from "./PipelineTimeline";
+import { ToolActivity } from "./ToolActivity";
 import "./EditorRoom.css";
 
 export function EditorRoom({ projectId, room }: { projectId: string; room: string }) {
   const { state, status, send } = useEditorSocket({ projectId, room });
   const partial = useMemo(() => Object.values(state.partial).join(""), [state.partial]);
   const action = (type: string, plan: Record<string, any>) => send({ type, plan_id: plan.plan_id, revision: plan.revision });
+  const decideTool = (approvalId: string, decision: "allow" | "deny", remember: boolean) =>
+    send({ type: "tool_approval_decision", approval_id: approvalId, decision, remember });
   return <main className="editor-room" aria-label={room === "book" ? "全书编辑对话" : `${room.replace("chapter:", "第")}章编辑对话`}>
     <div className="connection-state"><span className={`status-dot ${status}`} />{status === "connected" ? "编辑在线" : "正在重连，不会自动重发未知状态消息"}</div>
     <div className="message-scroll">
@@ -26,6 +29,7 @@ export function EditorRoom({ projectId, room }: { projectId: string; room: strin
       {state.writerBuffer && <article className="writer-stream"><div>Writer · 实时正文</div><p>{state.writerBuffer}</p></article>}
       {state.errors.map((error, index) => <div className="event-error" key={`${error}-${index}`}>{error}</div>)}
     </div>
+    <ToolActivity activity={state.toolActivity} approvals={state.pendingApprovals} onDecision={decideTool} />
     <MessageComposer storageKey={`novel-draft:${projectId}:${room}`} disabled={status !== "connected"}
       onSend={(text) => send({ type: "author_message", client_message_id: crypto.randomUUID(), text })}
       onCancel={() => send({ type: "cancel" })} />

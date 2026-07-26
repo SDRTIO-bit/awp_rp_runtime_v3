@@ -7,14 +7,20 @@ export interface EditorEvent {
 }
 export interface EditorMessage { id: string; role: "author" | "editor"; text: string; source?: string; }
 export interface PipelineStep { phase: string; state: string; data?: Record<string, any>; }
+export interface ToolActivityEntry {
+  approval_id: string; tool: string; status: string; summary: string;
+  targets?: string[]; reason?: string; decision?: string;
+}
 export interface EditorEventState {
   lastEventId: number; seen: Set<number>; messages: EditorMessage[];
   partial: Record<string, string>; plans: Record<string, Record<string, any>>;
   pipeline: PipelineStep[]; writerBuffer: string; errors: string[];
+  toolActivity: Record<string, ToolActivityEntry>;
+  pendingApprovals: Record<string, ToolActivityEntry>;
 }
 export const emptyEditorState = (): EditorEventState => ({
   lastEventId: 0, seen: new Set(), messages: [], partial: {}, plans: {},
-  pipeline: [], writerBuffer: "", errors: [],
+  pipeline: [], writerBuffer: "", errors: [], toolActivity: {}, pendingApprovals: {},
 });
 
 export function applyEditorEvent(state: EditorEventState, event: EditorEvent): EditorEventState {
@@ -24,6 +30,8 @@ export function applyEditorEvent(state: EditorEventState, event: EditorEvent): E
     ...state, seen: new Set(state.seen), messages: [...state.messages],
     partial: { ...state.partial }, plans: { ...state.plans },
     pipeline: [...state.pipeline], errors: [...state.errors],
+    toolActivity: { ...state.toolActivity },
+    pendingApprovals: { ...state.pendingApprovals },
     lastEventId: Math.max(state.lastEventId, id),
   };
   if (id) next.seen.add(id);
@@ -47,6 +55,44 @@ export function applyEditorEvent(state: EditorEventState, event: EditorEvent): E
     next.writerBuffer += p.text ?? "";
   } else if (event.type === "draft_version_saved") {
     next.pipeline = [...next.pipeline, { phase: "draft_saved", state: "completed", data: p }];
+  } else if (event.type === "tool_activity") {
+    const approvalId = p.approval_id ?? `tool-${id}`;
+    next.toolActivity[approvalId] = {
+      ...(next.toolActivity[approvalId] ?? {}),
+      approval_id: approvalId,
+      tool: p.tool ?? "tool",
+      status: p.status ?? "running",
+      summary: p.summary ?? p.tool ?? "工具操作",
+      targets: p.targets,
+      reason: p.reason,
+    };
+  } else if (event.type === "tool_approval_requested") {
+    const approvalId = p.approval_id;
+    if (approvalId) {
+      const approval = {
+        approval_id: approvalId,
+        tool: p.tool ?? "tool",
+        status: "waiting",
+        summary: p.summary ?? "等待审批",
+        targets: p.targets,
+        reason: p.reason,
+      };
+      next.pendingApprovals[approvalId] = approval;
+      next.toolActivity[approvalId] = approval;
+    }
+  } else if (event.type === "tool_approval_resolved") {
+    const approvalId = p.approval_id;
+    if (approvalId) {
+      const previous = next.toolActivity[approvalId] ?? next.pendingApprovals[approvalId];
+      if (previous) {
+        next.toolActivity[approvalId] = {
+          ...previous,
+          status: p.decision === "allow" ? "approved" : "denied",
+          decision: p.decision,
+        };
+      }
+      delete next.pendingApprovals[approvalId];
+    }
   } else if (["turn_failed", "action_rejected", "protocol_error"].includes(event.type)) {
     if (event.type === "turn_failed") {
       for (const [messageId, text] of Object.entries(next.partial)) {

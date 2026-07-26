@@ -49,3 +49,41 @@ it("clears the previous transient error when the author retries", () => {
 
   expect(state.errors).toEqual([]);
 });
+
+it("tracks tool activity and removes resolved approvals", () => {
+  let state = emptyEditorState();
+  state = applyEditorEvent(state, {
+    event_id: 1,
+    type: "tool_activity",
+    payload: {
+      approval_id: "a1",
+      tool: "write",
+      status: "checking",
+      summary: "修改 outline.md",
+    },
+  });
+  state = applyEditorEvent(state, {
+    event_id: 2,
+    type: "tool_approval_requested",
+    payload: {
+      approval_id: "a1",
+      tool: "write",
+      risk: "important",
+      summary: "修改 outline.md",
+      targets: ["outline.md"],
+      reason: "important file",
+    },
+  });
+
+  expect(state.toolActivity.a1.status).toBe("waiting");
+  expect(state.pendingApprovals.a1.tool).toBe("write");
+
+  state = applyEditorEvent(state, {
+    event_id: 3,
+    type: "tool_approval_resolved",
+    payload: { approval_id: "a1", decision: "deny" },
+  });
+
+  expect(state.pendingApprovals.a1).toBeUndefined();
+  expect(state.toolActivity.a1.status).toBe("denied");
+});
