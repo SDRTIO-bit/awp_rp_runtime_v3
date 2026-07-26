@@ -20,12 +20,24 @@ if str(_PROJECT_ROOT.parent) not in sys.path:
 from aiohttp import web
 
 from awp_rp_runtime_v3.runtime.novel_api import register_novel_routes
+from awp_rp_runtime_v3.runtime.novel_workspace_catalog import NovelWorkspaceCatalog
 from awp_rp_runtime_v3.runtime.runtime_store_factory import RuntimeStoreFactory
 from awp_rp_runtime_v3.runtime.session_runtime_registry import (
     SessionRuntimeStoreRegistry,
 )
 
 _WEB_DIST = _PROJECT_ROOT / "frontend" / "dist"
+WORKSPACE_CATALOG_KEY: web.AppKey[NovelWorkspaceCatalog] = web.AppKey(
+    "workspace_catalog",
+    NovelWorkspaceCatalog,
+)
+
+
+async def _health(request: web.Request) -> web.Response:
+    catalog = request.app[WORKSPACE_CATALOG_KEY]
+    return web.json_response(
+        {"data": {"status": "ok", "projects": len(catalog.list())}}
+    )
 
 
 def _default_registry_factory() -> SessionRuntimeStoreRegistry:
@@ -62,11 +74,15 @@ async def _serve_spa(request: web.Request) -> web.Response:
 
 def create_app(
     registry_factory: Callable[[], SessionRuntimeStoreRegistry] | None = None,
+    workspace_catalog: NovelWorkspaceCatalog | None = None,
 ) -> web.Application:
     """Create an aiohttp app with novel and SPA routes only."""
 
     app = web.Application()
+    catalog = workspace_catalog or NovelWorkspaceCatalog(_PROJECT_ROOT)
+    app[WORKSPACE_CATALOG_KEY] = catalog
     register_novel_routes(app, registry_factory or _default_registry_factory)
+    app.router.add_get("/awp/api/v1/health", _health)
     app.router.add_get("/awp", _serve_spa)
     app.router.add_get("/awp/{tail:.*}", _serve_spa)
     return app
