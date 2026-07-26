@@ -1,12 +1,4 @@
-"""RuntimeStoreFactory — single controlled entry point for all persistent stores.
-
-Resolves database path from runtime profile + namespace.
-Guarantees same (profile, namespace, sessionId) → same store instances.
-Enforces test/production isolation.
-
-Production workflow NEVER receives dbPath. The factory resolves it from env.
-Test isolation uses AWP_RUNTIME_PROFILE=test + AWP_TEST_RUNTIME_NAMESPACE.
-"""
+"""Environment-controlled factory for novel runtime stores."""
 
 from __future__ import annotations
 
@@ -20,10 +12,8 @@ from .session_runtime_registry import SessionRuntimeStoreRegistry
 
 # Module-level singleton cache keyed by (thread_id, db_path).
 #
-# sqlite3 connections are thread-affine by default. The management API can run
-# dispatcher work in a background thread while UI list/read endpoints stay on
-# the aiohttp event loop thread, so each thread needs its own connection-backed
-# registry for the same database path.
+# sqlite3 connections are thread-affine by default, so each thread receives its
+# own connection-backed registry for a database path.
 _registry_cache: dict[tuple[int, str], SessionRuntimeStoreRegistry] = {}
 _cache_lock = threading.Lock()
 
@@ -31,21 +21,21 @@ _cache_lock = threading.Lock()
 def _resolve_db_path(profile: str, namespace: str, store_root: str = "") -> str:
     """Resolve database path from profile + namespace.
 
-    Production: awp_rp_runtime.db in current directory.
-    Test: <store_root>/<namespace>/awp_session.db
+    Production: awp_novel_runtime.db in current directory.
+    Test: <store_root>/<namespace>/awp_novel.db
     """
     if profile == "test":
         if not store_root:
             store_root = str(Path("artifacts") / "test-runtime")
         db_dir = Path(store_root) / namespace
         db_dir.mkdir(parents=True, exist_ok=True)
-        return str(db_dir / "awp_session.db")
+        return str(db_dir / "awp_novel.db")
 
     # Production: no namespace, no user-controlled path
     explicit = os.environ.get("AWP_RUNTIME_DB_PATH", "")
     if explicit:
         return explicit
-    return "awp_rp_runtime.db"
+    return "awp_novel_runtime.db"
 
 
 def _get_or_create_registry(db_path: str) -> SessionRuntimeStoreRegistry:
@@ -133,20 +123,6 @@ class RuntimeStoreFactory:
     def registry(self) -> SessionRuntimeStoreRegistry:
         return self._registry
 
-    # ── Convenience accessors ─────────────────────────────────────────────
-
-    @property
-    def card_state_store(self):
-        return self._registry.card_state_store
-
-    @property
-    def turn_record_store(self):
-        return self._registry.turn_record_store
-
-    @property
-    def round_snapshot_store(self):
-        return self._registry.round_snapshot_store
-
     @property
     def active_memory_store(self):
         return self._registry.active_memory_store
@@ -154,26 +130,6 @@ class RuntimeStoreFactory:
     @property
     def rag_memory_store(self):
         return self._registry.rag_memory_store
-
-    @property
-    def trace_store(self):
-        return self._registry.trace_store
-
-    @property
-    def card_session_binding_store(self):
-        return self._registry.card_session_binding_store
-
-    @property
-    def opening_record_store(self):
-        return self._registry.opening_record_store
-
-    @property
-    def worldbook_binding_store(self):
-        return self._registry.worldbook_binding_store
-
-    @property
-    def bootstrap_receipt_store(self):
-        return self._registry.bootstrap_receipt_store
 
     def close(self) -> None:
         """Close the underlying database connection."""

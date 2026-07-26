@@ -20,6 +20,25 @@ def reg(tmp_path):
     return SessionRuntimeStoreRegistry(db)
 
 
+def test_registry_exposes_only_novel_and_novel_memory_stores(reg):
+    assert reg.novel_project_store
+    assert reg.active_memory_store
+    assert reg.rag_memory_store
+
+    for retired in (
+        "card_state_store",
+        "turn_record_store",
+        "round_snapshot_store",
+        "trace_store",
+        "card_definition_store",
+        "card_session_binding_store",
+        "opening_record_store",
+        "worldbook_binding_store",
+        "bootstrap_receipt_store",
+    ):
+        assert not hasattr(reg, retired)
+
+
 class TestNovelProjectStore:
     def test_create_and_load(self, reg):
         p = NovelProject(project_id="p1", title="测试小说", genre="玄幻")

@@ -1,75 +1,23 @@
-"""Shared test fixtures."""
+"""Shared fixtures for the novel runtime tests."""
 
-import sys
-import types
+from __future__ import annotations
+
 import json
+import sys
 from pathlib import Path
 
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root.parent))
-
-# ComfyUI runtime module `comfy_execution.validation` is only available inside a
-# running ComfyUI process. Several node/workflow tests exercise its
-# `validate_node_input` to check link type compatibility. Provide a faithful
-# offline stub when the real module is absent so these tests run under plain
-# pytest. The stub honours the AnyType("*") wildcard declared by
-# AWPV2TraceDisplay (accepts any received type) and otherwise falls back to
-# exact match or membership for union (list/tuple) input declarations.
-try:  # pragma: no cover - exercised only inside ComfyUI
-    import comfy_execution.validation  # noqa: F401
-except ModuleNotFoundError:
-    _stub = types.ModuleType("comfy_execution")
-    _stub_validation = types.ModuleType("comfy_execution.validation")
-
-    def validate_node_input(received, expected, *args, **kwargs):
-        if str(expected) == "*":
-            return True
-        if isinstance(expected, (list, tuple, set)):
-            return any(str(e) == "*" or e == received for e in expected)
-        return expected == received
-
-    _stub_validation.validate_node_input = validate_node_input
-    _stub.validation = _stub_validation
-    sys.modules["comfy_execution"] = _stub
-    sys.modules["comfy_execution.validation"] = _stub_validation
-
 import pytest
-from awp_rp_runtime_v3.testing.fakes import (
-    FakeCardStateStore, FakeTurnRecordStore, FakeActiveMemoryStore,
-    FakeRagMemoryStore, FakeTraceStore, FakeLLMProvider,
-)
-from awp_rp_runtime_v3.contracts.card_state import CardState, VariableEntry, SceneState
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT.parent))
+
 from awp_rp_runtime_v3.contracts.novel_pi_role_protocol import NovelPiRoleResult
 from awp_rp_runtime_v3.runtime.novel_role_runtime import novel_role_runtime_override
 
 
-@pytest.fixture
-def fake_card_state_store():
-    return FakeCardStateStore()
-
-@pytest.fixture
-def fake_turn_record_store():
-    return FakeTurnRecordStore()
-
-@pytest.fixture
-def fake_active_memory_store():
-    return FakeActiveMemoryStore()
-
-@pytest.fixture
-def fake_rag_memory_store():
-    return FakeRagMemoryStore()
-
-@pytest.fixture
-def fake_trace_store():
-    return FakeTraceStore()
-
-@pytest.fixture
-def fake_llm():
-    return FakeLLMProvider()
-
-
 class DeterministicNovelRoleRuntime:
-    """Schema-valid Pi role double for tests that exercise the whole engine."""
+    """Schema-valid Pi role double for whole-engine tests."""
 
     runtime_name = "TestPiRoles"
 
@@ -97,33 +45,43 @@ class DeterministicNovelRoleRuntime:
 
     def _text(self, task):
         if task.role == "architect":
-            return json.dumps({
-                "chapter_id": f"ch-{task.project_id}-{task.chapter_index}",
-                "project_id": task.project_id,
-                "chapter_index": task.chapter_index,
-                "title": f"第{task.chapter_index}章",
-                "target_chars": 300,
-                "chapter_position": "progression",
-                "target_emotion": "紧张",
-                "opening_hook": "人物在冲突中开场",
-                "main_payoff": "角色作出新决定",
-                "scene_beats": [{
-                    "beat_id": f"ch{task.chapter_index}-b1",
-                    "description": "角色通过对话推进当前冲突",
-                    "function_tag": "推进",
-                    "density": "normal",
-                    "budget_chars": 300,
-                }],
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "chapter_id": f"ch-{task.project_id}-{task.chapter_index}",
+                    "project_id": task.project_id,
+                    "chapter_index": task.chapter_index,
+                    "title": f"第{task.chapter_index}章",
+                    "target_chars": 300,
+                    "chapter_position": "progression",
+                    "target_emotion": "紧张",
+                    "opening_hook": "人物在冲突中开场",
+                    "main_payoff": "角色作出新决定",
+                    "scene_beats": [
+                        {
+                            "beat_id": f"ch{task.chapter_index}-b1",
+                            "description": "角色通过对话推进当前冲突",
+                            "function_tag": "推进",
+                            "density": "normal",
+                            "budget_chars": 300,
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
         if task.role == "director":
-            return json.dumps({
-                "beat_details": [{
-                    "beat_id": f"ch{task.chapter_index}-b1",
-                    "content_outline": "人物围绕具体阻碍展开对话并作出决定",
-                }],
-                "risk_flags": [],
-                "opportunities": [],
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "beat_details": [
+                        {
+                            "beat_id": f"ch{task.chapter_index}-b1",
+                            "content_outline": "人物围绕具体阻碍展开对话并作出决定",
+                        }
+                    ],
+                    "risk_flags": [],
+                    "opportunities": [],
+                },
+                ensure_ascii=False,
+            )
         if task.role == "writer":
             return (
                 "门刚推开，桌边的人就问他为什么现在才来。"
@@ -140,12 +98,15 @@ class DeterministicNovelRoleRuntime:
                 ensure_ascii=False,
             )
         if task.role == "ledger_curator":
-            return json.dumps({
-                "chapter_summary": "角色在争论后接下任务，关系与局势向前推进。",
-                "ledger_updates": [],
-                "ledger_resolves": [],
-                "foreshadowing_changes": [],
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "chapter_summary": "角色在争论后接下任务，关系与局势向前推进。",
+                    "ledger_updates": [],
+                    "ledger_resolves": [],
+                    "foreshadowing_changes": [],
+                },
+                ensure_ascii=False,
+            )
         return str(task.input_payload.get("prompt", ""))
 
 
