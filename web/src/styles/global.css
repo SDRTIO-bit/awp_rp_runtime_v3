@@ -1,0 +1,39 @@
+@import "./tokens.css";
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--ui-font);
+  overflow: hidden;
+}
+button, input, textarea { font: inherit; }
+button { color: inherit; }
+::selection { background: var(--accent-soft); }
+
+.icon-button,
+.quiet-button,
+.primary-button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 34px;
+  padding: 6px 12px;
+}
+.quiet-button:hover, .icon-button:hover { border-color: var(--border-strong); }
+.primary-button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button:disabled { cursor: not-allowed; opacity: .48; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

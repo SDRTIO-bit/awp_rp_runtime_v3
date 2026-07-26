@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import AppLayout from "./components/Layout";
+import { ThemeProvider } from "./components/workspace/ThemeProvider";
+import "./styles/global.css";
 
 const Novels = lazy(() => import("./pages/Novels"));
 const NovelDetail = lazy(() => import("./pages/NovelDetail"));
@@ -16,7 +18,8 @@ const routeFallback = (
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: "#1677ff" } }}>
+    <ThemeProvider>
+    <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: "#8b3f35" } }}>
       <BrowserRouter basename="/awp">
         <Suspense fallback={routeFallback}>
           <Routes>
@@ -30,5 +33,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </Suspense>
       </BrowserRouter>
     </ConfigProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );
