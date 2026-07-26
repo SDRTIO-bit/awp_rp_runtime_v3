@@ -19,8 +19,13 @@ from aiohttp import web
 from ..contracts.novel_character import NovelCharacter
 from ..contracts.novel_project import NovelProject
 from .novel_engine import NovelEngine
+from .novel_document_service import (
+    DocumentConflictError,
+    NovelDocumentService,
+)
 from .novel_planner_adapter import NovelPlannerAdapter
 from .session_runtime_registry import SessionRuntimeStoreRegistry
+from .novel_workspace_catalog import NovelWorkspaceCatalog
 
 RegistryFactory = Callable[[], SessionRuntimeStoreRegistry]
 
@@ -44,11 +49,115 @@ def _chapter_index(raw: str) -> int | None:
 class NovelApiHandlers:
     """Request handlers bound to a novel store registry factory."""
 
-    def __init__(self, registry_factory: RegistryFactory):
+    def __init__(
+        self,
+        registry_factory: RegistryFactory,
+        workspace_catalog: NovelWorkspaceCatalog | None = None,
+    ):
         self._registry_factory = registry_factory
+        self._workspace_catalog = workspace_catalog
 
     def _registry(self) -> SessionRuntimeStoreRegistry:
         return self._registry_factory()
+
+    def _document_service(self, project_id: str) -> NovelDocumentService:
+        if self._workspace_catalog is None:
+            raise KeyError("workspace catalog is unavailable")
+        workspace = self._workspace_catalog.require(project_id)
+        return NovelDocumentService(
+            workspace,
+            self._workspace_catalog.registry(project_id),
+        )
+
+    async def get_document(self, request: web.Request) -> web.Response:
+        try:
+            document = await asyncio.to_thread(
+                self._document_service(
+                    request.match_info["project_id"]
+                ).read,
+                request.match_info["kind"],
+                request.query.get("resource_id", ""),
+            )
+            return _json(document.model_dump(mode="json"))
+        except ValueError as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def list_document_versions(
+        self, request: web.Request
+    ) -> web.Response:
+        try:
+            versions = await asyncio.to_thread(
+                self._document_service(
+                    request.match_info["project_id"]
+                ).list_versions,
+                request.match_info["kind"],
+                request.query.get("resource_id", ""),
+            )
+            return _json(
+                [item.model_dump(mode="json") for item in versions]
+            )
+        except ValueError as exc:
+            return _json({"error": str(exc)}, 400)
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def get_document_version(
+        self, request: web.Request
+    ) -> web.Response:
+        try:
+            revision = int(request.match_info["revision"])
+            document = await asyncio.to_thread(
+                self._document_service(
+                    request.match_info["project_id"]
+                ).read_version,
+                request.match_info["kind"],
+                revision,
+                request.query.get("resource_id", ""),
+            )
+            return _json(document.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def save_document(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise ValueError("request body must be an object")
+            content = body.get("content")
+            expected_revision = body.get("expected_revision")
+            if not isinstance(content, str):
+                raise ValueError("content must be text")
+            if (
+                not isinstance(expected_revision, int)
+                or isinstance(expected_revision, bool)
+            ):
+                raise ValueError("expected_revision must be an integer")
+            document = await asyncio.to_thread(
+                self._document_service(
+                    request.match_info["project_id"]
+                ).save,
+                request.match_info["kind"],
+                content,
+                expected_revision,
+                request.query.get("resource_id", ""),
+            )
+            return _json(document.model_dump(mode="json"))
+        except DocumentConflictError as exc:
+            return _json(
+                {
+                    "error": str(exc),
+                    "current_revision": exc.current_revision,
+                },
+                409,
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
 
     async def create_project(self, request: web.Request) -> web.Response:
         body = await request.json()
@@ -337,16 +446,34 @@ class NovelApiHandlers:
 
 
 def register_novel_routes(
-    app: web.Application, registry_factory: RegistryFactory
+    app: web.Application,
+    registry_factory: RegistryFactory,
+    workspace_catalog: NovelWorkspaceCatalog | None = None,
 ) -> None:
     """Register the complete novel-only API surface on ``app``."""
 
-    handlers = NovelApiHandlers(registry_factory)
+    handlers = NovelApiHandlers(registry_factory, workspace_catalog)
     prefix = "/awp/api/v1/novels"
 
     app.router.add_get(prefix, handlers.list_projects)
     app.router.add_post(prefix, handlers.create_project)
     app.router.add_post(f"{prefix}/plan", handlers.plan_from_concept)
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/documents/{{kind}}/versions/{{revision}}",
+        handlers.get_document_version,
+    )
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/documents/{{kind}}/versions",
+        handlers.list_document_versions,
+    )
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/documents/{{kind}}",
+        handlers.get_document,
+    )
+    app.router.add_put(
+        f"{prefix}/{{project_id}}/documents/{{kind}}",
+        handlers.save_document,
+    )
     app.router.add_get(f"{prefix}/{{project_id}}", handlers.get_project)
     app.router.add_delete(f"{prefix}/{{project_id}}", handlers.delete_project)
     app.router.add_get(f"{prefix}/{{project_id}}/outline", handlers.get_outline)

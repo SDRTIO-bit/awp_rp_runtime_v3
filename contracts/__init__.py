@@ -13,6 +13,7 @@ from .novel_authoring import (
     AuthorScene,
 )
 from .novel_web_event import NovelRoomId, NovelWebEvent
+from .novel_document import NovelDocumentKind, NovelDocumentVersion
 
 __all__ = [
     "AuthorApproval",
@@ -23,4 +24,6 @@ __all__ = [
     "AuthorScene",
     "NovelRoomId",
     "NovelWebEvent",
+    "NovelDocumentKind",
+    "NovelDocumentVersion",
 ]

@@ -26,6 +26,7 @@ class ChapterDraft:
     raw_text: str = ""
     char_count: int = 0
     status: str = "draft"       # draft / accepted / rejected / superseded
+    source: str = "writer"
     quality_decision_id: str = ""
     quality_annotations: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     created_at: str = ""
@@ -42,6 +43,7 @@ class ChapterDraft:
             "raw_text": self.raw_text,
             "char_count": self.char_count,
             "status": self.status,
+            "source": self.source,
             "quality_decision_id": self.quality_decision_id,
             "quality_annotations": list(self.quality_annotations),
             "created_at": self.created_at,
@@ -60,6 +62,7 @@ class ChapterDraft:
             raw_text=data.get("raw_text", ""),
             char_count=data.get("char_count", 0),
             status=data.get("status", "draft"),
+            source=data.get("source", "writer"),
             quality_decision_id=data.get("quality_decision_id", ""),
             quality_annotations=tuple(data.get("quality_annotations", []) or []),
             created_at=data.get("created_at", ""),

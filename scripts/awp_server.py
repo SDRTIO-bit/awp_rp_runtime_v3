@@ -91,7 +91,11 @@ def create_app(
     app[WORKSPACE_CATALOG_KEY] = catalog
     manager = editor_session_manager or EditorSessionManager(catalog)
     app[EDITOR_SESSION_MANAGER_KEY] = manager
-    register_novel_routes(app, registry_factory or _default_registry_factory)
+    register_novel_routes(
+        app,
+        registry_factory or _default_registry_factory,
+        workspace_catalog=catalog,
+    )
     register_novel_websocket_routes(app)
     app.router.add_get("/awp/api/v1/health", _health)
     app.router.add_get("/awp", _serve_spa)
