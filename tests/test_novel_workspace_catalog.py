@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -58,3 +59,12 @@ def test_catalog_missing_project_does_not_accept_a_path(tmp_path):
 
     with pytest.raises(KeyError, match="workspace not found"):
         catalog.require("../../outside")
+
+
+def test_checked_in_workspace_bindings_are_valid_and_unique():
+    repository_root = Path(__file__).resolve().parents[1]
+
+    workspaces = NovelWorkspaceCatalog(repository_root).list()
+
+    assert workspaces
+    assert len({workspace.project_id for workspace in workspaces}) == len(workspaces)
