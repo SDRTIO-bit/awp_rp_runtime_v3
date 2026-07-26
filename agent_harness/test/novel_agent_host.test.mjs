@@ -116,4 +116,7 @@ test("real session factory receives the closed tool configuration", async () => 
   assert.match(systemPrompt, /作品和目标读者/);
   assert.match(systemPrompt, /不得直接创作整章正文/);
   assert.match(systemPrompt, /自动使用.*author-collaboration/s);
+  assert.match(systemPrompt, /先检索.*项目文件/s);
+  assert.match(systemPrompt, /delegate_project_task/);
+  assert.match(systemPrompt, /不得用工具.*替作者决定剧情/s);
 });

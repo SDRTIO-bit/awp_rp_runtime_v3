@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Execution status:** Completed inline on 2026-07-27. Verification: Python 29 passed, Pi Host 23 passed, Web 5 passed, production build succeeded.
+
 **Goal:** Give the persistent Pi writing editor project-scoped file tools, pre-execution approval, visible browser tool activity, and one-level read-only worker agents.
 
 **Architecture:** Pi exposes Coding-style tool names but delegates every operation to Python. `NovelProjectSandbox` resolves paths against the server-bound novel root, performs reads and versioned writes, classifies risk, and blocks protected or external targets. `EditorSessionManager` brokers author approvals over the existing durable WebSocket event stream; a nested Pi Session provides bounded read-only delegation.
@@ -491,4 +493,3 @@ Stop only the existing AWP server bound to `127.0.0.1:8188`, start `web.bat dail
 git add -- agent_harness/resources/system-prompt.md agent_harness/resources/skills/author-collaboration/SKILL.md agent_harness/test/novel_agent_host.test.mjs docs/superpowers/specs/2026-07-27-novel-editor-sandbox-toolkit-design.md
 git commit -m "docs: teach editor to use sandbox tools"
 ```
-
