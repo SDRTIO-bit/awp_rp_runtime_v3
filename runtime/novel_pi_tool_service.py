@@ -141,13 +141,30 @@ class NovelPiToolService:
             self._current_author_message,
             confirmation_quote,
         )
+        phase_callback = getattr(self._callbacks, "on_phase", None)
+        if phase_callback:
+            phase_callback(
+                "start",
+                "author_plan_compile",
+                {"chapter_index": plan.chapter_index},
+            )
         self._bind_project_root()
         chapter = AuthorPlanCompiler().compile_and_save(plan, self._registry)
+        if phase_callback:
+            phase_callback(
+                "end",
+                "author_plan_compile",
+                {"chapter_index": plan.chapter_index},
+            )
         draft = self._engine().write_chapter_stream(
             project_id=self._project_id,
             chapter_index=chapter.chapter_index,
             write_guidance="",
         )
+        if draft.status != "accepted":
+            raise ValueError(
+                "Writer output was not accepted; author plan remains approved"
+            )
         executed = self._authoring.mark_executed(
             plan_id,
             revision,
@@ -198,6 +215,11 @@ class NovelPiToolService:
                 on_beat=getattr(callbacks, "on_beat", None),
                 on_chunk=getattr(callbacks, "on_chunk", None),
                 on_error=getattr(callbacks, "on_error", None),
+                on_draft_saved=getattr(callbacks, "on_draft_saved", None),
+                should_cancel=(
+                    getattr(callbacks, "should_cancel", None)
+                    or (lambda: False)
+                ),
             ),
         )
 

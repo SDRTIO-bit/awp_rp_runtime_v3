@@ -37,11 +37,13 @@ from .novel_evolution_curator import novel_memory_scope
 from .novel_role_context import novel_role_scope
 from .novel_role_runtime import get_novel_role_runtime
 from .novel_trace import (
+    NovelPipelineCancelled,
     NovelStreamCallbacks,
     safe_on_phase,
     safe_on_beat,
     safe_on_chunk,
     safe_on_error,
+    safe_on_draft_saved,
 )
 
 
@@ -89,13 +91,24 @@ class NovelEngine:
         self._agenda_service = NpcAgendaService()
 
     def _safe_on_phase(self, event: str, name: str, payload: dict[str, Any]) -> None:
+        self._raise_if_cancelled()
         safe_on_phase(self._callbacks.on_phase, event, name, payload)
 
     def _safe_on_beat(self, event: str, beat_index: int, payload: dict[str, Any]) -> None:
+        self._raise_if_cancelled()
         safe_on_beat(self._callbacks.on_beat, event, beat_index, payload)
 
     def _safe_on_chunk(self, text: str) -> None:
+        self._raise_if_cancelled()
         safe_on_chunk(self._callbacks.on_chunk, text)
+
+    def _safe_on_draft_saved(self, payload: dict[str, Any]) -> None:
+        self._raise_if_cancelled()
+        safe_on_draft_saved(self._callbacks.on_draft_saved, payload)
+
+    def _raise_if_cancelled(self) -> None:
+        if self._callbacks.should_cancel():
+            raise NovelPipelineCancelled("novel pipeline cancelled by author")
 
     # Backward-compat: old code may still reference engine._style_cleaner
     @property
@@ -295,6 +308,15 @@ class NovelEngine:
         # V4: Director removed — Architect skeleton goes directly to Writer.
         # NPC pipeline still runs but only for agenda visibility in context.
         author_led = self._packet_builder.has_approved_author_plan(plan)
+        if author_led:
+            self._safe_on_phase(
+                "skipped", "architect", {"ch": chapter_index, "author_led": True}
+            )
+            self._safe_on_phase(
+                "skipped",
+                "autonomous_npc_planning",
+                {"ch": chapter_index, "author_led": True},
+            )
         npc_turn = (
             AutonomousNpcTurn()
             if author_led
@@ -960,6 +982,15 @@ class NovelEngine:
         global_summaries = self._build_global_summaries(project_id, chapter_index)
 
         author_led = self._packet_builder.has_approved_author_plan(plan)
+        if author_led:
+            self._safe_on_phase(
+                "skipped", "architect", {"ch": chapter_index, "author_led": True}
+            )
+            self._safe_on_phase(
+                "skipped",
+                "autonomous_npc_planning",
+                {"ch": chapter_index, "author_led": True},
+            )
         npc_turn = (
             AutonomousNpcTurn()
             if author_led
@@ -975,11 +1006,14 @@ class NovelEngine:
         )
 
         # Phase: director — separate task-scoped Pi Agent Session.
-        self._safe_on_phase("start", "director", {"ch": chapter_index})
         director_started = time.time()
         if author_led:
             director_guidance = DirectorGuidance()
+            self._safe_on_phase(
+                "skipped", "director", {"ch": chapter_index, "author_led": True}
+            )
         else:
+            self._safe_on_phase("start", "director", {"ch": chapter_index})
             director_guidance = self._call_director(
                 project_id,
                 plan,
@@ -996,12 +1030,12 @@ class NovelEngine:
                 revision=revision,
                 candidate_agendas=npc_turn.selected_agendas,
             )
-        self._safe_on_phase("end", "director", {
-            "ch": chapter_index,
-            "duration_ms": int((time.time() - director_started) * 1000),
-            "beats": len(director_guidance.beat_details),
-            "skipped": author_led,
-        })
+            self._safe_on_phase("end", "director", {
+                "ch": chapter_index,
+                "duration_ms": int((time.time() - director_started) * 1000),
+                "beats": len(director_guidance.beat_details),
+                "skipped": False,
+            })
 
         packet = self._packet_builder.build(
             chapter_plan=plan, ledger_items=ledger_items,
@@ -1116,29 +1150,47 @@ class NovelEngine:
             quality_decision_id=quality_decision.trace_id,
             quality_annotations=tuple(quality_decision.checks),
         )
-        self._registry.novel_chapter_draft_store.save(draft)
+        self._raise_if_cancelled()
+        if status == "accepted":
+            self._registry.novel_chapter_draft_store.save(draft)
+            self._safe_on_draft_saved(
+                {
+                    "draft_id": draft.draft_id,
+                    "chapter_id": draft.chapter_id,
+                    "revision": draft.revision,
+                    "status": draft.status,
+                    "char_count": draft.char_count,
+                }
+            )
 
         # Phase: ledger
-        self._safe_on_phase("start", "ledger", {"ch": chapter_index})
-        t = time.time()
-        self._update_ledger(
-            project_id, plan, text, ledger_items, characters, quality_decision,
-            revision=revision,
-            selected_npc_actions=(
-                director_guidance.selected_npc_actions
-                if chapter_quality_accepted
-                else ()
-            ),
-            agenda_updates=(
-                npc_turn.agenda_updates
-                if chapter_quality_accepted
-                else ()
-            ),
-        )
-        self._safe_on_phase("end", "ledger", {
-            "ch": chapter_index,
-            "duration_ms": int((time.time() - t) * 1000),
-        })
+        if status == "accepted":
+            self._safe_on_phase("start", "ledger", {"ch": chapter_index})
+            t = time.time()
+            self._update_ledger(
+                project_id, plan, text, ledger_items, characters, quality_decision,
+                revision=revision,
+                selected_npc_actions=(
+                    director_guidance.selected_npc_actions
+                    if chapter_quality_accepted
+                    else ()
+                ),
+                agenda_updates=(
+                    npc_turn.agenda_updates
+                    if chapter_quality_accepted
+                    else ()
+                ),
+            )
+            self._safe_on_phase("end", "ledger", {
+                "ch": chapter_index,
+                "duration_ms": int((time.time() - t) * 1000),
+            })
+        else:
+            self._safe_on_phase(
+                "skipped",
+                "ledger",
+                {"ch": chapter_index, "reason": "quality_rejected"},
+            )
 
         return draft
 

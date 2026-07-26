@@ -14,6 +14,12 @@ PhaseCallback = Callable[[str, str, dict[str, Any]], None]
 BeatCallback = Callable[[str, int, dict[str, Any]], None]
 ChunkCallback = Callable[[str], None]
 ErrorCallback = Callable[[str, str], None]
+DraftSavedCallback = Callable[[dict[str, Any]], None]
+CancellationCallback = Callable[[], bool]
+
+
+class NovelPipelineCancelled(RuntimeError):
+    """Raised before formal commits when the author cancels a running pipeline."""
 
 
 @dataclass
@@ -22,6 +28,8 @@ class NovelStreamCallbacks:
     on_beat: BeatCallback = field(default=lambda e, i, p: None)
     on_chunk: ChunkCallback = field(default=lambda t: None)
     on_error: ErrorCallback = field(default=lambda ph, msg: None)
+    on_draft_saved: DraftSavedCallback = field(default=lambda payload: None)
+    should_cancel: CancellationCallback = field(default=lambda: False)
 
 
 def safe_on_phase(cb: PhaseCallback | None, event: str, name: str,
@@ -60,3 +68,26 @@ def safe_on_error(cb: ErrorCallback | None, phase: str, message: str) -> None:
         cb(phase, message)
     except Exception:
         pass
+
+
+def safe_on_draft_saved(
+    cb: DraftSavedCallback | None,
+    payload: dict[str, Any],
+) -> None:
+    if cb is None:
+        return
+    try:
+        cb(payload)
+    except Exception:
+        pass
+
+
+__all__ = [
+    "NovelPipelineCancelled",
+    "NovelStreamCallbacks",
+    "safe_on_beat",
+    "safe_on_chunk",
+    "safe_on_draft_saved",
+    "safe_on_error",
+    "safe_on_phase",
+]

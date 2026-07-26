@@ -104,9 +104,18 @@ class NovelAuthoringService:
         with _LOCKS_GUARD:
             self._lock = _LOCKS.setdefault(str(self.root), threading.RLock())
 
-    def record_author_message(self, text: str, session_id: str, turn: int) -> str:
+    def record_author_message(
+        self,
+        text: str,
+        session_id: str,
+        turn: int,
+        *,
+        source: str = "editor_chat",
+    ) -> str:
         if not text.strip():
             raise ValueError("author message cannot be empty")
+        if source not in {"editor_chat", "web_action"}:
+            raise ValueError("invalid author message source")
         message_id = f"author-{uuid.uuid4().hex}"
         path = self.journal_dir / f"{datetime.now().astimezone():%Y-%m-%d}.jsonl"
         self._append_jsonl(
@@ -117,6 +126,7 @@ class NovelAuthoringService:
                 "session_id": session_id,
                 "turn": turn,
                 "text": text,
+                "source": source,
                 "created_at": _now(),
             },
         )

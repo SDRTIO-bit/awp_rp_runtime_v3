@@ -103,6 +103,26 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
                     if set(frame) != {"type"}:
                         raise ValueError("invalid cancel frame")
                     await manager.cancel(key)
+                elif frame_type in {"approve_plan", "execute_plan"}:
+                    if set(frame) != {"type", "plan_id", "revision"}:
+                        raise ValueError(f"invalid {frame_type} frame")
+                    plan_id = frame["plan_id"]
+                    revision = frame["revision"]
+                    if (
+                        not isinstance(plan_id, str)
+                        or not plan_id.strip()
+                        or not isinstance(revision, int)
+                        or isinstance(revision, bool)
+                        or revision < 1
+                    ):
+                        raise ValueError("invalid author plan reference")
+                    task = asyncio.create_task(
+                        manager.handle_author_action(
+                            key, frame_type, plan_id, revision
+                        )
+                    )
+                    tasks.add(task)
+                    task.add_done_callback(tasks.discard)
                 else:
                     raise ValueError("unknown editor frame type")
             except (
