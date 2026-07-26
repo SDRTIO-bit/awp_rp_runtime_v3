@@ -55,4 +55,11 @@ test("real session factory receives the closed tool configuration", async () => 
   assert.equal(captured.noTools, "all");
   assert.deepEqual(captured.tools, NOVEL_TOOL_NAMES);
   assert.deepEqual(captured.customTools.map((tool) => tool.name), NOVEL_TOOL_NAMES);
+  const skills = captured.resourceLoader.getSkills().skills;
+  const collaboration = skills.find((skill) => skill.name === "author-collaboration");
+  assert.equal(collaboration?.disableModelInvocation, false);
+  const systemPrompt = captured.resourceLoader.getSystemPrompt();
+  assert.match(systemPrompt, /作品和目标读者/);
+  assert.match(systemPrompt, /不得直接创作整章正文/);
+  assert.match(systemPrompt, /自动使用.*author-collaboration/s);
 });
