@@ -2,9 +2,23 @@
 
 一个作者主导、项目管线执行的小说创作运行时。
 
+## 推荐入口：Novel Coding 网页
+
+在仓库根目录运行：
+
+```powershell
+.\web.bat daily_high_school
+```
+
+它会在本机 `127.0.0.1:8188` 启动服务并打开浏览器。网页中央始终保留作者与编辑对话，
+右侧查看计划、正文和批注；确认计划与交给 Writer 执行是两个独立动作。正文和 Prompt
+默认只读，进入编辑模式后的每次保存都会生成新版本。
+
+`tui.bat` 仅保留为兼容诊断入口，不再是推荐创作界面。
+
 系统使用两个隔离的嵌入式 Pi Host：
 
-- 交互 Host：在 TUI 中理解作者意图并调用项目级小说工具。
+- 交互 Host：在网页编辑室中理解作者意图并调用项目级小说工具。
 - 角色 Host：为 Writer、Continuity、Style Cleaner、Ledger Curator 等角色维护受限会话。
 
 Python 负责确定性编排、SQLite 持久化、质量检查和文件写入。Agent 没有任意 shell、文件或网络权限。
