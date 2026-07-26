@@ -4,6 +4,8 @@
 
 Novel CLI 是一个文件驱动的小说管线命令行工具。通过项目目录管理小说，自动调用 LLM 生成章节内容。
 
+默认创作入口是 `scripts/awp_tui.py` 中的专属写作编辑：作者直接谈剧情，消息先写入本地，编辑反复追问并形成计划，作者跨轮批准后才交给 Writer。CLI 的 `plan` / `batch` 是保留的显式 AI 自主模式，不代表默认创作权限。
+
 ## 快速开始
 
 ```bash
@@ -51,6 +53,7 @@ novels/my_novel/
 ├── outline.md         # 章节大纲/灵感
 ├── novel.db           # SQLite 数据库（seed 后生成）
 ├── .novel_cli.json    # CLI 运行时配置
+├── .awp/authoring/    # 作者原话、素材与版本化批准计划
 ├── output/            # 生成的章节 .md 文件
 └── export/            # 导出的结构化数据
 ```
@@ -90,6 +93,15 @@ novels/my_novel/
 角色 role 可选值：`protagonist`（主角）、`deuteragonist`（第二主角）、`supporting`（配角）、`antagonist`（反派）。
 
 ## 管线流程
+
+默认作者主导 TUI：
+
+```text
+作者对话 → 本地日志 → 编辑追问/质疑 → 待确认计划
+        → 下一轮批准 → 更后轮执行 → 确定性编译 → Writer
+```
+
+显式自主 CLI：
 
 ```
 init → 编辑文件 → seed（文件→DB）

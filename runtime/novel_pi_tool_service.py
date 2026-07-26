@@ -132,7 +132,14 @@ class NovelPiToolService:
         self._require_turn_context()
         plan_id = str(args.get("plan_id", ""))
         revision = int(args.get("revision", 0))
-        plan = self._authoring.get_plan(plan_id, revision)
+        confirmation_quote = str(args.get("confirmation_quote", ""))
+        plan = self._authoring.validate_execution_request(
+            plan_id,
+            revision,
+            self._current_turn,
+            self._current_author_message,
+            confirmation_quote,
+        )
         chapter = AuthorPlanCompiler().compile_and_save(plan, self._registry)
         draft = self._engine().write_chapter_stream(
             project_id=self._project_id,
@@ -145,7 +152,7 @@ class NovelPiToolService:
             self._current_turn,
             self._current_message_id,
             self._current_author_message,
-            str(args.get("confirmation_quote", "")),
+            confirmation_quote,
         )
         return {
             "ok": True,

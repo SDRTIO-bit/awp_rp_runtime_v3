@@ -197,15 +197,13 @@ class NovelAuthoringService:
         confirmation_quote: str,
     ) -> AuthorChapterPlan:
         with self._lock:
-            plan = self._latest_exact(plan_id, revision)
-            if plan.status != AuthorPlanStatus.APPROVED or plan.approval is None:
-                raise ValueError("only an approved plan can execute")
-            if current_turn <= plan.approval.turn:
-                raise ValueError("execution requires a later author turn")
-            if not confirmation_quote or confirmation_quote not in current_author_message:
-                raise ValueError("execution quote must occur in the author message")
-            if not _explicit_execution(current_author_message):
-                raise ValueError("author message is not an explicit execution request")
+            plan = self.validate_execution_request(
+                plan_id,
+                revision,
+                current_turn,
+                current_author_message,
+                confirmation_quote,
+            )
             executed = plan.model_copy(
                 update={
                     "status": AuthorPlanStatus.EXECUTED,
@@ -216,6 +214,27 @@ class NovelAuthoringService:
             self._write_plan(executed)
             self._update_status(executed)
             return executed
+
+    def validate_execution_request(
+        self,
+        plan_id: str,
+        revision: int,
+        current_turn: int,
+        current_author_message: str,
+        confirmation_quote: str,
+    ) -> AuthorChapterPlan:
+        """Validate consent before any chapter compilation or Writer side effect."""
+
+        plan = self._latest_exact(plan_id, revision)
+        if plan.status != AuthorPlanStatus.APPROVED or plan.approval is None:
+            raise ValueError("only an approved plan can execute")
+        if current_turn <= plan.approval.turn:
+            raise ValueError("execution requires a later author turn")
+        if not confirmation_quote or confirmation_quote not in current_author_message:
+            raise ValueError("execution quote must occur in the author message")
+        if not _explicit_execution(current_author_message):
+            raise ValueError("author message is not an explicit execution request")
+        return plan
 
     def authoring_context(self, chapter_index: int | None = None) -> dict[str, Any]:
         index = self._read_index()

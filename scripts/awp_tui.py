@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """AWP Novel TUI — Textual-powered terminal dashboard for novel pipeline.
 
-左右分屏：左侧管线实时进度，右侧 cc 风格聊天面板（NovelBrain）。
+左右分屏：左侧管线实时进度，右侧为专属写作编辑对话。
 
 用法:
   python scripts/awp_tui.py [novel_dir]
@@ -217,7 +217,7 @@ class NovelTui(App):
                 yield RichLog(id="writer-output", highlight=True, markup=True, wrap=True)
             with Vertical(id="right-panel"):
                 yield RichLog(id="chat-history", highlight=True, markup=True, wrap=True)
-                yield Input(id="chat-input", placeholder="输入指令... (Enter 发送, Esc 切换焦点)")
+                yield Input(id="chat-input", placeholder="与专属写作编辑讨论创作... (Enter 发送)")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -305,7 +305,7 @@ class NovelTui(App):
                 role_runtime = "?"
                 writer_model = "?"
             mode_text = (
-                f"| Agent: [bold cyan]{interactive_runtime}[/] "
+                f"| Editor: [bold cyan]{interactive_runtime}[/] "
                 f"| Roles: [bold cyan]{role_runtime}[/] "
                 f"| Writer: {writer_model}"
             )
@@ -647,7 +647,6 @@ class NovelTui(App):
 
         elif cmd == "/help":
             chat.write("[bold]命令列表:[/]")
-            chat.write("  /new <项目名> <思路>  新建项目（AI 自动大纲）")
             chat.write("  /open <项目>  连接已有项目")
             chat.write("  /status       查看项目状态")
             chat.write("  /list         列出所有项目")
@@ -671,11 +670,11 @@ class NovelTui(App):
             chat.write("  /session list       列出所有会话")
             chat.write("  /session delete <名> 删除会话")
             chat.write("")
-            chat.write("[bold]对话示例:[/]")
-            chat.write("  帮我把第3章写了")
-            chat.write("  帮我构思一个新故事 （brainstorm 模式）")
-            chat.write("  查一下明朝科举制度 （research 模式）")
-            chat.write("  继续写第4-6章")
+            chat.write("[bold]默认专属编辑流程:[/]")
+            chat.write("  直接说剧情、人物或世界观想法，无需输入技能名")
+            chat.write("  每条作者消息会先保存到项目本地，再交给编辑")
+            chat.write("  编辑会追问、质疑并区分已确定/候选/未决/禁止")
+            chat.write("  计划摘要、作者批准和启动写作必须分三个回合完成")
 
         else:
             chat.write(f"[dim]未知命令: {cmd}。输入 /help 查看帮助。[/]")
@@ -749,7 +748,7 @@ class NovelTui(App):
             chat.write(f"[bold green]✓ 项目创建完成: {plan.title}[/] ({project_id})")
             chat.write(f"  题材: {plan.genre} | 平台: {plan.target_platform}")
             chat.write(f"  卷数: {len(plan.volumes)} | 核心情感: {plan.core_emotion}")
-            chat.write(f"  [dim]现在可以对话：帮我把第1章写了[/]")
+            chat.write("  [dim]现在可以直接告诉编辑：你想让这一章发生什么，以及绝不能发生什么。[/]")
             self._auto_save()
         except Exception as e:
             import traceback

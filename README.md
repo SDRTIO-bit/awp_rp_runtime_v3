@@ -28,10 +28,17 @@ tui novels\<project-name>
 python -m awp_rp_runtime_v3.scripts.awp_tui novels\<project-name>
 ```
 
-默认使用嵌入式 Pi：
+默认使用嵌入式 Pi 专属写作编辑。作者直接说剧情、人物或世界观想法即可，无需调用技能；消息会先保存到项目的 `.awp/authoring/`，再进入编辑对话。编辑不会直接写整章，只有跨轮确认的作者计划才能交给 Writer。
 
 ```powershell
 $env:NOVEL_AGENT_RUNTIME = "pi"
+```
+
+默认作者主导流程：
+
+```powershell
+作者对话 → 编辑追问/质疑 → 待确认计划
+        → 下一轮批准 → 更后轮执行 → Writer 管线
 ```
 
 旧 Python NovelBrain 只作为显式兼容边界：
@@ -42,7 +49,7 @@ $env:NOVEL_AGENT_RUNTIME = "legacy"
 
 Pi 启动失败时不会静默切换到 legacy。
 
-## CLI
+## CLI（显式自主模式）
 
 ```powershell
 python scripts\novel_cli.py init novels\my_novel
@@ -51,6 +58,8 @@ python scripts\novel_cli.py plan novels\my_novel 1
 python scripts\novel_cli.py write novels\my_novel 1 --stream
 python scripts\novel_cli.py export novels\my_novel
 ```
+
+CLI 的 `plan` / `batch` 会显式使用 AI 自主规划，保留用于兼容和批处理，不是默认作者主导入口。
 
 ## 测试
 

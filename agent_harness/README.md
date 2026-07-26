@@ -1,34 +1,39 @@
-# AWP Pi 小说 Agent Harness
+# AWP Pi 专属写作编辑 Harness
 
-这个目录将 Pi 作为小说模式的内嵌 Agent harness。它不是外部 `pi` CLI，也不是一次 LLM 请求的转发器。
+这里内嵌两个隔离的 Pi Host，不依赖外部 Pi CLI，也不开端口。
 
-小说模式使用两个隔离的 Node Host：
+- `novel_agent_host.mjs`：项目级专属写作编辑。它自动识别创作意图、读取上下文、保存素材、整理计划并执行跨轮确认。
+- `novel_role_host.mjs`：自动管线角色 Host，运行 Writer、Continuity、Style Cleaner、Ledger Curator，以及显式自主 CLI 使用的 Architect/Director。
 
-- `novel_agent_host.mjs`：项目级交互 Agent，理解 TUI 指令并调用高层小说工具。
-- `novel_role_host.mjs`：底层角色 Agent，分别运行 Architect、Director、Writer、Continuity、Style Cleaner 和 Ledger Curator 的 Pi Session。
+默认编辑只有八个项目绑定工具：
 
-两个 Host 分离是为了避免顶层 Pi 等待 `write_chapter` 时，Writer 又递归占用同一 Session 所造成的死锁。Python `NovelEngine` 只保留确定性编排、质量规则、状态提交和 SQLite 持久化。
+`project_status`、`read_chapter`、`audit_chapter`、`read_authoring_context`、`capture_author_material`、`save_author_plan`、`approve_author_plan`、`execute_author_plan`。
 
-交互 Agent 允许的工具只有：`project_status`、`read_chapter`、`plan_chapter`、`write_chapter`、`audit_chapter`。角色 Agent 按角色获得更窄的只读工具集；Style Cleaner 无工具。Pi 默认的 shell、读写文件和网络工具全部禁用。
+它没有 shell、网络或任意文件读写能力，也没有 `plan_chapter` / `write_chapter` 绕过入口。Python 会在每条作者消息发给 Pi 之前写入项目日志，并强制计划提出、作者批准、启动写作发生在三个不同作者轮次。
 
 ```powershell
-cd F:\12\语英\awp_rp_runtime_v3\agent_harness
+cd agent_harness
 npm ci
 npm test
 $env:NOVEL_AGENT_RUNTIME = 'pi'
-python scripts\novel_cli.py plan novels\<project-name> 1
-python scripts\novel_cli.py write novels\<project-name> 1 --stream
-python scripts\awp_tui.py novels\<project-name>
+python ..\scripts\awp_tui.py ..\novels\<project-name>
 ```
 
-`plan`、`write`、`batch`、`run` 会显示实际的 Agent Runtime 与 Writer provider/model。若依赖缺失，命令会明确提示在 `agent_harness` 运行 `npm ci`，不会悄悄退回旧实现。
+作者可直接用自然语言讨论剧情，无需输入 `/skill`。`author-collaboration` Skill 会自动进入 CAPTURE → DIVERGE → CHALLENGE → SYNTHESIZE → CONFIRM → HANDOFF 循环。
 
-使用已有的 `NOVEL_LLM_PROVIDER`、`NOVEL_LLM_MODEL`、`NOVEL_LLM_BASE_URL` 和 `NOVEL_LLM_API_KEY_ENV` 配置模型。密钥仅从环境变量交给 Node 进程，不写入会话或项目文件。
+本地恢复资料位于：
 
-若需临时恢复旧 Python Agent，唯一方式是显式设置：
+```text
+<project>/.awp/authoring/journal/YYYY-MM-DD.jsonl
+<project>/.awp/authoring/inbox.jsonl
+<project>/.awp/authoring/chapter-plans/<plan-id>.v<revision>.json
+<project>/.awp/authoring/index.json
+```
+
+若需显式使用旧 Python NovelBrain：
 
 ```powershell
 $env:NOVEL_AGENT_RUNTIME = 'legacy'
 ```
 
-Pi 失败时不会自动回退，以免误判当前执行的 Agent。
+Pi 故障不会自动回退。
