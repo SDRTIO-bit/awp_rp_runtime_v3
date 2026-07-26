@@ -68,6 +68,9 @@ Thumbs.db
 # Local isolated worktrees
 .worktrees/
 
+# Local visual brainstorming sessions
+.superpowers/
+
 # Novel downloads (TomatoNovelDownloader output)
 downloads/
 
