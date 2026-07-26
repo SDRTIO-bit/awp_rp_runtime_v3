@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import json
+import os
 import re
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, Iterator
+
+from ..contracts.novel_tool_approval import ToolApprovalRequest
 
 
 class NovelProjectSandbox:
@@ -65,6 +71,88 @@ class NovelProjectSandbox:
         if name == "grep":
             return self._grep(args)
         raise ValueError(f"unsupported project read tool: {name}")
+
+    def classify(
+        self, name: str, args: dict[str, Any]
+    ) -> ToolApprovalRequest:
+        targets: list[str] = []
+        risk = "hard_deny"
+        summary = f"拒绝未知工具 {name}"
+        reason = "unknown project tool"
+        if name in {"read", "ls", "find", "grep"}:
+            raw = str(args.get("path", ".") or ".")
+            targets = [raw]
+            try:
+                self.resolve_relative(raw)
+            except ValueError as exc:
+                reason = str(exc)
+            else:
+                risk = "read"
+                summary = f"{name} {raw}"
+                reason = "project-local read"
+        elif name in {"write", "edit"}:
+            raw = str(args.get("path", "") or "")
+            targets = [raw]
+            try:
+                path = self.resolve_relative(raw, write=True)
+            except ValueError as exc:
+                reason = str(exc)
+                summary = f"拒绝修改 {raw or '(missing path)'}"
+            else:
+                relative = path.relative_to(self.root).as_posix()
+                content_size = len(
+                    str(args.get("content", "")).encode("utf-8")
+                )
+                important = (
+                    relative.startswith("output/chapter_")
+                    and relative.endswith(".md")
+                ) or content_size > 100_000
+                risk = "important" if important else "write"
+                summary = f"{'修改' if name == 'edit' else '写入'} {relative}"
+                reason = (
+                    "chapter output or large replacement requires author approval"
+                    if important
+                    else "ordinary project text mutation"
+                )
+                targets = [relative]
+        elif name == "bash":
+            command = str(args.get("command", "") or "").strip()
+            if command in {"pwd", "Get-Location"}:
+                risk = "read"
+                summary = "显示小说项目工作目录"
+                reason = "fixed project-local command"
+            elif re.search(
+                r"(?i)\b(curl|wget|invoke-webrequest|iwr|ssh|scp|npm|pip|"
+                r"winget|choco)\b|https?://",
+                command,
+            ):
+                summary = "拒绝网络或包管理命令"
+                reason = "network and package commands are outside the novel sandbox"
+            else:
+                summary = "拒绝无法静态证明安全的终端命令"
+                reason = "ambiguous shell command cannot be proven project-local"
+        return ToolApprovalRequest.create(
+            tool=name,
+            risk=risk,
+            summary=summary,
+            targets=targets,
+            reason=reason,
+            arguments=args,
+        )
+
+    def execute_write(self, name: str, args: dict[str, Any]) -> str:
+        if name == "write":
+            return self._write(args)
+        if name == "edit":
+            return self._edit(args)
+        if name == "bash":
+            command = str(args.get("command", "") or "").strip()
+            if command not in {"pwd", "Get-Location"}:
+                raise ValueError(
+                    "shell command is not permitted by the novel sandbox"
+                )
+            return "."
+        raise ValueError(f"unsupported project write tool: {name}")
 
     def _read(self, args: dict[str, Any]) -> str:
         raw = self._required_path(args)
@@ -178,6 +266,125 @@ class NovelProjectSandbox:
                     if len(matches) >= limit:
                         return "\n".join(matches)
         return "\n".join(matches) or "(no matches)"
+
+    def _write(self, args: dict[str, Any]) -> str:
+        raw = self._required_path(args)
+        content = args.get("content")
+        if not isinstance(content, str):
+            raise ValueError("content must be text")
+        if len(content.encode("utf-8")) > self.MAX_READ_BYTES:
+            raise ValueError("project write exceeds text size limit")
+        path = self.resolve_relative(raw, write=True)
+        self._check_expected_hash(path, args.get("expected_hash"))
+        if path.exists():
+            self._backup(path)
+        self._atomic_write(path, content)
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        relative = path.relative_to(self.root).as_posix()
+        self._audit("write", relative, digest)
+        return f"wrote: {relative}\nsha256: {digest}"
+
+    def _edit(self, args: dict[str, Any]) -> str:
+        raw = self._required_path(args)
+        path = self.resolve_relative(raw, write=True)
+        if not path.is_file():
+            raise ValueError(f"project file not found: {raw}")
+        self._check_expected_hash(path, args.get("expected_hash"))
+        edits = args.get("edits")
+        if not isinstance(edits, list) or not edits or len(edits) > 100:
+            raise ValueError("edits must contain 1-100 exact replacements")
+        original = self._read_text(path)
+        updated = original
+        for edit in edits:
+            if not isinstance(edit, dict):
+                raise ValueError("each edit must be an object")
+            old = edit.get("oldText")
+            new = edit.get("newText")
+            if not isinstance(old, str) or not old:
+                raise ValueError("oldText must be non-empty text")
+            if not isinstance(new, str):
+                raise ValueError("newText must be text")
+            if original.count(old) != 1:
+                raise ValueError("oldText must occur exactly once")
+            updated = updated.replace(old, new, 1)
+        if updated == original:
+            raise ValueError("edit did not change the project file")
+        if len(updated.encode("utf-8")) > self.MAX_READ_BYTES:
+            raise ValueError("edited project file exceeds text size limit")
+        self._backup(path)
+        self._atomic_write(path, updated)
+        digest = hashlib.sha256(updated.encode("utf-8")).hexdigest()
+        relative = path.relative_to(self.root).as_posix()
+        self._audit("edit", relative, digest)
+        return f"edited: {relative}\nsha256: {digest}"
+
+    def _check_expected_hash(self, path: Path, expected: Any) -> None:
+        if expected in (None, ""):
+            return
+        if not isinstance(expected, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", expected
+        ):
+            raise ValueError("expected_hash must be a sha256 hex digest")
+        if not path.is_file():
+            raise ValueError("project file changed since it was read")
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected:
+            raise ValueError("project file changed since it was read")
+
+    def _backup(self, path: Path) -> None:
+        relative = path.relative_to(self.root).as_posix()
+        data = path.read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        safe_name = relative.replace("/", "__").replace("\\", "__")
+        directory = self.root / ".awp" / "file-history" / safe_name
+        directory.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "path": relative,
+            "sha256": digest,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "content": data.decode("utf-8"),
+        }
+        self._atomic_write(
+            directory / f"{timestamp}-{digest[:12]}.json",
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        )
+
+    def _audit(self, tool: str, relative: str, digest: str) -> None:
+        directory = self.root / ".awp" / "tool-audit"
+        directory.mkdir(parents=True, exist_ok=True)
+        event = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "tool": tool,
+            "target": relative,
+            "sha256": digest,
+        }
+        path = directory / "events.jsonl"
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    @staticmethod
+    def _atomic_write(path: Path, content: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=str(path.parent),
+        )
+        temporary_path = Path(temporary)
+        try:
+            with os.fdopen(
+                descriptor, "w", encoding="utf-8", newline="\n"
+            ) as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, path)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
 
     def _walk(self, base: Path) -> Iterator[Path]:
         if not base.is_dir():

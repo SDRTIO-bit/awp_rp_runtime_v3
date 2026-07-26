@@ -79,3 +79,64 @@ def test_read_supports_line_window_and_bounded_results(tmp_path):
     assert "4: 第4行" in result
     assert "5: 第5行" not in result
 
+
+def test_edit_backs_up_and_rejects_stale_hash(tmp_path):
+    path = tmp_path / "outline.md"
+    path.write_text("旧标题", encoding="utf-8")
+    sandbox = NovelProjectSandbox(tmp_path)
+    before = sandbox.content_hash("outline.md")
+
+    result = sandbox.execute_write(
+        "edit",
+        {
+            "path": "outline.md",
+            "expected_hash": before,
+            "edits": [{"oldText": "旧标题", "newText": "新标题"}],
+        },
+    )
+
+    assert path.read_text(encoding="utf-8") == "新标题"
+    assert "outline.md" in result
+    history = list((tmp_path / ".awp" / "file-history").rglob("*.json"))
+    assert history
+    assert '"content": "旧标题"' in history[0].read_text(encoding="utf-8")
+
+    with pytest.raises(ValueError, match="changed"):
+        sandbox.execute_write(
+            "edit",
+            {
+                "path": "outline.md",
+                "expected_hash": before,
+                "edits": [{"oldText": "新标题", "newText": "覆盖"}],
+            },
+        )
+
+
+def test_write_is_atomic_and_audited(tmp_path):
+    sandbox = NovelProjectSandbox(tmp_path)
+
+    result = sandbox.execute_write(
+        "write", {"path": "notes/idea.md", "content": "礼堂事故"}
+    )
+
+    assert (tmp_path / "notes" / "idea.md").read_text(
+        encoding="utf-8"
+    ) == "礼堂事故"
+    assert "sha256:" in result
+    audit_files = list((tmp_path / ".awp" / "tool-audit").glob("*.jsonl"))
+    assert len(audit_files) == 1
+    assert '"tool": "write"' in audit_files[0].read_text(encoding="utf-8")
+
+
+def test_edit_requires_unique_exact_source_text(tmp_path):
+    (tmp_path / "world.md").write_text("相同\n相同", encoding="utf-8")
+    sandbox = NovelProjectSandbox(tmp_path)
+
+    with pytest.raises(ValueError, match="exactly once"):
+        sandbox.execute_write(
+            "edit",
+            {
+                "path": "world.md",
+                "edits": [{"oldText": "相同", "newText": "不同"}],
+            },
+        )
