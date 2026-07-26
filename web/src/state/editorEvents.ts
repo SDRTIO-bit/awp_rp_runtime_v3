@@ -29,6 +29,7 @@ export function applyEditorEvent(state: EditorEventState, event: EditorEvent): E
   if (id) next.seen.add(id);
   const p = event.payload ?? {};
   if (event.type === "author_message_saved") {
+    next.errors = [];
     next.messages.push({ id: p.client_message_id ?? `author-${id}`, role: "author", text: p.text ?? "", source: p.source });
   } else if (event.type === "editor_delta") {
     const messageId = p.message_id ?? "active";
@@ -47,6 +48,12 @@ export function applyEditorEvent(state: EditorEventState, event: EditorEvent): E
   } else if (event.type === "draft_version_saved") {
     next.pipeline = [...next.pipeline, { phase: "draft_saved", state: "completed", data: p }];
   } else if (["turn_failed", "action_rejected", "protocol_error"].includes(event.type)) {
+    if (event.type === "turn_failed") {
+      for (const [messageId, text] of Object.entries(next.partial)) {
+        if (text) next.messages.push({ id: messageId, role: "editor", text });
+      }
+      next.partial = {};
+    }
     next.errors.push(p.message ?? "操作失败");
   }
   return next;
