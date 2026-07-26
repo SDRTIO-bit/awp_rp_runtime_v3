@@ -67,11 +67,22 @@ class NovelPromptAssembler:
             parts.append(f"\n=== WRITING INTENT ===\n{packet.writing_intent}")
 
         # Output rules
-        parts.append(f"\n=== OUTPUT RULES ===\n"
-                    f"- 只输出正文，无标签、无 JSON、无元信息\n"
-                    f"- 目标 {packet.chapter_plan.target_chars} 字\n"
-                    f"- 结尾必须留悬念/钩子\n"
-                    f"- 不复述上一章结尾")
+        author_led = packet.chapter_contract.lstrip().startswith("[AUTHOR-APPROVED]")
+        output_rules = (
+            f"\n=== OUTPUT RULES ===\n"
+            f"- 只输出正文，无标签、无 JSON、无元信息\n"
+            f"- 目标 {packet.chapter_plan.target_chars} 字（软目标）\n"
+            f"- 作者章节契约决定节奏、对白与结尾形态\n"
+            f"- 不复述上一章结尾"
+            if author_led
+            else
+            f"\n=== OUTPUT RULES ===\n"
+            f"- 只输出正文，无标签、无 JSON、无元信息\n"
+            f"- 目标 {packet.chapter_plan.target_chars} 字\n"
+            f"- 结尾必须留悬念/钩子\n"
+            f"- 不复述上一章结尾"
+        )
+        parts.append(output_rules)
 
         return "\n".join(parts)
 

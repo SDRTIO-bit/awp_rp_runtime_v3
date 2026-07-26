@@ -171,7 +171,13 @@ class NovelWriterAdapter:
 
         parts.append("\n开始写正文。")
 
-        return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
+        author_led = contract.lstrip().startswith("[AUTHOR-APPROVED]")
+        system_prompt = (
+            _get_writer_prompt("writer_author")
+            if author_led
+            else _get_writer_prompt(self._writer_prompt_name)
+        )
+        return system_prompt, "\n".join(parts)
 
     def _build_beat_prompt(self, packet: NovelWritePacket, write_guidance: str = "") -> tuple[str, str]:
         """Build prompt for a single beat. Returns (system_prompt, user_prompt).
@@ -187,27 +193,38 @@ class NovelWriterAdapter:
         """
         beat = packet.current_scene_beat
         p = packet.chapter_plan
+        author_led = packet.chapter_contract.lstrip().startswith("[AUTHOR-APPROVED]")
 
         # ═══ Tier 1: 稳定前缀 — DeepSeek 前缀缓存最大化命中 ═══
         # 这一层跨 beat、跨章节都几乎不变，放在 prompt 最前端让缓存复用。
 
-        parts = [
-            "=== OUTPUT RULES ===\n"
-            "- 只输出本 beat 的正文\n"
-            "- 不得提前写后续 beat；当前 beat 的目标完成后立即收束\n"
-            "- 无标签、无 JSON、无元信息\n"
-            "- 对话+行为占正文60%以上，描写不超过40%\n"
-            "- 必须有对话。即使 beat 描述没提对话，也要加入：自言自语、回忆别人说过的话、对物件说话、打电话\n"
-            "- 对话要有互动感和功能：要推进剧情/展示人设/制造冲突\n"
-            "- 描写点到即止：一个物件一句话，不要铺开写三句\n"
-            "\n"
-            "=== 红线（最高优先） ===\n"
-            "- 禁止'不是A而是B'否定对比句式\n"
-            "- 本章比喻总数不超过三个。日常描写不附加比喻。'像''如同''仿佛'等词尽量不用\n"
-            "- 禁止精确秒数/分钟数。用'片刻''一会儿''过了一阵'\n"
-            "- 情绪不拆三层。'不是X。就是Y。像Z一样'这种解读全禁止。一句话写完情绪\n"
-            "- 叙述者不替读者感受。不写'她全都知道''他自己都没意识到'这类上帝视角",
-        ]
+        if author_led:
+            parts = [
+                "=== OUTPUT RULES ===\n"
+                "- 只输出本 beat 的正文\n"
+                "- 不得提前写后续 beat；当前 beat 的目标完成后立即收束\n"
+                "- 无标签、无 JSON、无元信息\n"
+                "- 字数是软目标；不得为凑字数增加作者未批准的事件\n"
+                "- 具体节奏、对白、描写和收束方式服从作者章节契约",
+            ]
+        else:
+            parts = [
+                "=== OUTPUT RULES ===\n"
+                "- 只输出本 beat 的正文\n"
+                "- 不得提前写后续 beat；当前 beat 的目标完成后立即收束\n"
+                "- 无标签、无 JSON、无元信息\n"
+                "- 对话+行为占正文60%以上，描写不超过40%\n"
+                "- 必须有对话。即使 beat 描述没提对话，也要加入：自言自语、回忆别人说过的话、对物件说话、打电话\n"
+                "- 对话要有互动感和功能：要推进剧情/展示人设/制造冲突\n"
+                "- 描写点到即止：一个物件一句话，不要铺开写三句\n"
+                "\n"
+                "=== 红线（最高优先） ===\n"
+                "- 禁止'不是A而是B'否定对比句式\n"
+                "- 本章比喻总数不超过三个。日常描写不附加比喻。'像''如同''仿佛'等词尽量不用\n"
+                "- 禁止精确秒数/分钟数。用'片刻''一会儿''过了一阵'\n"
+                "- 情绪不拆三层。'不是X。就是Y。像Z一样'这种解读全禁止。一句话写完情绪\n"
+                "- 叙述者不替读者感受。不写'她全都知道''他自己都没意识到'这类上帝视角",
+            ]
 
         # V4: 移除运行时标杆加载
         # Global summaries (缓慢增长，前缀缓存大部分命中)
@@ -223,6 +240,11 @@ class NovelWriterAdapter:
             f"\n=== CHAPTER CONTEXT ===\n"
             f"标题: {p.title} | 情绪: {p.target_emotion} | 定位: {p.chapter_position}"
         )
+        if author_led:
+            parts.append(
+                "\n=== AUTHOR-APPROVED CHAPTER CONTRACT ===\n"
+                + packet.chapter_contract
+            )
 
         # Director anchor (章节内稳定)
         if packet.director_guidance.guidance_id:
@@ -269,14 +291,15 @@ class NovelWriterAdapter:
                 detail_lines.append(f"情绪翻转: {beat_guidance.emotion_shift}")
             if beat_guidance.dialogue_keys:
                 detail_lines.append(f"对白要点: {'；'.join(beat_guidance.dialogue_keys)}")
-            if beat_guidance.hook_execution:
+            if beat_guidance.hook_execution and not author_led:
                 detail_lines.append(f"钩子落地: {beat_guidance.hook_execution}")
             if detail_lines:
                 beat_lines.append("Director 细纲:")
                 beat_lines.extend(f"  {ln}" for ln in detail_lines)
-        beat_lines.append(
-            "注意：以上描述只是骨架。你必须用对话填充血肉。没有对话的beat是失败的。"
-        )
+        if not author_led:
+            beat_lines.append(
+                "注意：以上描述只是骨架。你必须用对话填充血肉。没有对话的beat是失败的。"
+            )
         parts.append("\n=== CURRENT BEAT ===\n" + "\n".join(beat_lines))
 
         # Give the writer an explicit stopping boundary. A positive word budget
@@ -303,7 +326,12 @@ class NovelWriterAdapter:
         if write_guidance:
             parts.append(f"\n=== WRITER GUIDANCE ===\n{write_guidance}\n（以上引导是硬性要求，必须执行）")
 
-        return _get_writer_prompt(self._writer_prompt_name), "\n".join(parts)
+        system_prompt = (
+            _get_writer_prompt("writer_author")
+            if author_led
+            else _get_writer_prompt(self._writer_prompt_name)
+        )
+        return system_prompt, "\n".join(parts)
 
     def _match_beat_guidance(self, packet: NovelWritePacket, beat_id: str):
         """从 director_guidance.beat_details 按 beat_id 匹配当前 beat 的细纲。
