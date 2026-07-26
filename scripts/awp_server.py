@@ -20,6 +20,13 @@ if str(_PROJECT_ROOT.parent) not in sys.path:
 from aiohttp import web
 
 from awp_rp_runtime_v3.runtime.novel_api import register_novel_routes
+from awp_rp_runtime_v3.runtime.novel_editor_session_manager import (
+    EditorSessionManager,
+)
+from awp_rp_runtime_v3.runtime.novel_websocket_api import (
+    EDITOR_SESSION_MANAGER_KEY,
+    register_novel_websocket_routes,
+)
 from awp_rp_runtime_v3.runtime.novel_workspace_catalog import NovelWorkspaceCatalog
 from awp_rp_runtime_v3.runtime.runtime_store_factory import RuntimeStoreFactory
 from awp_rp_runtime_v3.runtime.session_runtime_registry import (
@@ -75,16 +82,26 @@ async def _serve_spa(request: web.Request) -> web.Response:
 def create_app(
     registry_factory: Callable[[], SessionRuntimeStoreRegistry] | None = None,
     workspace_catalog: NovelWorkspaceCatalog | None = None,
+    editor_session_manager: EditorSessionManager | None = None,
 ) -> web.Application:
     """Create an aiohttp app with novel and SPA routes only."""
 
     app = web.Application()
     catalog = workspace_catalog or NovelWorkspaceCatalog(_PROJECT_ROOT)
     app[WORKSPACE_CATALOG_KEY] = catalog
+    manager = editor_session_manager or EditorSessionManager(catalog)
+    app[EDITOR_SESSION_MANAGER_KEY] = manager
     register_novel_routes(app, registry_factory or _default_registry_factory)
+    register_novel_websocket_routes(app)
     app.router.add_get("/awp/api/v1/health", _health)
     app.router.add_get("/awp", _serve_spa)
     app.router.add_get("/awp/{tail:.*}", _serve_spa)
+
+    async def cleanup(_: web.Application) -> None:
+        await manager.close()
+        catalog.close()
+
+    app.on_cleanup.append(cleanup)
     return app
 
 

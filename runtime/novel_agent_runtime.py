@@ -18,12 +18,24 @@ class PiNovelAgentRuntime:
     dl_output_dir = ""
     _compress_count = 0
 
-    def __init__(self, registry, callbacks, project_dir: Path, project_id: str, *, bridge_factory=NovelPiBridge):
+    def __init__(
+        self,
+        registry,
+        callbacks,
+        project_dir: Path,
+        project_id: str,
+        *,
+        session_id: str | None = None,
+        session_dir: Path | None = None,
+        bridge_factory=NovelPiBridge,
+    ):
         self._bridge = bridge_factory(
             registry,
             callbacks,
             project_dir=project_dir,
             project_id=project_id,
+            session_id=session_id,
+            session_dir=session_dir,
         )
 
     def handle_message(self, text: str) -> str:
@@ -74,6 +86,8 @@ def create_novel_agent_runtime(
     project_dir: Path,
     project_id: str,
     *,
+    session_id: str | None = None,
+    session_dir: Path | None = None,
     bridge_factory=NovelPiBridge,
 ):
     """Create the selected runtime without silently changing agent behavior."""
@@ -85,6 +99,8 @@ def create_novel_agent_runtime(
             callbacks,
             project_dir,
             project_id,
+            session_id=session_id,
+            session_dir=session_dir,
             bridge_factory=bridge_factory,
         )
     if runtime == "legacy":

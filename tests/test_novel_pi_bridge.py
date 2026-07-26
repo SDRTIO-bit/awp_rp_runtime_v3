@@ -25,6 +25,9 @@ def _write_host(path: Path, mode: str = "normal") -> Path:
     script.write_text(
         f'''import json, sys
 mode = {mode!r}
+if mode == "stderr_exit":
+    print("missing module: @earendil-works/pi-coding-agent", file=sys.stderr, flush=True)
+    raise SystemExit(3)
 for raw in sys.stdin:
     frame = json.loads(raw)
     if frame["kind"] == "init":
@@ -115,3 +118,38 @@ def test_bridge_turn_sequence_survives_process_restart(tmp_path, reg):
         for line in journal.read_text(encoding="utf-8").splitlines()
     ]
     assert turns == [1, 2]
+
+
+def test_bridge_reports_bounded_stderr_when_host_exits(tmp_path, reg):
+    host = _write_host(tmp_path, mode="stderr_exit")
+
+    with pytest.raises(
+        NovelPiBridgeError,
+        match="missing module: @earendil-works/pi-coding-agent",
+    ):
+        NovelPiBridge(
+            reg,
+            BrainCallbacks(),
+            project_dir=tmp_path,
+            project_id="p1",
+            host_command=[sys.executable, str(host)],
+        )
+
+
+def test_bridge_accepts_stable_room_session_identity(tmp_path, reg):
+    host = _write_host(tmp_path)
+    session_dir = tmp_path / ".awp" / "pi-sessions" / "editor" / "chapter-1"
+    bridge = NovelPiBridge(
+        reg,
+        BrainCallbacks(),
+        project_dir=tmp_path,
+        project_id="p1",
+        session_id="editor-p1-chapter-1",
+        session_dir=session_dir,
+        host_command=[sys.executable, str(host)],
+    )
+    try:
+        assert bridge.session_id == "editor-p1-chapter-1"
+        assert bridge.session_dir == session_dir.resolve()
+    finally:
+        bridge.close()

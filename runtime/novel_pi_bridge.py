@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import queue
+import re
 import shutil
 import subprocess
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,8 @@ class NovelPiBridge:
         *,
         project_dir: Path,
         project_id: str,
+        session_id: str | None = None,
+        session_dir: Path | None = None,
         host_command: list[str] | None = None,
     ):
         self._registry = registry
@@ -47,22 +51,43 @@ class NovelPiBridge:
         self._project_dir = Path(project_dir).resolve()
         self._project_id = project_id
         self._host_command = host_command or self._default_host_command()
-        self._session_dir = self._project_dir / ".awp" / "pi-sessions"
+        self._session_dir = (
+            Path(session_dir).resolve()
+            if session_dir is not None
+            else (self._project_dir / ".awp" / "pi-sessions").resolve()
+        )
+        try:
+            self._session_dir.relative_to(self._project_dir)
+        except ValueError as exc:
+            raise ValueError("Pi session directory escaped project root") from exc
         self._process: subprocess.Popen[str] | None = None
         self._frames: queue.Queue[str | None] = queue.Queue()
         self._write_lock = threading.Lock()
         self._turn_lock = threading.Lock()
         self._active_request_id = ""
-        self._session_id = f"pi-editor-{uuid.uuid4().hex}"
+        self._session_id = session_id or f"pi-editor-{uuid.uuid4().hex}"
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", self._session_id):
+            raise ValueError("invalid Pi session id")
         self._turn_counter = 0
         self._current_message_id = ""
         self._current_author_message = ""
+        self._stderr_tail: deque[str] = deque(maxlen=80)
+        self._stderr_lock = threading.Lock()
+        self._stderr_thread: threading.Thread | None = None
         self.sent_tool_results: list[dict[str, Any]] = []
         self._start()
 
     @property
     def runtime_name(self) -> str:
         return "Pi"
+
+    @property
+    def session_id(self) -> str:
+        return self._session_id
+
+    @property
+    def session_dir(self) -> Path:
+        return self._session_dir
 
     def handle_message(self, text: str) -> str:
         with self._turn_lock:
@@ -114,6 +139,8 @@ class NovelPiBridge:
         self.close()
         self._session_dir = self._project_dir / ".awp" / "pi-sessions" / uuid.uuid4().hex
         self._frames = queue.Queue()
+        with self._stderr_lock:
+            self._stderr_tail.clear()
         self._start()
 
     def close(self) -> None:
@@ -142,7 +169,7 @@ class NovelPiBridge:
                 self._host_command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 bufsize=1,
@@ -151,6 +178,12 @@ class NovelPiBridge:
             raise NovelPiBridgeError(f"unable to start Pi host: {exc}") from exc
         self._process = process
         threading.Thread(target=self._read_stdout, args=(process,), daemon=True).start()
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr,
+            args=(process,),
+            daemon=True,
+        )
+        self._stderr_thread.start()
         connection = NovelLLMFactory().get_pi_agent_connection()
         init_id = uuid.uuid4().hex
         self._write(NovelPiFrame(
@@ -173,17 +206,41 @@ class NovelPiBridge:
             self._frames.put(raw.rstrip("\r\n"))
         self._frames.put(None)
 
+    def _read_stderr(self, process: subprocess.Popen[str]) -> None:
+        assert process.stderr is not None
+        for raw in process.stderr:
+            with self._stderr_lock:
+                self._stderr_tail.append(raw.rstrip("\r\n"))
+
     def _read_frame(self, *, timeout_seconds: float) -> NovelPiFrame:
         try:
             raw = self._frames.get(timeout=timeout_seconds)
         except queue.Empty as exc:
             raise NovelPiBridgeError("Pi host timed out waiting for a response") from exc
         if raw is None:
-            raise NovelPiBridgeError("Pi host exited unexpectedly")
+            process = self._process
+            if process is not None:
+                try:
+                    process.wait(timeout=0.2)
+                except subprocess.TimeoutExpired:
+                    pass
+            stderr_thread = self._stderr_thread
+            if stderr_thread is not None:
+                stderr_thread.join(timeout=0.2)
+            raise NovelPiBridgeError(self._unexpected_exit_message())
         try:
             return decode_frame(raw)
         except NovelPiProtocolError as exc:
             raise NovelPiBridgeError(str(exc)) from exc
+
+    def _unexpected_exit_message(self) -> str:
+        with self._stderr_lock:
+            diagnostics = "\n".join(self._stderr_tail).strip()
+        if len(diagnostics) > 4096:
+            diagnostics = diagnostics[-4096:]
+        if diagnostics:
+            return f"Pi host exited unexpectedly: {diagnostics}"
+        return "Pi host exited unexpectedly"
 
     def _write(self, frame: NovelPiFrame, *, process: subprocess.Popen[str] | None = None) -> None:
         target = process or self._process
