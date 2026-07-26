@@ -132,6 +132,16 @@ class NovelAuthoringService:
             self._atomic_json(self.index_path, index)
             return turn
 
+    def next_event_id(self) -> int:
+        """Allocate a durable project-level browser event sequence."""
+
+        with self._lock:
+            index = self._read_index()
+            event_id = int(index.get("last_event_id", 0) or 0) + 1
+            index["last_event_id"] = event_id
+            self._atomic_json(self.index_path, index)
+            return event_id
+
     def capture_material(
         self,
         summary: str,
