@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { ChapterSummary, listChapters } from "../../api/workspace";
 
 export function ProjectTree({
-  projectId, room, onRoom, onPrompt,
+  projectId, room, onRoom, onPrompt, open = false, onClose,
 }: {
-  projectId: string; room: string; onRoom: (room: string) => void; onPrompt: () => void;
+  projectId: string; room: string; onRoom: (room: string) => void; onPrompt: () => void; open?: boolean; onClose?: () => void;
 }) {
   const [chapters, setChapters] = useState<ChapterSummary[]>([]);
   const [error, setError] = useState("");
@@ -12,7 +12,8 @@ export function ProjectTree({
     listChapters(projectId).then(setChapters).catch((e) => setError(String(e)));
   }, [projectId]);
   return (
-    <aside className="project-tree" aria-label="项目目录">
+    <aside className={`project-tree ${open ? "mobile-open" : ""}`} aria-label="项目目录">
+      <button className="mobile-drawer-close" onClick={onClose} aria-label="关闭项目目录">×</button>
       <div className="tree-project">
         <span className="tree-kicker">本地小说项目</span>
         <strong>{projectId}</strong>

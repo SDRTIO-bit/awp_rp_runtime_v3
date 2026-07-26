@@ -5,7 +5,9 @@ import { VersionedEditor } from "./VersionedEditor";
 type Tab = "plan" | "draft" | "notes";
 export function DocumentPane({
   projectId, room, writerBuffer = "",
-}: { projectId: string; room: string; writerBuffer?: string }) {
+  open = false,
+  onClose,
+}: { projectId: string; room: string; writerBuffer?: string; open?: boolean; onClose?: () => void }) {
   const [tab, setTab] = useState<Tab>("plan");
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
@@ -20,7 +22,8 @@ export function DocumentPane({
   }, [projectId, chapter, tab]);
   const shown = tab === "draft" && writerBuffer ? writerBuffer : content;
   return (
-    <aside className="document-pane" aria-label="创作文档">
+    <aside className={`document-pane ${open ? "mobile-open" : ""}`} aria-label="创作文档">
+      <button className="mobile-drawer-close document-close" onClick={onClose} aria-label="关闭创作文档">×</button>
       <div className="document-tabs" role="tablist">
         <button role="tab" aria-selected={tab === "plan"} onClick={() => setTab("plan")}>计划</button>
         <button role="tab" aria-selected={tab === "draft"} onClick={() => setTab("draft")}>正文</button>

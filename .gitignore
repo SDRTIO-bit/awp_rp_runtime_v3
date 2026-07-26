@@ -79,3 +79,7 @@ artifacts/
 
 # Private real-LLM transcripts (contains raw card/prompt/response content)
 artifacts/private-real-llm/
+
+# Browser acceptance-test artifacts
+.playwright-cli/
+output/playwright/
