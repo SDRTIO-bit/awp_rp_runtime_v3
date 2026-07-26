@@ -34,6 +34,58 @@ test("host initializes Pi with no builtins and only editor tools", async () => {
   assert.deepEqual(frames, [{ kind: "event", request_id: "init-1", payload: { type: "ready" } }]);
 });
 
+test("editor tool calls use the active prompt request id", async () => {
+  const frames = [];
+  let requestPython;
+  let finishTurn;
+  const turnFinished = new Promise((resolve) => { finishTurn = resolve; });
+  const fakeSession = {
+    subscribe: () => {},
+    dispose: () => {},
+    prompt: async () => {
+      await requestPython("project_status", {}, undefined);
+    },
+    getLastAssistantText: () => "已读取项目状态",
+  };
+  let host;
+  host = new NovelAgentHost({
+    createSession: async (_payload, receivedRequestPython) => {
+      requestPython = receivedRequestPython;
+      return { session: fakeSession };
+    },
+    writeFrame: (frame) => {
+      frames.push(frame);
+      if (frame.kind === "tool_call") {
+        void host.handleFrame({
+          kind: "tool_result",
+          request_id: frame.request_id,
+          payload: {
+            tool_call_id: frame.payload.tool_call_id,
+            ok: true,
+            content: "项目正常",
+          },
+        });
+      }
+      if (frame.kind === "turn_end") finishTurn();
+    },
+  });
+
+  await host.handleFrame({
+    kind: "init",
+    request_id: "init-1",
+    payload: { project_root: "C:/novel", session_dir: "C:/sessions", connection: {} },
+  });
+  await host.handleFrame({
+    kind: "prompt",
+    request_id: "prompt-1",
+    payload: { text: "读取项目状态" },
+  });
+  await turnFinished;
+
+  const toolCall = frames.find((frame) => frame.kind === "tool_call");
+  assert.equal(toolCall?.request_id, "prompt-1");
+});
+
 test("real session factory receives the closed tool configuration", async () => {
   let captured;
   await createNovelAgentSession(

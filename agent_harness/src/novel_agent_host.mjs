@@ -151,7 +151,12 @@ export class NovelAgentHost {
     if (this._session) this._session.dispose();
     const created = await this._createSession(
       frame.payload,
-      (name, arguments_, signal) => this._requestPython(frame.request_id, name, arguments_, signal),
+      (name, arguments_, signal) => {
+        if (!this._activeRequestId) {
+          return Promise.reject(new Error("Pi tool call has no active editor prompt"));
+        }
+        return this._requestPython(this._activeRequestId, name, arguments_, signal);
+      },
       this._resourcesDir,
     );
     this._session = created.session;
