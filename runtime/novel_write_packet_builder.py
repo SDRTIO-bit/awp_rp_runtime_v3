@@ -9,9 +9,12 @@ from typing import Any
 
 from ..contracts.novel_write_packet import NovelWritePacket
 from ..contracts.novel_chapter import ChapterPlan
+from ..contracts.novel_authoring import AuthorChapterPlan
 from ..contracts.novel_ledger import LedgerItem
 from ..contracts.novel_director_guidance import DirectorGuidance
 from .novel_writer_context import NovelWriterContextCompiler
+from .novel_author_plan_compiler import AuthorPlanCompiler
+from .novel_authoring_service import NovelAuthoringService
 
 
 def writer_safe_guidance(guidance: DirectorGuidance) -> DirectorGuidance:
@@ -106,6 +109,11 @@ class NovelWritePacketBuilder:
         packet.emotion_module = emotion_module
         packet.rhythm_reference = rhythm_reference
         packet.style_profile = style_profile
+        author_contract = self._approved_author_contract(
+            chapter_plan, project_root
+        )
+        if author_contract:
+            packet.chapter_contract = author_contract
         return packet
 
     def build_beat_packet(
@@ -132,6 +140,7 @@ class NovelWritePacketBuilder:
         ]
 
         safe_guidance = writer_safe_guidance(director_guidance)
+        project_root = self._project_root(chapter_plan)
         return NovelWritePacket(
             packet_id=f"pkt-{chapter_plan.chapter_id}-{beat.beat_id}",
             project_id=chapter_plan.project_id,
@@ -147,7 +156,44 @@ class NovelWritePacketBuilder:
             current_scene_beat=beat,
             accumulated_text=accumulated_text,
             sibling_outlines=list(sibling_outlines or []),
+            project_root=project_root,
+            chapter_contract=self._approved_author_contract(
+                chapter_plan, project_root
+            ),
         )
+
+    def _project_root(self, chapter_plan: ChapterPlan) -> str:
+        if self._registry is None:
+            return ""
+        try:
+            project = self._registry.novel_project_store.load(
+                chapter_plan.project_id
+            )
+            return str((getattr(project, "config", {}) or {}).get("novel_dir", "") or "")
+        except (AttributeError, TypeError):
+            return ""
+
+    @staticmethod
+    def _approved_author_contract(
+        chapter_plan: ChapterPlan, project_root: str
+    ) -> str:
+        if not project_root:
+            return ""
+        try:
+            context = NovelAuthoringService(
+                project_root, chapter_plan.project_id
+            ).authoring_context(chapter_plan.chapter_index)
+            candidates = [
+                AuthorChapterPlan.model_validate(raw)
+                for raw in context["plans"]
+                if raw.get("status") in {"approved", "executed"}
+            ]
+            if not candidates:
+                return ""
+            latest = max(candidates, key=lambda item: item.revision)
+            return AuthorPlanCompiler().render_writer_contract(latest)
+        except (FileNotFoundError, OSError, ValueError, KeyError, TypeError):
+            return ""
 
     def _filter_relevant_ledger(
         self, plan: ChapterPlan, items: list[LedgerItem],
