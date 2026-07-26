@@ -5,9 +5,6 @@ import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import AppLayout from "./components/Layout";
 
-const Sessions = lazy(() => import("./pages/Sessions"));
-const SessionChat = lazy(() => import("./pages/SessionChat"));
-const Cards = lazy(() => import("./pages/Cards"));
 const Novels = lazy(() => import("./pages/Novels"));
 const NovelDetail = lazy(() => import("./pages/NovelDetail"));
 
@@ -24,12 +21,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Suspense fallback={routeFallback}>
           <Routes>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/sessions" replace />} />
-              <Route path="/sessions" element={<Sessions />} />
-              <Route path="/sessions/:id" element={<SessionChat />} />
-              <Route path="/cards" element={<Cards />} />
+              <Route path="/" element={<Navigate to="/novels" replace />} />
               <Route path="/novels" element={<Novels />} />
               <Route path="/novels/:id" element={<NovelDetail />} />
+              <Route path="*" element={<Navigate to="/novels" replace />} />
             </Route>
           </Routes>
         </Suspense>

@@ -159,18 +159,20 @@ export default function NovelDetail() {
             {autonomy ? (
               <Space direction="vertical" size="small" style={{ width: "100%" }}>
                 <Space>
-                  <Tag color="blue">活跃议程 {autonomy.active_agenda_count}</Tag>
-                  <Tag color="orange">过期议程 {autonomy.stale_agenda_count}</Tag>
-                  <Tag color="green">已接受动作 {autonomy.npc_action_count}</Tag>
+                  <Tag color="blue">活跃议程 {autonomy.active_count}</Tag>
+                  <Tag color="orange">过期议程 {autonomy.stale_count}</Tag>
+                  <Tag color="green">
+                    已接受动作 {Object.values(autonomy.chapter_action_counts).reduce((sum, count) => sum + count, 0)}
+                  </Tag>
                 </Space>
-                {autonomy.chapters.length > 0 && (
+                {Object.keys(autonomy.chapter_action_counts).length > 0 && (
                   <List
                     size="small"
-                    dataSource={autonomy.chapters}
-                    renderItem={(ch) => (
+                    dataSource={Object.entries(autonomy.chapter_action_counts)}
+                    renderItem={([chapterIndex, actionCount]) => (
                       <List.Item>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          第{ch.chapter_index}章：活跃 {ch.active_agenda_count} · 过期 {ch.stale_agenda_count} · 动作 {ch.npc_action_count}
+                          第{chapterIndex}章：动作 {actionCount}
                         </Text>
                       </List.Item>
                     )}
