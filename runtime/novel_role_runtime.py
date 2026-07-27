@@ -26,9 +26,11 @@ class PiNovelRoleRuntime:
         *,
         bridge: Any | None = None,
         bridge_factory: Callable[..., Any] = NovelPiRoleBridge,
+        override_connection_resolver: Callable[[str], dict[str, Any]] | None = None,
     ) -> None:
         self._injected_bridge = bridge
         self._bridge_factory = bridge_factory
+        self._override_connection_resolver = override_connection_resolver
         self._bridges: dict[tuple[int, str, str], Any] = {}
 
     def run(
@@ -88,6 +90,7 @@ class PiNovelRoleRuntime:
                 context.registry,
                 project_dir=project_dir,
                 project_id=context.project_id,
+                connection_resolver=self._override_connection_resolver,
             )
             self._bridges[key] = bridge
         return bridge
@@ -178,9 +181,21 @@ def create_novel_role_runtime(
 
     mode = os.environ.get("NOVEL_AGENT_RUNTIME", "pi").lower()
     if mode == "pi":
+        # Build a connection resolver that reads the current project's LLM
+        # overrides from the singleton factory (set by EditorSessionManager
+        # or the API just before runtime creation).
+        factory = NovelLLMFactory.get_instance()
+
+        def _resolver(role: str) -> dict[str, Any]:
+            from dataclasses import asdict as _asdict
+            connection = _asdict(factory.get_pi_role_connection(role))
+            connection.pop("api_key", None)
+            return connection
+
         return PiNovelRoleRuntime(
             bridge=bridge,
             bridge_factory=bridge_factory,
+            override_connection_resolver=_resolver,
         )
     if mode == "legacy":
         return LegacyNovelRoleRuntime(llm_factory=llm_factory)

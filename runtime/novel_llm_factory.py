@@ -182,24 +182,24 @@ class NovelLLMFactory:
         return overridden
 
     def _role_config(self, role: str) -> dict[str, Any]:
-        """Return the merged role config, applying OpenCode model overrides when
-        NOVEL_LLM_PROVIDER=opencode is set.
+        """Return the merged role config, applying project overrides and
+        provider-specific model defaults.
 
-        Default behavior (no env or provider=deepseek) returns ROLE_CONFIGS
-        unchanged so all existing tests pass.
+        Per-project overrides (model, max_tokens, thinking_level) take
+        precedence over hardcoded ROLE_CONFIGS.
         """
         base = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
-        # Project-level overrides take highest priority
         project = self._project_overrides.get(role, {})
         if project:
             overridden = dict(base)
             for key in ("model", "max_tokens"):
                 if key in project:
                     overridden[key] = project[key]
-            # Accept both "thinking" (legacy) and "thinking_level" (API)
             thinking_level = project.get("thinking_level") or project.get("thinking", "")
             if thinking_level:
-                overridden = self._override_thinking_from_level(overridden, str(thinking_level))
+                overridden = self._override_thinking_from_level(
+                    overridden, str(thinking_level)
+                )
             elif "thinking" in project:
                 overridden["thinking"] = project["thinking"]
             base = overridden
