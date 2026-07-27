@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from awp_rp_runtime_v3.contracts.novel_web_event import NovelRoomId, NovelWebEvent
 from awp_rp_runtime_v3.runtime.novel_conversation_store import (
     NovelConversationStore,
+    ROOT_BRANCH_ID,
 )
 
 
@@ -126,3 +127,47 @@ def test_replay_rejects_malformed_or_cross_room_rows(tmp_path):
 
     with pytest.raises(ValueError, match="does not belong"):
         store.replay("book")
+
+
+# ---------------------------------------------------------------------------
+# Branch-aware append
+# ---------------------------------------------------------------------------
+
+
+def test_append_defaults_to_main_branch(tmp_path):
+    store = NovelConversationStore(tmp_path, "p1")
+    event = store.append("book", "author_message_saved", {"text": "hello"})
+    assert event.branch_id == ROOT_BRANCH_ID
+
+
+def test_append_to_specific_branch(tmp_path):
+    store = NovelConversationStore(tmp_path, "p1")
+    child = store.create_branch("book", title="child")
+    event = store.append(
+        "book",
+        "author_message_saved",
+        {"text": "child msg"},
+        branch_id=child.branch_id,
+    )
+    assert event.branch_id == child.branch_id
+
+
+def test_branch_aware_replay_filters_by_branch(tmp_path):
+    store = NovelConversationStore(tmp_path, "p1")
+    store.append("book", "author_message_saved", {"text": "main msg"})
+    child = store.create_branch("book", title="child")
+    store.append(
+        "book",
+        "author_message_saved",
+        {"text": "child msg"},
+        branch_id=child.branch_id,
+    )
+
+    main_events = store.replay("book", "main")
+    child_events = store.replay("book", child.branch_id)
+
+    main_texts = [e.payload["text"] for e in main_events]
+    child_texts = [e.payload["text"] for e in child_events]
+    assert "main msg" in main_texts
+    assert "child msg" not in main_texts
+    assert "child msg" in child_texts
