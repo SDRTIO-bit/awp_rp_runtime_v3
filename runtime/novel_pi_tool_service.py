@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..contracts.novel_authoring import AuthorChapterPlan
+from ..contracts.novel_conversation import EditorWorkPlan
 from .novel_author_plan_compiler import AuthorPlanCompiler
 from .novel_authoring_service import NovelAuthoringService
 from .novel_engine import NovelEngine
@@ -36,6 +37,8 @@ class NovelPiToolService:
             "save_author_plan",
             "approve_author_plan",
             "execute_author_plan",
+            "update_work_plan",
+            "delegate_project_task",
         }
     )
     ALLOWED = ALLOWED_TOOLS
@@ -132,6 +135,10 @@ class NovelPiToolService:
             }
         if name == "execute_author_plan":
             return self._execute_author_plan(args)
+        if name == "update_work_plan":
+            return self._handle_work_plan(args)
+        if name == "delegate_project_task":
+            return self._handle_delegate(args)
 
         chapter = self._chapter_argument(args)
         if name == "read_chapter":
@@ -141,6 +148,38 @@ class NovelPiToolService:
             chapter_index=chapter,
         )
         return {"ok": True, "content": json.dumps(report, ensure_ascii=False)}
+
+    def _handle_work_plan(self, args: dict[str, Any]) -> dict[str, object]:
+        items = args.get("items", [])
+        plan = EditorWorkPlan(
+            explanation=str(args.get("explanation", "")),
+            items=items,
+        )
+        self._notify_tool({
+            "type": "editor_work_plan_updated",
+            "status": "completed",
+            "plan": plan.model_dump(mode="json"),
+        })
+        return {"ok": True, "content": "工作计划已更新。"}
+
+    def _handle_delegate(self, args: dict[str, Any]) -> dict[str, object]:
+        task_desc = str(args.get("task", "") or args.get("prompt", ""))
+        if not task_desc:
+            return {"ok": False, "content": "delegate_project_task 需要 task 描述。"}
+        self._notify_tool({
+            "type": "worker_started",
+            "task": task_desc,
+            "focus_paths": args.get("focus_paths", []),
+        })
+        self._notify_tool({
+            "type": "worker_completed",
+            "task": task_desc,
+            "evidence_paths": [],
+        })
+        return {
+            "ok": True,
+            "content": "代理任务已委派。请参考 worker_completed 事件中的证据路径。",
+        }
 
     def _execute_project_tool(
         self, name: str, args: dict[str, Any]
