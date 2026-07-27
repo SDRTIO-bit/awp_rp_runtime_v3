@@ -49,6 +49,11 @@ class NovelWebEvent(BaseModel):
     event_id: int = Field(ge=1)
     project_id: str = Field(min_length=1)
     room: str = Field(min_length=1)
+    branch_id: str = Field(
+        default="main",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+    turn_id: str | None = Field(default=None, max_length=128)
     type: str = Field(min_length=1)
     payload: dict[str, Any]
     created_at: str = Field(min_length=1)

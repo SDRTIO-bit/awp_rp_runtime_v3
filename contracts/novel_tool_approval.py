@@ -26,6 +26,7 @@ class ToolApprovalRequest(BaseModel):
     summary: str = Field(min_length=1, max_length=1_000)
     targets: list[str] = Field(default_factory=list, max_length=100)
     reason: str = Field(min_length=1, max_length=2_000)
+    diff: str = Field(default="", max_length=60_000)
     arguments_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -39,6 +40,7 @@ class ToolApprovalRequest(BaseModel):
         targets: list[str],
         reason: str,
         arguments: dict[str, Any],
+        diff: str = "",
     ) -> "ToolApprovalRequest":
         canonical = json.dumps(
             arguments,
@@ -66,6 +68,7 @@ class ToolApprovalRequest(BaseModel):
             summary=summary,
             targets=targets,
             reason=reason,
+            diff=diff,
             arguments_hash=arguments_hash,
             signature=hashlib.sha256(signature_source).hexdigest(),
         )

@@ -58,3 +58,27 @@ def test_approval_contracts_are_strict_and_have_stable_signature():
     assert len(request.signature) == 64
     assert decision.decision == "allow"
     assert request.model_dump()["risk"] == "important"
+
+
+def test_approval_request_round_trips_diff():
+    request = ToolApprovalRequest.create(
+        tool="write",
+        risk="important",
+        summary="修改大纲",
+        targets=["outline.md"],
+        reason="需要审批",
+        arguments={"path": "outline.md", "content": "正文"},
+        diff="--- a/outline.md\n+++ b/outline.md\n@@ -1 +1 @@\n-旧\n+新\n",
+    )
+    assert request.diff == "--- a/outline.md\n+++ b/outline.md\n@@ -1 +1 @@\n-旧\n+新\n"
+
+    # diff defaults to empty string
+    request_no_diff = ToolApprovalRequest.create(
+        tool="read",
+        risk="read",
+        summary="只读操作",
+        targets=["notes.md"],
+        reason="无需审批",
+        arguments={"path": "notes.md"},
+    )
+    assert request_no_diff.diff == ""
