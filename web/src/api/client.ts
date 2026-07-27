@@ -199,6 +199,14 @@ export async function writeNovelChapter(
   );
 }
 
+export async function getAutonomySummary(
+  projectId: string,
+): Promise<AutonomySummary> {
+  return get<AutonomySummary>(
+    `/novels/${encodeURIComponent(projectId)}/autonomy-summary`,
+  );
+}
+
 export interface LlmRoleOverride {
   model?: string;
   max_tokens?: number;
