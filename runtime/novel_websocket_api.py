@@ -165,6 +165,19 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
                         decision,
                         remember,
                     )
+                elif frame_type == "restore_file_version":
+                    if set(frame) != {"type", "path", "version_id", "expected_hash"}:
+                        raise ValueError("invalid restore_file_version frame")
+                    version_path = frame["path"]
+                    version_id = frame["version_id"]
+                    expected_hash = frame["expected_hash"]
+                    task = asyncio.create_task(
+                        manager.restore_file_version(
+                            key, version_path, version_id, expected_hash
+                        )
+                    )
+                    tasks.add(task)
+                    task.add_done_callback(tasks.discard)
                 else:
                     raise ValueError("unknown editor frame type")
             except (

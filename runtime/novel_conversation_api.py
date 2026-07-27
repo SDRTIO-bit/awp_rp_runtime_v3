@@ -178,6 +178,22 @@ class NovelConversationApiHandlers:
         except (KeyError, FileNotFoundError) as exc:
             return _error(str(exc), 404)
 
+    async def list_project_file_history(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
+        path = request.query.get("path", "")
+        if not path:
+            return _error("path query parameter is required", 400)
+        try:
+            from .novel_project_history_service import NovelProjectHistoryService
+            service = self._context_service(project_id)
+            history = NovelProjectHistoryService(service._sandbox.root)
+            versions = await asyncio.to_thread(history.list_versions, path)
+            return _json(versions)
+        except ValueError as exc:
+            return _error(str(exc), 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _error(str(exc), 404)
+
 
 def register_conversation_routes(
     app: web.Application,
@@ -206,6 +222,10 @@ def register_conversation_routes(
     app.router.add_get(
         "/awp/api/v1/novels/{project_id}/project-files",
         handlers.list_project_files,
+    )
+    app.router.add_get(
+        "/awp/api/v1/novels/{project_id}/project-files/history",
+        handlers.list_project_file_history,
     )
 
 

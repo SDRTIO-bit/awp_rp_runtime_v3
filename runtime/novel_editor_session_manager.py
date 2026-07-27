@@ -695,6 +695,52 @@ class EditorSessionManager:
             if not pending.future.done():
                 pending.future.set_result("deny")
 
+    async def restore_file_version(
+        self,
+        key: EditorRoomKey,
+        path: str,
+        version_id: str,
+        expected_hash: str,
+    ) -> None:
+        session = self._require_session(key)
+        from .novel_project_history_service import NovelProjectHistoryService
+        history = NovelProjectHistoryService(session.project_dir)
+        turn_id = f"turn-{uuid.uuid4().hex}"
+
+        # Preview the restore
+        preview = history.preview("edit", {
+            "path": path,
+            "edits": [{"oldText": "", "newText": ""}],  # placeholder
+        })
+
+        # Actually get the restore diff
+        receipt = await asyncio.to_thread(
+            history.restore,
+            path,
+            version_id,
+            expected_hash,
+            branch_id=key.branch_id,
+            turn_id=turn_id,
+        )
+
+        # Emit the change event
+        change_event = session.store.append(
+            key.room,
+            "project_file_changed",
+            {
+                "path": path,
+                "operation": "restore",
+                "before_hash": receipt.before_hash,
+                "after_hash": receipt.after_hash,
+                "diff": receipt.diff,
+                "change_id": receipt.change_id,
+                "history_version_id": receipt.history_version_id,
+            },
+            branch_id=key.branch_id,
+            turn_id=turn_id,
+        )
+        self._broadcast(session, change_event)
+
     def _require_session(self, key: EditorRoomKey) -> _RoomSession:
         if self._closed:
             raise RuntimeError("editor session manager is closed")
