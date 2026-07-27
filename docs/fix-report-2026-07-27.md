@@ -6,7 +6,7 @@
 - `.gitignore` 追加 `.omo/run-continuation/`、`.omo/plans/`、`novels/**/.awp/authoring/`、`novels/**/.awp/file-history/`、`novels/**/.awp/tool-audit/`
 - `git rm --cached -r` 移除 198 个运行时文件
 - 密钥扫描：无明文 API Key、无 JWT Token、`docs/handoffs/*.md` 中仅含占位符 `sk-xxx`
-- `git filter-repo` 历史重写：**未执行**，留待独立处理
+- `git filter-repo` 历史重写：**已跳过**，待独立执行（详见文末步骤）
 
 ### 阶段 1：POST → PUT ✅ `c60ba839`
 - `web/src/api/client.ts`：新增 `put()` 函数，`updateLlmConfig()` 改用 PUT
