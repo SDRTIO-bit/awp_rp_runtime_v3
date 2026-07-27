@@ -116,7 +116,7 @@ def main() -> None:
     parser.add_argument("--db-path")
     args = parser.parse_args()
     if args.db_path:
-        os.environ["AWP_DB_PATH"] = str(Path(args.db_path).resolve())
+        os.environ["AWP_RUNTIME_DB_PATH"] = str(Path(args.db_path).resolve())
     web.run_app(create_app(), host=args.host, port=args.port)
 
 

@@ -48,6 +48,19 @@ class WebLauncher:
     def preflight(self) -> None:
         if shutil.which("node") is None:
             raise LauncherError("需要 Node.js >=22.19。")
+        try:
+            result = subprocess.run(
+                ["node", "-v"],
+                capture_output=True, text=True, timeout=5,
+            )
+            version_str = result.stdout.strip().lstrip("v")
+            major = int(version_str.split(".")[0])
+            if major < 22:
+                raise LauncherError(
+                    f"Node.js >=22.19 is required, found v{version_str}"
+                )
+        except (subprocess.TimeoutExpired, OSError, ValueError, IndexError):
+            pass
         harness = self.repository_root / "agent_harness" / "node_modules" / "@earendil-works" / "pi-coding-agent"
         if not harness.exists():
             raise LauncherError("agent_harness 依赖不完整，请运行：cd agent_harness && npm ci")

@@ -4,10 +4,32 @@
 
 ## 推荐入口：Novel Coding 网页
 
+### 前置步骤（首次使用）
+
+```powershell
+# 安装 Python 依赖
+pip install -e ".[dev,tui]"
+
+# 安装并测试 agent_harness
+cd agent_harness
+npm ci
+npm test
+cd ..
+
+# 安装并构建前端
+cd web
+npm ci
+npm test
+npm run build
+cd ..
+```
+
+### 启动
+
 在仓库根目录运行：
 
 ```powershell
-.\web.bat &lt;project-name&gt;
+.\web.bat <project-name>
 ```
 
 它会在本机 `127.0.0.1:8188` 启动服务并打开浏览器。网页中央始终保留作者与编辑对话，
@@ -38,8 +60,8 @@ npm test
 ## TUI
 
 ```powershell
-tui novels\&lt;project-name&gt;
-python -m awp_rp_runtime_v3.scripts.awp_tui novels\&lt;project-name&gt;
+tui novels\<project-name>
+python -m awp_rp_runtime_v3.scripts.awp_tui novels\<project-name>
 ```
 
 默认使用嵌入式 Pi 专属写作编辑。作者直接说剧情、人物或世界观想法即可，无需调用技能；消息会先保存到项目的 `.awp/authoring/`，再进入编辑对话。编辑不会直接写整章，只有跨轮确认的作者计划才能交给 Writer。
@@ -78,9 +100,16 @@ CLI 的 `plan` / `batch` 会显式使用 AI 自主规划，保留用于兼容和
 ## 测试
 
 ```powershell
-python -m pytest tests\test_novel_*.py -q
+python -m pytest tests -q --tb=short
 cd agent_harness
+npm ci
 npm test
+cd ..
+cd web
+npm ci
+npm test
+npm run build
+cd ..
 ```
 
 架构与当前实施计划见：
