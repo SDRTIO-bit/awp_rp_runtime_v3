@@ -27,6 +27,7 @@ from .novel_planner_adapter import NovelPlannerAdapter
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_workspace_catalog import NovelWorkspaceCatalog
 from .novel_prompt_service import NovelPromptService
+from .novel_conversation_api import register_conversation_routes
 
 RegistryFactory = Callable[[], SessionRuntimeStoreRegistry]
 
@@ -684,6 +685,9 @@ def register_novel_routes(
         f"{prefix}/{{project_id}}/characters/{{character_id}}/state-promotions",
         handlers.promote_character_state,
     )
+
+    # Register conversation and project-file routes
+    register_conversation_routes(app, registry_factory, workspace_catalog)
 
 
 __all__ = ["NovelApiHandlers", "register_novel_routes"]
