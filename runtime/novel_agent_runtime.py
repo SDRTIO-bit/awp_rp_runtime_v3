@@ -27,6 +27,7 @@ class PiNovelAgentRuntime:
         *,
         session_id: str | None = None,
         session_dir: Path | None = None,
+        context_seed: str = "",
         bridge_factory=NovelPiBridge,
     ):
         self._bridge = bridge_factory(
@@ -36,6 +37,7 @@ class PiNovelAgentRuntime:
             project_id=project_id,
             session_id=session_id,
             session_dir=session_dir,
+            context_seed=context_seed,
         )
 
     def handle_message(self, text: str) -> str:
@@ -88,6 +90,7 @@ def create_novel_agent_runtime(
     *,
     session_id: str | None = None,
     session_dir: Path | None = None,
+    context_seed: str = "",
     bridge_factory=NovelPiBridge,
 ):
     """Create the selected runtime without silently changing agent behavior."""
@@ -101,6 +104,7 @@ def create_novel_agent_runtime(
             project_id,
             session_id=session_id,
             session_dir=session_dir,
+            context_seed=context_seed,
             bridge_factory=bridge_factory,
         )
     if runtime == "legacy":

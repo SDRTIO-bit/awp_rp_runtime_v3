@@ -26,12 +26,19 @@ from .novel_workspace_catalog import NovelWorkspaceCatalog
 class EditorRoomKey:
     project_id: str
     room: str
+    branch_id: str = "main"
 
     @classmethod
-    def parse(cls, project_id: str, room: str) -> "EditorRoomKey":
+    def parse(
+        cls, project_id: str, room: str, branch_id: str = "main"
+    ) -> "EditorRoomKey":
         if not project_id.strip():
             raise ValueError("project id cannot be empty")
-        return cls(project_id=project_id, room=str(NovelRoomId.parse(room)))
+        return cls(
+            project_id=project_id,
+            room=str(NovelRoomId.parse(room)),
+            branch_id=branch_id,
+        )
 
 
 class EditorSubscription:
@@ -127,7 +134,7 @@ class _RoomSession:
 
 
 class EditorSessionManager:
-    """Own one persistent Pi editor runtime per full-book/chapter room."""
+    """Own one persistent Pi editor runtime per project/room/branch."""
 
     def __init__(
         self,
@@ -140,11 +147,20 @@ class EditorSessionManager:
         self._runtime_factory = runtime_factory
         self._tool_approval_timeout = tool_approval_timeout
         self._sessions: dict[EditorRoomKey, _RoomSession] = {}
+        self._room_locks: dict[tuple[str, str], asyncio.Lock] = {}
         self._closed = False
 
     @staticmethod
-    def key(project_id: str, room: str) -> EditorRoomKey:
-        return EditorRoomKey.parse(project_id, room)
+    def key(
+        project_id: str, room: str, branch_id: str = "main"
+    ) -> EditorRoomKey:
+        return EditorRoomKey.parse(project_id, room, branch_id=branch_id)
+
+    def _room_lock(self, key: EditorRoomKey) -> asyncio.Lock:
+        room_key = (key.project_id, key.room)
+        if room_key not in self._room_locks:
+            self._room_locks[room_key] = asyncio.Lock()
+        return self._room_locks[room_key]
 
     async def subscribe(
         self,
@@ -161,7 +177,7 @@ class EditorSessionManager:
         session.subscriptions.add(subscription)
         if after_event_id is not None:
             for event in session.store.replay(
-                key.room, after_event_id=after_event_id
+                key.room, branch_id=key.branch_id, after_event_id=after_event_id
             ):
                 subscription.enqueue(event)
         return subscription
@@ -174,7 +190,7 @@ class EditorSessionManager:
     ) -> None:
         session = self._require_session(key)
         for event in session.store.replay(
-            key.room, after_event_id=after_event_id
+            key.room, branch_id=key.branch_id, after_event_id=after_event_id
         ):
             subscription.enqueue(event)
 
@@ -200,7 +216,7 @@ class EditorSessionManager:
             )
             workspace = self.catalog.require(key.project_id)
             digest = hashlib.sha256(
-                f"{key.project_id}\0{key.room}".encode("utf-8")
+                f"{key.project_id}\0{key.room}\0{key.branch_id}".encode("utf-8")
             ).hexdigest()[:24]
             session_id = f"novel-editor-{digest}"
             room_dir = (
@@ -211,6 +227,13 @@ class EditorSessionManager:
                 / digest
             ).resolve()
 
+            # Compute context seed from branch's inherited history
+            context_seed = ""
+            if key.branch_id != "main" or key.branch_id == "main":
+                context_seed = session.store.render_context(
+                    key.room, branch_id=key.branch_id
+                )
+
             def create_runtime() -> Any:
                 return self._runtime_factory(
                     self.catalog.registry(key.project_id),
@@ -219,6 +242,7 @@ class EditorSessionManager:
                     key.project_id,
                     session_id=session_id,
                     session_dir=room_dir,
+                    context_seed=context_seed,
                 )
 
             session.runtime = await asyncio.to_thread(create_runtime)
@@ -631,18 +655,17 @@ class EditorSessionManager:
     def _require_session(self, key: EditorRoomKey) -> _RoomSession:
         if self._closed:
             raise RuntimeError("editor session manager is closed")
-        canonical = EditorRoomKey.parse(key.project_id, key.room)
-        workspace = self.catalog.require(canonical.project_id)
-        session = self._sessions.get(canonical)
+        workspace = self.catalog.require(key.project_id)
+        session = self._sessions.get(key)
         if session is None:
             session = _RoomSession(
-                key=canonical,
+                key=key,
                 store=NovelConversationStore(
                     workspace.root, workspace.project_id
                 ),
                 project_dir=workspace.root,
             )
-            self._sessions[canonical] = session
+            self._sessions[key] = session
         return session
 
     @staticmethod

@@ -10,6 +10,9 @@ from awp_rp_runtime_v3.runtime.novel_editor_session_manager import (
     EditorRoomKey,
     EditorSessionManager,
 )
+from awp_rp_runtime_v3.runtime.novel_conversation_store import (
+    NovelConversationStore,
+)
 from awp_rp_runtime_v3.runtime.novel_workspace_catalog import NovelWorkspaceCatalog
 
 
@@ -156,5 +159,110 @@ async def test_cancel_targets_only_the_selected_room(tmp_path):
     await manager.cancel(first)
 
     assert sum(runtime.aborted for runtime in runtimes.values()) == 1
+    await manager.close()
+
+
+# ---------------------------------------------------------------------------
+# Branch isolation tests (Task 4)
+# ---------------------------------------------------------------------------
+
+
+def test_branch_keys_are_distinct():
+    first = EditorRoomKey.parse("p1", "book")
+    second = EditorRoomKey.parse("p1", "book", branch_id="conversation-child")
+    assert first != second
+    assert first.branch_id == "main"
+    assert second.branch_id == "conversation-child"
+
+
+def test_legacy_key_defaults_to_main():
+    key = EditorRoomKey.parse("p1", "chapter:3")
+    assert key.branch_id == "main"
+
+
+@pytest.mark.asyncio
+async def test_different_branches_get_different_session_dirs(tmp_path):
+    session_dirs: list[Path] = []
+    catalog = _catalog(tmp_path)
+    workspace = catalog.require("p1")
+    project_dir = workspace.root
+
+    def runtime_factory(
+        registry, callbacks, project_dir, project_id, *, session_dir, **kwargs
+    ):
+        session_dirs.append(session_dir)
+        return _Runtime(callbacks)
+
+    store = NovelConversationStore(project_dir, "p1")
+    store.append("book", "author_message_saved", {"text": "父分支消息"})
+    child = store.create_branch(
+        "book", parent_branch_id="main", fork_event_id=1, title="子分支"
+    )
+
+    manager = EditorSessionManager(catalog, runtime_factory=runtime_factory)
+    first = EditorRoomKey.parse("p1", "book", branch_id="main")
+    second = EditorRoomKey.parse("p1", "book", branch_id=child.branch_id)
+
+    await manager.ensure_runtime(first)
+    await manager.ensure_runtime(second)
+
+    assert session_dirs[0] != session_dirs[1]
+    assert ".awp" in str(session_dirs[0])
+    await manager.close()
+
+
+@pytest.mark.asyncio
+async def test_context_seed_contains_inherited_history(tmp_path):
+    seeds: list[str] = []
+    catalog = _catalog(tmp_path)
+    workspace = catalog.require("p1")
+    project_dir = workspace.root
+
+    def runtime_factory(
+        registry, callbacks, project_dir, project_id, *, context_seed="", **kwargs
+    ):
+        seeds.append(context_seed)
+        return _Runtime(callbacks)
+
+    store = NovelConversationStore(project_dir, "p1")
+    store.append("book", "author_message_saved", {"text": "父分支消息"})
+    store.append("book", "editor_message_completed", {"text": "编辑回答"})
+    child = store.create_branch(
+        "book", parent_branch_id="main", fork_event_id=1,
+        title="子分支",
+    )
+
+    manager = EditorSessionManager(catalog, runtime_factory=runtime_factory)
+    child_key = EditorRoomKey.parse(
+        "p1", "book", branch_id=child.branch_id
+    )
+
+    await manager.ensure_runtime(child_key)
+
+    assert len(seeds) >= 1
+    assert "父分支消息" in seeds[-1]
+    assert "编辑回答" not in seeds[-1]
+    await manager.close()
+
+
+@pytest.mark.asyncio
+async def test_root_branch_context_seed_empty(tmp_path):
+    seeds: list[str] = []
+    catalog = _catalog(tmp_path)
+
+    def runtime_factory(
+        registry, callbacks, project_dir, project_id, *, context_seed="", **kwargs
+    ):
+        seeds.append(context_seed)
+        return _Runtime(callbacks)
+
+    manager = EditorSessionManager(catalog, runtime_factory=runtime_factory)
+    key = EditorRoomKey.parse("p1", "book")
+
+    await manager.ensure_runtime(key)
+
+    assert len(seeds) >= 1
+    assert "<conversation_history>" in seeds[-1]
+    assert "</conversation_history>" in seeds[-1]
     await manager.close()
 

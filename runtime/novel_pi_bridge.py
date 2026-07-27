@@ -44,12 +44,14 @@ class NovelPiBridge:
         project_id: str,
         session_id: str | None = None,
         session_dir: Path | None = None,
+        context_seed: str = "",
         host_command: list[str] | None = None,
     ):
         self._registry = registry
         self._callbacks = callbacks
         self._project_dir = Path(project_dir).resolve()
         self._project_id = project_id
+        self._context_seed = context_seed
         self._host_command = host_command or self._default_host_command()
         self._session_dir = (
             Path(session_dir).resolve()
@@ -192,6 +194,7 @@ class NovelPiBridge:
             payload={
                 "project_root": str(self._project_dir),
                 "session_dir": str(self._session_dir),
+                "context_seed": self._context_seed,
                 "connection": asdict(connection),
             },
         ))
