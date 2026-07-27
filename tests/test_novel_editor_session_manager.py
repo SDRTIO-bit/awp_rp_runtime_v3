@@ -268,3 +268,97 @@ async def test_root_branch_context_seed_empty(tmp_path):
     assert "</conversation_history>" in seeds[-1]
     await manager.close()
 
+
+# ---------------------------------------------------------------------------
+# Project LLM override isolation tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_project_llm_overrides_storage_isolation(tmp_path):
+    """Two projects' LLM configs must be stored independently and not leak."""
+    from awp_rp_runtime_v3.runtime.novel_llm_factory import NovelLLMFactory
+
+    # Create two distinct project catalogs side by side
+    for pid in ["proj-a", "proj-b"]:
+        project = tmp_path / "novels" / pid
+        project.mkdir(parents=True)
+        (project / ".novel_cli.json").write_text(
+            json.dumps({"project_id": pid, "db_path": str(project / "novel.db")}),
+            encoding="utf-8",
+        )
+    catalog = NovelWorkspaceCatalog(tmp_path)
+
+    factory = NovelLLMFactory.get_instance()
+    factory.reset()
+
+    # Activate project A and set its overrides
+    project_a = next(ws for ws in catalog.list() if ws.project_id == "proj-a")
+    reg_a = catalog.registry("proj-a")
+    from awp_rp_runtime_v3.contracts.novel_project import NovelProject as NP
+    from dataclasses import replace
+    proj_a = NP(
+        project_id="proj-a", title="A", genre="", target_platform="",
+        target_reader="", core_emotion="", one_sentence_pitch="", status="draft",
+        config={"llm_overrides": {"writer": {"model": "model-a", "max_tokens": 9999}}},
+    )
+    reg_a.novel_project_store.create(proj_a)
+    loaded_a = reg_a.novel_project_store.load("proj-a")
+    overrides_a = getattr(loaded_a, "config", {}).get("llm_overrides", {})
+    factory.set_project_overrides(overrides_a)
+    conn_a = factory.get_pi_role_connection("writer")
+    assert conn_a.model == "model-a"
+    assert conn_a.max_tokens == 9999
+
+    # Switch to project B
+    project_b = next(ws for ws in catalog.list() if ws.project_id == "proj-b")
+    reg_b = catalog.registry("proj-b")
+    proj_b = NP(
+        project_id="proj-b", title="B", genre="", target_platform="",
+        target_reader="", core_emotion="", one_sentence_pitch="", status="draft",
+        config={"llm_overrides": {"writer": {"model": "model-b", "max_tokens": 1111}}},
+    )
+    reg_b.novel_project_store.create(proj_b)
+    loaded_b = reg_b.novel_project_store.load("proj-b")
+    overrides_b = getattr(loaded_b, "config", {}).get("llm_overrides", {})
+    factory.set_project_overrides(overrides_b)
+    conn_b = factory.get_pi_role_connection("writer")
+    assert conn_b.model == "model-b"
+    assert conn_b.max_tokens == 1111
+
+    # Switch back to A and verify no leakage from B
+    factory.set_project_overrides(overrides_a)
+    conn_a2 = factory.get_pi_role_connection("writer")
+    assert conn_a2.model == "model-a"
+    assert conn_a2.max_tokens == 9999
+
+    factory.reset()
+    catalog.close()
+
+
+@pytest.mark.asyncio
+async def test_project_registry_isolation_prevents_cross_db_writes(tmp_path):
+    """Data written to project A's DB must not appear in project B's DB."""
+    for pid in ["island-a", "island-b"]:
+        project = tmp_path / "novels" / pid
+        project.mkdir(parents=True)
+        (project / ".novel_cli.json").write_text(
+            json.dumps({"project_id": pid, "db_path": str(project / "novel.db")}),
+            encoding="utf-8",
+        )
+    catalog = NovelWorkspaceCatalog(tmp_path)
+
+    # Create a project in island-a's DB via its own registry
+    reg_a = catalog.registry("island-a")
+    from awp_rp_runtime_v3.contracts.novel_project import NovelProject as NP
+    proj_a = NP(
+        project_id="island-a", title="Island A", genre="", target_platform="",
+        target_reader="", core_emotion="", one_sentence_pitch="", status="draft",
+    )
+    reg_a.novel_project_store.create(proj_a)
+
+    # island-b's DB must NOT contain island-a's project
+    reg_b = catalog.registry("island-b")
+    assert reg_b.novel_project_store.load("island-a") is None
+
+    catalog.close()
