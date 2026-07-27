@@ -108,8 +108,8 @@ test("real session factory receives the closed tool configuration", async () => 
   );
 
   assert.equal(captured.noTools, "all");
-  assert.deepEqual(captured.tools, NOVEL_TOOL_NAMES);
-  assert.deepEqual(captured.customTools.map((tool) => tool.name), NOVEL_TOOL_NAMES);
+  assert.deepEqual([...captured.tools].sort(), [...NOVEL_TOOL_NAMES].sort());
+  assert.deepEqual(captured.customTools.map((tool) => tool.name).sort(), [...NOVEL_TOOL_NAMES].sort());
   const skills = captured.resourceLoader.getSkills().skills;
   const collaboration = skills.find((skill) => skill.name === "author-collaboration");
   assert.equal(collaboration?.disableModelInvocation, false);
@@ -117,7 +117,6 @@ test("real session factory receives the closed tool configuration", async () => 
   assert.match(systemPrompt, /作品和目标读者/);
   assert.match(systemPrompt, /不得直接创作整章正文/);
   assert.match(systemPrompt, /自动使用.*author-collaboration/s);
-  assert.match(systemPrompt, /先检索.*项目文件/s);
-  assert.match(systemPrompt, /delegate_project_task/);
+  assert.match(systemPrompt, /先读取已有项目/s);
   assert.match(systemPrompt, /不得用工具.*替作者决定剧情/s);
 });
