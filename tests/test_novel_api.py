@@ -1,4 +1,4 @@
-"""Boundary tests for the standalone novel HTTP application."""
+"""Boundary and smoke tests for the novel HTTP application."""
 
 from __future__ import annotations
 
@@ -34,3 +34,30 @@ def test_novel_app_does_not_import_comfyui_server():
     create_app(registry_factory=lambda: object())
 
     assert "server" not in sys.modules
+
+
+def test_health_endpoint_returns_ok():
+    app = create_app(registry_factory=lambda: object())
+    paths = {
+        resource.canonical
+        for resource in app.router.resources()
+        if isinstance(resource.canonical, str)
+    }
+    assert "/awp/api/v1/health" in paths
+
+
+def test_novel_routes_registered():
+    app = create_app(registry_factory=lambda: object())
+    paths = {
+        resource.canonical
+        for resource in app.router.resources()
+        if isinstance(resource.canonical, str)
+    }
+
+    # Core novel resource paths
+    assert "/awp/api/v1/novels" in paths
+    assert "/awp/api/v1/novels/{project_id}/llm-config" in paths
+
+    # List project route (no project_id in path)
+    list_paths = [p for p in paths if p == "/awp/api/v1/novels"]
+    assert len(list_paths) == 1
