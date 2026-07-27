@@ -95,10 +95,12 @@ async def test_manager_persists_before_pi_and_streams_real_deltas(tmp_path):
 
     assert observed_persisted == [True]
     assert [frame["type"] for frame in socket.frames] == [
+        "turn_started",
         "author_message_saved",
         "editor_delta",
         "editor_delta",
         "editor_message_completed",
+        "turn_completed",
     ]
     assert "".join(
         frame["payload"]["text"]

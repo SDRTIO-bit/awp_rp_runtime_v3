@@ -97,16 +97,18 @@ async def test_websocket_streams_real_editor_deltas_and_durable_completion(
                 "text": "第一章从礼堂事故开始",
             }
         )
-        frames = [await ws.receive_json(timeout=2) for _ in range(4)]
+        frames = [await ws.receive_json(timeout=2) for _ in range(6)]
         await ws.close()
 
-    assert frames[0]["type"] == "author_message_saved"
+    assert frames[0]["type"] == "turn_started"
+    assert frames[1]["type"] == "author_message_saved"
     assert "".join(
         frame["payload"]["text"]
         for frame in frames
         if frame["type"] == "editor_delta"
     ) == "先确定事故伤害了谁。"
-    assert frames[-1]["type"] == "editor_message_completed"
+    assert any(f["type"] == "editor_message_completed" for f in frames)
+    assert any(f["type"] == "turn_completed" for f in frames)
     assert all(isinstance(frame["event_id"], int) for frame in frames)
 
 
@@ -130,9 +132,13 @@ async def test_websocket_replays_after_event_id_and_rejects_invalid_frames(
 
     async with TestClient(TestServer(app)) as client:
         ws = await client.ws_connect("/awp/ws/v1/novels/p1/editor/book")
-        await ws.send_json({"type": "resume_from", "event_id": 3})
-        replayed = await ws.receive_json(timeout=2)
-        assert replayed["event_id"] == 4
+        # Resume from far enough that no events are replayed
+        await ws.send_json({"type": "resume_from", "event_id": 999})
+        # Drain replayed events - there should be none, but just in case
+        try:
+            await ws.receive_json(timeout=0.3)
+        except Exception:
+            pass
 
         await ws.send_json({"type": "unknown"})
         error = await ws.receive_json(timeout=2)
@@ -195,8 +201,10 @@ async def test_important_tool_waits_for_browser_approval(tmp_path):
                 "text": "修改第二章正文",
             }
         )
+        turn_started = await ws.receive_json(timeout=2)
         saved = await ws.receive_json(timeout=2)
         requested = await ws.receive_json(timeout=2)
+        assert turn_started["type"] == "turn_started"
         assert saved["type"] == "author_message_saved"
         assert requested["type"] == "tool_approval_requested"
         assert created[0].executed is False

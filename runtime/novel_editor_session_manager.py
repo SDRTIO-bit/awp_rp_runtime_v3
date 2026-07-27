@@ -261,7 +261,17 @@ class EditorSessionManager:
         if not client_message_id.strip() or len(client_message_id) > 200:
             raise ValueError("invalid client message id")
         session = self._require_session(key)
+        turn_id = f"turn-{uuid.uuid4().hex}"
         async with session.turn_lock:
+            # Durable turn lifecycle start
+            started = session.store.append(
+                key.room,
+                "turn_started",
+                {"status": "queued"},
+                branch_id=key.branch_id,
+                turn_id=turn_id,
+            )
+            self._broadcast(session, started)
             saved = session.store.append(
                 key.room,
                 "author_message_saved",
@@ -269,6 +279,8 @@ class EditorSessionManager:
                     "client_message_id": client_message_id,
                     "text": text,
                 },
+                branch_id=key.branch_id,
+                turn_id=turn_id,
             )
             self._broadcast(session, saved)
             session.active_message_id = uuid.uuid4().hex
@@ -281,6 +293,8 @@ class EditorSessionManager:
                     key.room,
                     "turn_failed",
                     {"message": str(exc)[-4000:]},
+                    branch_id=key.branch_id,
+                    turn_id=turn_id,
                 )
                 self._broadcast(session, failed)
                 return
@@ -292,6 +306,15 @@ class EditorSessionManager:
                 key.room, message_id, result
             )
             self._broadcast(session, completed)
+            # Durable turn lifecycle end
+            turn_done = session.store.append(
+                key.room,
+                "turn_completed",
+                {"status": "completed"},
+                branch_id=key.branch_id,
+                turn_id=turn_id,
+            )
+            self._broadcast(session, turn_done)
             chapter_index = (
                 int(key.room.split(":", 1)[1])
                 if key.room.startswith("chapter:")
@@ -666,6 +689,10 @@ class EditorSessionManager:
                 project_dir=workspace.root,
             )
             self._sessions[key] = session
+            # Recover any stale incomplete turn
+            session.store.interrupt_incomplete_turn(
+                key.room, branch_id=key.branch_id
+            )
         return session
 
     @staticmethod

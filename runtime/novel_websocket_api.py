@@ -29,9 +29,11 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
     await websocket.prepare(request)
 
     try:
+        branch_id = request.match_info.get("branch_id", "main")
         key = EditorRoomKey.parse(
             request.match_info["project_id"],
             request.match_info["room"],
+            branch_id=branch_id,
         )
         manager.catalog.require(key.project_id)
     except (KeyError, ValueError) as exc:
@@ -168,6 +170,10 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
 def register_novel_websocket_routes(
     app: web.Application,
 ) -> None:
+    app.router.add_get(
+        "/awp/ws/v1/novels/{project_id}/editor/{room}/branches/{branch_id}",
+        editor_websocket,
+    )
     app.router.add_get(
         "/awp/ws/v1/novels/{project_id}/editor/{room}",
         editor_websocket,
