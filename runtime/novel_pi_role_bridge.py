@@ -28,7 +28,7 @@ class NovelPiRoleBridgeError(RuntimeError):
 
 
 def _default_connection_resolver(role: str) -> dict[str, Any]:
-    factory = NovelLLMFactory()
+    factory = NovelLLMFactory.get_instance()
     connection = asdict(factory.get_pi_role_connection(role))
     connection.pop("api_key", None)
     return connection

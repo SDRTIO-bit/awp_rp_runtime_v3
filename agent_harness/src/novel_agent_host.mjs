@@ -95,7 +95,7 @@ export async function createNovelAgentSession(
       input: ["text"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 131072,
-      maxTokens: 4000,
+      maxTokens: Number(connection.max_tokens ?? 4000),
     }],
   });
   const model = modelRegistry.find(connection.provider, connection.model);

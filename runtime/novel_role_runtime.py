@@ -112,7 +112,7 @@ class LegacyNovelRoleRuntime:
     runtime_name = "LegacyRoles"
 
     def __init__(self, *, llm_factory: NovelLLMFactory | None = None) -> None:
-        self._llm_factory = llm_factory or NovelLLMFactory()
+        self._llm_factory = llm_factory or NovelLLMFactory.get_instance()
 
     def run(
         self,

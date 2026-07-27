@@ -16,10 +16,10 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const LOCAL_PROVIDERS: Array<{ id: string; label: string; defaultBase: string; defaultKeyEnv: string }> = [
-  { id: "awp-deepseek", label: "DeepSeek", defaultBase: "https://api.deepseek.com/v1", defaultKeyEnv: "DEEPSEEK_API_KEY" },
-  { id: "awp-opencode", label: "OpenCode", defaultBase: "https://opencode.ai/zen/go/v1", defaultKeyEnv: "OPENCODE_API_KEY" },
-  { id: "awp-mimo", label: "小米 MiMo", defaultBase: "https://token-plan-cn.xiaomimimo.com/v1", defaultKeyEnv: "MIMO_API_KEY" },
-  { id: "awp-siliconflow", label: "硅基流动", defaultBase: "https://api.siliconflow.cn/v1", defaultKeyEnv: "SILICONFLOW_API_KEY" },
+  { id: "deepseek", label: "DeepSeek", defaultBase: "https://api.deepseek.com/v1", defaultKeyEnv: "DEEPSEEK_API_KEY" },
+  { id: "opencode", label: "OpenCode", defaultBase: "https://opencode.ai/zen/go/v1", defaultKeyEnv: "OPENCODE_API_KEY" },
+  { id: "mimo", label: "小米 MiMo", defaultBase: "https://token-plan-cn.xiaomimimo.com/v1", defaultKeyEnv: "MIMO_API_KEY" },
+  { id: "siliconflow", label: "硅基流动", defaultBase: "https://api.siliconflow.cn/v1", defaultKeyEnv: "SILICONFLOW_API_KEY" },
   { id: "custom", label: "自定义 OpenAI 兼容", defaultBase: "", defaultKeyEnv: "" },
 ];
 

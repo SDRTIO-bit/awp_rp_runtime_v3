@@ -186,7 +186,7 @@ class NovelPiBridge:
             daemon=True,
         )
         self._stderr_thread.start()
-        connection = NovelLLMFactory().get_pi_agent_connection()
+        connection = NovelLLMFactory.get_instance().get_pi_agent_connection()
         init_id = uuid.uuid4().hex
         self._write(NovelPiFrame(
             kind="init",

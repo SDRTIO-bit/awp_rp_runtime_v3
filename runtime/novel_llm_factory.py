@@ -166,6 +166,21 @@ class NovelLLMFactory:
                 )
         return self._adapters[role]
 
+    @staticmethod
+    def _override_thinking_from_level(config: dict[str, Any], level: str) -> dict[str, Any]:
+        """Apply a thinking_level string (low/medium/high/off) to a config dict."""
+        overridden = dict(config)
+        level = str(level or "").strip().lower()
+        if level == "off":
+            overridden["thinking"] = THINKING_DISABLED
+        elif level == "low":
+            overridden["thinking"] = THINKING_LOW
+        elif level == "medium":
+            overridden["thinking"] = THINKING_MEDIUM
+        elif level == "high":
+            overridden["thinking"] = THINKING_HIGH
+        return overridden
+
     def _role_config(self, role: str) -> dict[str, Any]:
         """Return the merged role config, applying OpenCode model overrides when
         NOVEL_LLM_PROVIDER=opencode is set.
@@ -181,7 +196,11 @@ class NovelLLMFactory:
             for key in ("model", "max_tokens"):
                 if key in project:
                     overridden[key] = project[key]
-            if "thinking" in project:
+            # Accept both "thinking" (legacy) and "thinking_level" (API)
+            thinking_level = project.get("thinking_level") or project.get("thinking", "")
+            if thinking_level:
+                overridden = self._override_thinking_from_level(overridden, str(thinking_level))
+            elif "thinking" in project:
                 overridden["thinking"] = project["thinking"]
             base = overridden
         if self._provider_choice(role) not in ("opencode", "mimo", "siliconflow"):

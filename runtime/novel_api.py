@@ -609,11 +609,14 @@ class NovelApiHandlers:
             defaults = {}
             for role in ROLE_NAMES:
                 connection = factory.get_pi_role_connection(role)
+                # Map the internal "awp-*" provider_id back to the type the
+                # frontend uses ("deepseek" / "opencode" / "mimo" / "siliconflow").
+                provider_type = factory._provider_choice(role)
                 defaults[role] = {
                     "model": connection.model,
                     "max_tokens": connection.max_tokens,
                     "thinking_level": connection.thinking_level,
-                    "provider": connection.provider,
+                    "provider": provider_type,
                 }
             return _json({"overrides": overrides, "defaults": defaults})
         except Exception as exc:
@@ -642,7 +645,8 @@ class NovelApiHandlers:
             config["llm_overrides"] = overrides
             updated = replace(project, config=config)
             self._registry(project_id).novel_project_store.update(updated)
-            # Push to the factory immediately
+            # Push to the factory immediately — use get_instance() so all
+            # future Pi bridges see the updated config
             NovelLLMFactory.get_instance().set_project_overrides(overrides)
             return _json({"ok": True, "overrides": overrides})
         except Exception as exc:
