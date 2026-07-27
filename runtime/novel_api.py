@@ -650,9 +650,9 @@ class NovelApiHandlers:
             config["llm_overrides"] = overrides
             updated = replace(project, config=config)
             self._registry(project_id).novel_project_store.update(updated)
-            # Push to the factory immediately — use get_instance() so all
-            # future Pi bridges see the updated config
-            NovelLLMFactory.get_instance().set_project_overrides(overrides)
+            # Do NOT mutate the global singleton — runtimes capture per-project
+            # snapshots at construction time (see EditorSessionManager.ensure_runtime
+            # and create_novel_role_runtime).
             return _json({"ok": True, "overrides": overrides})
         except Exception as exc:
             return _json({"error": str(exc)[:500]}, 500)

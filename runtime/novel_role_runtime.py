@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from ..contracts.novel_pi_role_protocol import NovelPiRoleResult, NovelPiRoleTask
-from .novel_llm_factory import NovelLLMFactory
+from .novel_llm_factory import NovelLLMFactory, NovelLLMSnapshot
 from .novel_pi_role_bridge import NovelPiRoleBridge
 from .novel_role_context import NovelRoleContext
 
@@ -174,6 +174,7 @@ class LegacyNovelRoleRuntime:
 def create_novel_role_runtime(
     *,
     llm_factory: NovelLLMFactory | None = None,
+    snapshot: NovelLLMSnapshot | None = None,
     bridge: Any | None = None,
     bridge_factory: Callable[..., Any] = NovelPiRoleBridge,
 ):
@@ -181,10 +182,7 @@ def create_novel_role_runtime(
 
     mode = os.environ.get("NOVEL_AGENT_RUNTIME", "pi").lower()
     if mode == "pi":
-        # Build a connection resolver that reads the current project's LLM
-        # overrides from the singleton factory (set by EditorSessionManager
-        # or the API just before runtime creation).
-        factory = NovelLLMFactory.get_instance()
+        factory = snapshot or NovelLLMFactory.get_instance()
 
         def _resolver(role: str) -> dict[str, Any]:
             from dataclasses import asdict as _asdict

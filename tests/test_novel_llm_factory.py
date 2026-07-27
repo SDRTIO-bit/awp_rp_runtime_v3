@@ -1,4 +1,10 @@
-from awp_rp_runtime_v3.runtime.novel_llm_factory import ROLE_CONFIGS, NovelLLMFactory
+import pytest
+
+from awp_rp_runtime_v3.runtime.novel_llm_factory import (
+    ROLE_CONFIGS,
+    NovelLLMFactory,
+    NovelLLMSnapshot,
+)
 
 
 def test_deepseek_default_uses_v4_pro_for_every_novel_role(monkeypatch):
@@ -131,3 +137,101 @@ def test_project_overrides_isolated_between_resets(monkeypatch):
     })
     config_a2 = factory.get_pi_role_connection("writer")
     assert config_a2.model == "project-a-model"
+
+
+# ---------------------------------------------------------------------------
+# Immutable project-scoped snapshot tests
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_unaffected_by_singleton_mutation(monkeypatch):
+    """A snapshot must not observe later singleton _project_overrides writes."""
+    monkeypatch.delenv("NOVEL_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("NOVEL_LLM_MODEL", raising=False)
+
+    factory = NovelLLMFactory.get_instance()
+    factory.reset()
+
+    snapshot = NovelLLMFactory.for_project(
+        "proj-a", {"writer": {"model": "snap-model", "max_tokens": 5555}}
+    )
+    assert isinstance(snapshot, NovelLLMSnapshot)
+    assert snapshot.get_pi_role_connection("writer").model == "snap-model"
+    assert snapshot.get_pi_role_connection("writer").max_tokens == 5555
+
+    # Mutate the singleton after the snapshot was captured
+    factory.set_project_overrides(
+        {"writer": {"model": "singleton-model", "max_tokens": 9999}}
+    )
+
+    # Snapshot must still reflect the captured state
+    assert snapshot.get_pi_role_connection("writer").model == "snap-model"
+    assert snapshot.get_pi_role_connection("writer").max_tokens == 5555
+
+
+def test_two_snapshots_stay_isolated(monkeypatch):
+    """Two snapshots captured with different overrides must not leak."""
+    monkeypatch.delenv("NOVEL_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("NOVEL_LLM_MODEL", raising=False)
+
+    factory = NovelLLMFactory.get_instance()
+    factory.reset()
+
+    snap_a = NovelLLMFactory.for_project(
+        "proj-a", {"writer": {"model": "model-a"}}
+    )
+    snap_b = NovelLLMFactory.for_project(
+        "proj-b", {"writer": {"model": "model-b"}}
+    )
+
+    assert snap_a.get_pi_role_connection("writer").model == "model-a"
+    assert snap_b.get_pi_role_connection("writer").model == "model-b"
+
+    # Singleton mutation must not affect either snapshot
+    factory.set_project_overrides({"writer": {"model": "model-c"}})
+    assert snap_a.get_pi_role_connection("writer").model == "model-a"
+    assert snap_b.get_pi_role_connection("writer").model == "model-b"
+
+    # Mutating the dict passed to for_project after construction must not leak
+    factory.reset()
+
+
+def test_snapshot_deep_copies_input_overrides(monkeypatch):
+    """Mutating the overrides dict after snapshot construction must not leak in."""
+    monkeypatch.delenv("NOVEL_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("NOVEL_LLM_MODEL", raising=False)
+
+    factory = NovelLLMFactory.get_instance()
+    factory.reset()
+
+    overrides: dict = {"writer": {"model": "original"}}
+    snapshot = NovelLLMFactory.for_project("proj-a", overrides)
+
+    # Mutate the caller's dict after construction
+    overrides["writer"]["model"] = "mutated"
+    assert snapshot.get_pi_role_connection("writer").model == "original"
+
+    with pytest.raises(TypeError):
+        snapshot._overrides["writer"] = {"model": "replacement"}
+
+
+def test_snapshot_get_pi_role_connections_matches_roles(monkeypatch):
+    """Snapshot.get_pi_role_connections must return the same role set as factory."""
+    monkeypatch.delenv("NOVEL_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("NOVEL_LLM_MODEL", raising=False)
+
+    factory = NovelLLMFactory.get_instance()
+    factory.reset()
+
+    snapshot = NovelLLMFactory.for_project("proj-a", {})
+    connections = snapshot.get_pi_role_connections()
+    assert set(connections) == {
+        "architect",
+        "director",
+        "writer",
+        "continuity_checker",
+        "style_cleaner",
+        "ledger_curator",
+        "npc_planner",
+    }
+    assert all(c.api_key is None for c in connections.values())

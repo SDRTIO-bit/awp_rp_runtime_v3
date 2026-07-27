@@ -235,13 +235,13 @@ class EditorSessionManager:
                     key.room, branch_id=key.branch_id
                 )
 
-            # Push project LLM overrides into the factory before creating the runtime
             project = self.catalog.registry(key.project_id).novel_project_store.load(key.project_id)
-            if project:
-                factory = NovelLLMFactory.get_instance()
-                factory.set_project_overrides(
-                    getattr(project, "config", {}).get("llm_overrides", {}) or {}
-                )
+            overrides = (
+                getattr(project, "config", {}).get("llm_overrides", {})
+                if project is not None
+                else {}
+            )
+            snapshot = NovelLLMFactory.for_project(key.project_id, overrides)
 
             def create_runtime() -> Any:
                 return self._runtime_factory(
@@ -252,6 +252,7 @@ class EditorSessionManager:
                     session_id=session_id,
                     session_dir=room_dir,
                     context_seed=context_seed,
+                    snapshot=snapshot,
                 )
 
             session.runtime = await asyncio.to_thread(create_runtime)

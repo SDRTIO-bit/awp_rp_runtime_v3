@@ -10,9 +10,11 @@ DeepSeekAdapter 的 "thinking 吃光 content 后 max_tokens=16000 重试" 分支
 
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 
 from ..adapters.llm.deepseek_adapter import DeepSeekAdapter
 
@@ -58,6 +60,81 @@ class NovelPiConnectionConfig:
     api_key: None = None
 
 
+class NovelLLMSnapshot:
+    """Immutable, project-scoped snapshot of LLM configuration.
+
+    Captures a deep copy of the per-project overrides at construction time.
+    All role/agent connection and role config accessors derive from the
+    captured copy and never observe later mutations to the
+    ``NovelLLMFactory`` singleton's ``_project_overrides``.
+
+    Env vars (``NOVEL_LLM_PROVIDER`` etc.) are read live, matching the
+    factory's behavior — they are global process config, not project state.
+    """
+
+    __slots__ = ("_overrides", "_project_id")
+
+    def __init__(
+        self,
+        project_id: str,
+        overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        self._project_id = project_id
+        # Deep copy so later caller mutations don't leak in, and later
+        # singleton mutations can't reach us (we never hold a reference to
+        # the singleton's dict).
+        self._overrides = self._freeze(copy.deepcopy(overrides or {}))
+
+    @staticmethod
+    def _freeze(value: Any) -> Any:
+        if isinstance(value, dict):
+            return MappingProxyType(
+                {key: NovelLLMSnapshot._freeze(item) for key, item in value.items()}
+            )
+        if isinstance(value, list):
+            return tuple(NovelLLMSnapshot._freeze(item) for item in value)
+        return value
+
+    @property
+    def project_id(self) -> str:
+        return self._project_id
+
+    # -- accessors mirror NovelLLMFactory but read from the captured copy --
+
+    def _provider_choice(self, role: str = "") -> str:
+        return NovelLLMFactory._provider_choice_for(self._overrides, role)
+
+    def _role_config(self, role: str) -> dict[str, Any]:
+        return NovelLLMFactory._role_config_for(self._overrides, role)
+
+    def get_pi_agent_connection(self) -> NovelPiConnectionConfig:
+        return self.get_pi_role_connection("brain")
+
+    def get_pi_role_connection(self, role: str) -> NovelPiConnectionConfig:
+        return NovelLLMFactory._pi_role_connection_for(self._overrides, role)
+
+    def get_pi_role_connections(self) -> dict[str, NovelPiConnectionConfig]:
+        roles = (
+            "architect",
+            "npc_planner",
+            "director",
+            "writer",
+            "continuity_checker",
+            "style_cleaner",
+            "ledger_curator",
+        )
+        return {role: self.get_pi_role_connection(role) for role in roles}
+
+    def get_thinking_config(self, role: str) -> dict[str, Any]:
+        return self._role_config(role)["thinking"]
+
+    def get_model(self, role: str) -> str:
+        return self._role_config(role)["model"]
+
+    def get_max_tokens(self, role: str) -> int:
+        return self._role_config(role)["max_tokens"]
+
+
 class NovelLLMFactory:
     """Factory for creating LLM adapter instances for novel agents.
 
@@ -81,16 +158,41 @@ class NovelLLMFactory:
             cls._instance = cls()
         return cls._instance
 
+    @classmethod
+    def for_project(
+        cls,
+        project_id: str,
+        overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> NovelLLMSnapshot:
+        """Return an immutable, project-scoped LLM configuration snapshot.
+
+        When ``overrides`` is provided, the snapshot captures a deep copy of
+        that dict.  When ``overrides`` is None, the snapshot captures a deep
+        copy of the singleton's current ``_project_overrides``.
+
+        The returned snapshot never observes later singleton mutations.
+        """
+        if overrides is None:
+            overrides = cls.get_instance().get_project_overrides()
+        return NovelLLMSnapshot(project_id, overrides)
+
     @staticmethod
     def _provider_choice(role: str = "") -> str:
         """Return provider for role, falling back to global NOVEL_LLM_PROVIDER.
         Project overrides take priority over env."""
-        instance = NovelLLMFactory.get_instance()
-        project = instance._project_overrides.get(role, {})
+        return NovelLLMFactory._provider_choice_for(
+            NovelLLMFactory.get_instance()._project_overrides, role
+        )
+
+    @staticmethod
+    def _provider_choice_for(
+        overrides: Mapping[str, Any], role: str = ""
+    ) -> str:
+        """Return provider for role given a captured overrides dict."""
+        project = overrides.get(role, {})
         p_provider = project.get("provider", "")
         if p_provider:
             return p_provider
-        import os
         if role:
             per_role = os.environ.get(f"NOVEL_LLM_PROVIDER_{role.upper()}")
             if per_role:
@@ -188,8 +290,17 @@ class NovelLLMFactory:
         Per-project overrides (model, max_tokens, thinking_level) take
         precedence over hardcoded ROLE_CONFIGS.
         """
+        return NovelLLMFactory._role_config_for(
+            self._project_overrides, role
+        )
+
+    @staticmethod
+    def _role_config_for(
+        overrides: Mapping[str, Any], role: str
+    ) -> dict[str, Any]:
+        """Return the merged role config for a captured overrides dict."""
         base = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
-        project = self._project_overrides.get(role, {})
+        project = overrides.get(role, {})
         if project:
             overridden = dict(base)
             for key in ("model", "max_tokens"):
@@ -197,16 +308,16 @@ class NovelLLMFactory:
                     overridden[key] = project[key]
             thinking_level = project.get("thinking_level") or project.get("thinking", "")
             if thinking_level:
-                overridden = self._override_thinking_from_level(
+                overridden = NovelLLMFactory._override_thinking_from_level(
                     overridden, str(thinking_level)
                 )
             elif "thinking" in project:
                 overridden["thinking"] = project["thinking"]
             base = overridden
-        if self._provider_choice(role) not in ("opencode", "mimo", "siliconflow"):
+        if NovelLLMFactory._provider_choice_for(overrides, role) not in ("opencode", "mimo", "siliconflow"):
             return base
 
-        provider = self._provider_choice(role)
+        provider = NovelLLMFactory._provider_choice_for(overrides, role)
         if provider == "mimo":
             default_map = {
                 "director":           "mimo-v2.5-pro",
@@ -222,7 +333,7 @@ class NovelLLMFactory:
                 or default_map.get(role, "mimo-v2.5-pro")
             )
             config = {**base, "model": model_id}
-            self._adjust_for_thinking_models(config, model_id)
+            NovelLLMFactory._adjust_for_thinking_models(config, model_id)
             return config
 
         # Override model names with OpenCode-available ids.
@@ -247,7 +358,7 @@ class NovelLLMFactory:
             or default_map.get(role, "qwen3.7-max")
         )
         config = {**base, "model": model_id}
-        self._adjust_for_thinking_models(config, model_id)
+        NovelLLMFactory._adjust_for_thinking_models(config, model_id)
         return config
 
     @staticmethod
@@ -265,17 +376,28 @@ class NovelLLMFactory:
     def get_pi_role_connection(self, role: str) -> NovelPiConnectionConfig:
         """Resolve one role's non-secret Pi provider and generation settings."""
 
-        provider = self._provider_choice(role)
-        project = self._project_overrides.get(role, {})
+        return NovelLLMFactory._pi_role_connection_for(
+            self._project_overrides, role
+        )
+
+    @staticmethod
+    def _pi_role_connection_for(
+        overrides: Mapping[str, Any], role: str
+    ) -> NovelPiConnectionConfig:
+        """Resolve one role's Pi connection from a captured overrides dict."""
+
+        provider = NovelLLMFactory._provider_choice_for(overrides, role)
+        project = overrides.get(role, {})
         role_suffix = role.upper()
-        thinking = self.get_thinking_config(role).get("thinking", {})
+        thinking = NovelLLMFactory._role_config_for(overrides, role)["thinking"].get("thinking", {})
         thinking_level = (
             "off"
             if thinking.get("type") == "disabled"
             else str(thinking.get("reasoning_effort", "low"))
         )
-        model = self.get_model(role)
-        max_tokens = self.get_max_tokens(role)
+        role_cfg = NovelLLMFactory._role_config_for(overrides, role)
+        model = role_cfg["model"]
+        max_tokens = role_cfg["max_tokens"]
         # OpenCode's Qwen 3.7 Plus route reserves a fixed 32K thinking budget.
         # A 2K-character Writer has a 4K completion cap, so leaving thinking
         # on makes Alibaba reject the request before prose generation.

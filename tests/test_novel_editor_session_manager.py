@@ -337,6 +337,39 @@ async def test_project_llm_overrides_storage_isolation(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_editor_runtime_receives_project_llm_snapshot(tmp_path):
+    """The editor host must receive a captured project configuration."""
+    from awp_rp_runtime_v3.contracts.novel_project import NovelProject as NP
+    from awp_rp_runtime_v3.runtime.novel_llm_factory import NovelLLMFactory
+
+    catalog = _catalog(tmp_path)
+    catalog.registry("p1").novel_project_store.create(
+        NP(
+            project_id="p1", title="Project", genre="", target_platform="",
+            target_reader="", core_emotion="", one_sentence_pitch="", status="draft",
+            config={"llm_overrides": {"brain": {"model": "editor-model-a"}}},
+        )
+    )
+    snapshots = []
+
+    def runtime_factory(registry, callbacks, project_dir, project_id, **kwargs):
+        snapshots.append(kwargs["snapshot"])
+        return _Runtime(callbacks)
+
+    factory = NovelLLMFactory.get_instance()
+    factory.reset()
+    manager = EditorSessionManager(catalog, runtime_factory=runtime_factory)
+    await manager.ensure_runtime(EditorRoomKey.parse("p1", "book"))
+    factory.set_project_overrides({"brain": {"model": "singleton-model-b"}})
+
+    assert snapshots[0].get_pi_agent_connection().model == "editor-model-a"
+
+    await manager.close()
+    factory.reset()
+    catalog.close()
+
+
+@pytest.mark.asyncio
 async def test_project_registry_isolation_prevents_cross_db_writes(tmp_path):
     """Data written to project A's DB must not appear in project B's DB."""
     for pid in ["island-a", "island-b"]:

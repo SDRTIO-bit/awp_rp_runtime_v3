@@ -46,12 +46,14 @@ class NovelPiBridge:
         session_dir: Path | None = None,
         context_seed: str = "",
         host_command: list[str] | None = None,
+        snapshot: Any | None = None,
     ):
         self._registry = registry
         self._callbacks = callbacks
         self._project_dir = Path(project_dir).resolve()
         self._project_id = project_id
         self._context_seed = context_seed
+        self._snapshot = snapshot
         self._host_command = host_command or self._default_host_command()
         self._session_dir = (
             Path(session_dir).resolve()
@@ -186,7 +188,11 @@ class NovelPiBridge:
             daemon=True,
         )
         self._stderr_thread.start()
-        connection = NovelLLMFactory.get_instance().get_pi_agent_connection()
+        connection = (
+            self._snapshot.get_pi_agent_connection()
+            if self._snapshot is not None
+            else NovelLLMFactory.get_instance().get_pi_agent_connection()
+        )
         init_id = uuid.uuid4().hex
         self._write(NovelPiFrame(
             kind="init",

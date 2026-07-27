@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from .novel_brain import NovelBrain
 from .novel_pi_bridge import NovelPiBridge
@@ -29,6 +30,7 @@ class PiNovelAgentRuntime:
         session_dir: Path | None = None,
         context_seed: str = "",
         bridge_factory=NovelPiBridge,
+        snapshot: Any | None = None,
     ):
         self._bridge = bridge_factory(
             registry,
@@ -38,6 +40,7 @@ class PiNovelAgentRuntime:
             session_id=session_id,
             session_dir=session_dir,
             context_seed=context_seed,
+            snapshot=snapshot,
         )
 
     def handle_message(self, text: str) -> str:
@@ -92,6 +95,7 @@ def create_novel_agent_runtime(
     session_dir: Path | None = None,
     context_seed: str = "",
     bridge_factory=NovelPiBridge,
+    snapshot: Any | None = None,
 ):
     """Create the selected runtime without silently changing agent behavior."""
 
@@ -106,6 +110,7 @@ def create_novel_agent_runtime(
             session_dir=session_dir,
             context_seed=context_seed,
             bridge_factory=bridge_factory,
+            snapshot=snapshot,
         )
     if runtime == "legacy":
         return LegacyNovelAgentRuntime(registry, callbacks, project_dir, project_id)
