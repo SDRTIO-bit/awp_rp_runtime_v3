@@ -21,8 +21,13 @@ export interface ChapterSummary {
 
 export class ApiConflictError extends Error {
   currentRevision: number;
-  constructor(message: string, currentRevision: number) {
-    super(message); this.currentRevision = currentRevision;
+  code?: string;
+  effects?: ConversationEffect[];
+  constructor(message: string, currentRevision: number, code?: string, effects?: ConversationEffect[]) {
+    super(message);
+    this.currentRevision = currentRevision;
+    this.code = code;
+    this.effects = effects;
   }
 }
 
@@ -64,3 +69,81 @@ export const savePrompt = (projectId: string, role: string, content: string, exp
   });
 export const promptDiff = (projectId: string, role: string) =>
   request<{ diff: string }>(`${root}/${encodeURIComponent(projectId)}/prompts/${role}/diff`);
+
+// ---------------------------------------------------------------------------
+// Conversation branching (Task 9)
+// ---------------------------------------------------------------------------
+
+export interface ConversationBranch {
+  branch_id: string;
+  project_id: string;
+  room: string;
+  parent_branch_id: string | null;
+  fork_event_id: number | null;
+  title: string;
+  status: "active" | "archived";
+  created_at: string;
+  updated_at: string;
+  head_event_id: number;
+  has_side_effects: boolean;
+}
+
+export interface ConversationEffect {
+  event_id: number;
+  type: string;
+  summary: string;
+}
+
+export interface ConversationSearchHit {
+  event_id: number;
+  branch_id: string;
+  role: "author" | "editor";
+  excerpt: string;
+  created_at: string;
+}
+
+export interface ProjectFileEntry {
+  path: string;
+}
+
+export interface ProjectFileVersion {
+  version_id: string;
+  sha256: string;
+  created_at: string;
+  size_bytes: number;
+}
+
+export const listConversations = (projectId: string, room: string, archived = false) =>
+  request<ConversationBranch[]>(
+    `${root}/${encodeURIComponent(projectId)}/editor-rooms/${encodeURIComponent(room)}/conversations${archived ? "?archived=1" : ""}`
+  );
+
+export const createConversation = (
+  projectId: string, room: string,
+  body: { parent_branch_id?: string; fork_event_id?: number; title: string; confirm_effects?: boolean }
+) =>
+  request<ConversationBranch>(
+    `${root}/${encodeURIComponent(projectId)}/editor-rooms/${encodeURIComponent(room)}/conversations`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+  );
+
+export const updateConversation = (projectId: string, room: string, branchId: string, body: { title?: string; archived?: boolean }) =>
+  request<{ branch_id: string; updated: boolean }>(
+    `${root}/${encodeURIComponent(projectId)}/editor-rooms/${encodeURIComponent(room)}/conversations/${encodeURIComponent(branchId)}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+  );
+
+export const searchConversations = (projectId: string, room: string, q: string) =>
+  request<ConversationSearchHit[]>(
+    `${root}/${encodeURIComponent(projectId)}/editor-rooms/${encodeURIComponent(room)}/conversation-search?q=${encodeURIComponent(q)}`
+  );
+
+export const listProjectFiles = (projectId: string, q = "") =>
+  request<string[]>(
+    `${root}/${encodeURIComponent(projectId)}/project-files?q=${encodeURIComponent(q)}`
+  );
+
+export const listProjectFileHistory = (projectId: string, path: string) =>
+  request<ProjectFileVersion[]>(
+    `${root}/${encodeURIComponent(projectId)}/project-files/history?path=${encodeURIComponent(path)}`
+  );

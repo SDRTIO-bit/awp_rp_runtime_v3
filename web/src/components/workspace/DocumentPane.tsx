@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getChapterPlan, getDocument } from "../../api/workspace";
 import { VersionedEditor } from "./VersionedEditor";
 
@@ -7,7 +7,8 @@ export function DocumentPane({
   projectId, room, writerBuffer = "",
   open = false,
   onClose,
-}: { projectId: string; room: string; writerBuffer?: string; open?: boolean; onClose?: () => void }) {
+  extraTabs,
+}: { projectId: string; room: string; writerBuffer?: string; open?: boolean; onClose?: () => void; extraTabs?: ReactNode }) {
   const [tab, setTab] = useState<Tab>("plan");
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
