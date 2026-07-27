@@ -39,6 +39,17 @@ async function post<T>(path: string, payload?: unknown): Promise<T> {
   return body.data as T;
 }
 
+async function put<T>(path: string, payload?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}/awp/api/v1${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+  const body = await parseJson<T>(res);
+  if (!res.ok) throw new Error(errorMessage(body, res.status));
+  return body.data as T;
+}
+
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}/awp/api/v1${path}`, { method: "DELETE" });
   const body = await parseJson<T>(res);
@@ -210,5 +221,5 @@ export async function updateLlmConfig(
   projectId: string,
   overrides: Record<string, Partial<LlmRoleOverride>>,
 ): Promise<{ ok: boolean; overrides: Record<string, LlmRoleOverride> }> {
-  return post(`/novels/${encodeURIComponent(projectId)}/llm-config`, { overrides });
+  return put(`/novels/${encodeURIComponent(projectId)}/llm-config`, { overrides });
 }

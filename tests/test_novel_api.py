@@ -18,6 +18,16 @@ def test_novel_app_registers_only_novel_and_static_routes():
     assert not any("/sessions" in path or "/cards" in path for path in paths)
 
 
+def test_llm_config_routes_registered():
+    app = create_app(registry_factory=lambda: object())
+    paths = {
+        resource.canonical
+        for resource in app.router.resources()
+        if isinstance(resource.canonical, str)
+    }
+    assert "/awp/api/v1/novels/{project_id}/llm-config" in paths
+
+
 def test_novel_app_does_not_import_comfyui_server():
     import sys
 
