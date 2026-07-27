@@ -52,6 +52,15 @@ web/dist/
 novels/**/.awp/pi-sessions/
 novels/**/.awp/pi-role-sessions/
 
+# Project-local authoring runtime data (conversations, journals, plans)
+novels/**/.awp/authoring/
+novels/**/.awp/file-history/
+novels/**/.awp/tool-audit/
+
+# Local run-continuation snapshots and plans (OMO sessions)
+.omo/run-continuation/
+.omo/plans/
+
 # Logs and traces
 *.log
 logs/

@@ -1,6 +1,0 @@
-{"created_at": "2026-07-27T03:36:07.606105+00:00", "tool": "write", "target": "output/chapter_01.md", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
-{"created_at": "2026-07-27T03:36:07.667177+00:00", "tool": "write", "target": "output/chapter_01.quality.json", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
-{"created_at": "2026-07-27T03:36:09.765242+00:00", "tool": "write", "target": "output/chapter_02.md", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
-{"created_at": "2026-07-27T03:36:09.831806+00:00", "tool": "write", "target": "output/chapter_02.quality.json", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
-{"created_at": "2026-07-27T03:36:09.896528+00:00", "tool": "write", "target": "guidance/chapter_01.md", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
-{"created_at": "2026-07-27T03:36:09.958470+00:00", "tool": "write", "target": "guidance/chapter_02.md", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
