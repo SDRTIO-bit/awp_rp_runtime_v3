@@ -65,6 +65,11 @@ class NovelApiHandlers:
             return self._workspace_catalog.registry(project_id)
         return self._registry_factory()
 
+    def _global_registry(self) -> SessionRuntimeStoreRegistry:
+        """Return the default (non-project-scoped) registry for routes without a
+        project context (e.g. project creation, listing)."""
+        return self._registry_factory()
+
     def _document_service(self, project_id: str) -> NovelDocumentService:
         if self._workspace_catalog is None:
             raise KeyError("workspace catalog is unavailable")
@@ -310,7 +315,7 @@ class NovelApiHandlers:
             status="planning",
         )
         try:
-            self._registry().novel_project_store.create(project)
+            self._global_registry().novel_project_store.create(project)
             return _json(project.to_dict())
         except Exception as exc:
             return _json({"error": str(exc)[:200]}, 500)
@@ -333,7 +338,7 @@ class NovelApiHandlers:
                         }
                     )
                 return _json(projects)
-            projects = self._registry().novel_project_store.list_all()
+            projects = self._global_registry().novel_project_store.list_all()
             return _json([project.to_dict() for project in projects])
         except Exception as exc:
             return _json({"error": str(exc)[:200]}, 500)
@@ -344,7 +349,7 @@ class NovelApiHandlers:
             registry = (
                 self._workspace_catalog.registry(project_id)
                 if self._workspace_catalog is not None
-                else self._registry()
+                else self._global_registry()
             )
             project = registry.novel_project_store.load(project_id)
             if project is None:
@@ -356,7 +361,7 @@ class NovelApiHandlers:
     async def delete_project(self, request: web.Request) -> web.Response:
         project_id = request.match_info["project_id"]
         try:
-            registry = self._registry()
+            registry = self._registry(project_id)
             registry.novel_plan_store.delete(project_id)
             registry.novel_project_store.delete(project_id)
             return _json({"success": True})
@@ -389,7 +394,7 @@ class NovelApiHandlers:
             return _json({"error": "chapter_index must be >= 1"}, 400)
         try:
             plan = await asyncio.to_thread(
-                NovelEngine(self._registry()).plan_chapter,
+                NovelEngine(self._registry(project_id)).plan_chapter,
                 project_id=project_id,
                 chapter_index=chapter_index,
                 task_description=body.get("task_description", ""),
@@ -417,7 +422,7 @@ class NovelApiHandlers:
             return _json({"error": "Invalid chapter index"}, 400)
         try:
             draft = await asyncio.to_thread(
-                NovelEngine(self._registry()).write_chapter,
+                NovelEngine(self._registry(project_id)).write_chapter,
                 project_id=request.match_info["project_id"],
                 chapter_index=idx,
             )
@@ -448,7 +453,7 @@ class NovelApiHandlers:
         body = await request.json()
         try:
             draft = await asyncio.to_thread(
-                NovelEngine(self._registry()).revise_chapter,
+                NovelEngine(self._registry(project_id)).revise_chapter,
                 project_id=request.match_info["project_id"],
                 chapter_index=idx,
                 feedback=body.get("feedback", ""),
@@ -470,7 +475,7 @@ class NovelApiHandlers:
             return _json({"error": "Invalid chapter range"}, 400)
         try:
             drafts = await asyncio.to_thread(
-                NovelEngine(self._registry()).batch_write,
+                NovelEngine(self._registry(project_id)).batch_write,
                 project_id=request.match_info["project_id"],
                 chapter_start=chapter_start,
                 chapter_end=chapter_end,
@@ -500,7 +505,7 @@ class NovelApiHandlers:
     async def autonomy_summary(self, request: web.Request) -> web.Response:
         project_id = request.match_info["project_id"]
         try:
-            registry = self._registry()
+            registry = self._registry(project_id)
             if registry.novel_project_store.load(project_id) is None:
                 return _json({"error": "Project not found"}, 404)
             agendas = registry.novel_ledger_store.list_by_project(
@@ -539,7 +544,7 @@ class NovelApiHandlers:
             )
         source_item_id = body.get("source_item_id", "")
         try:
-            registry = self._registry()
+            registry = self._registry(project_id)
             character = registry.novel_character_store.load(character_id)
             if character is None or character.project_id != project_id:
                 return _json(
