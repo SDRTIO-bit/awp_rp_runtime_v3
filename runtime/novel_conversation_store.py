@@ -634,6 +634,9 @@ class NovelConversationStore:
         room: str,
         message_id: str,
         text: str,
+        *,
+        branch_id: str = ROOT_BRANCH_ID,
+        turn_id: str | None = None,
     ) -> NovelWebEvent:
         if not message_id.strip():
             raise ValueError("message id cannot be empty")
@@ -643,6 +646,8 @@ class NovelConversationStore:
             room,
             "editor_message_completed",
             {"message_id": message_id, "text": text},
+            branch_id=branch_id,
+            turn_id=turn_id,
         )
 
 

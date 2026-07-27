@@ -185,3 +185,85 @@ async def test_llm_config_put_rejects_unknown_role(api_app):
 
     assert response.status == 400
     assert body["data"]["error"] == "unknown role: unknown-role"
+
+
+class _StubDraft:
+    """Minimal stand-in for ChapterDraft.to_dict()."""
+
+    def __init__(self, **payload):
+        self._payload = payload
+
+    def to_dict(self) -> dict:
+        return self._payload
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route", "engine_method", "payload"),
+    [
+        ("chapters/2/write", "write_chapter", None),
+        ("chapters/2/revise", "revise_chapter", {"feedback": "节奏太慢"}),
+    ],
+)
+async def test_chapter_routes_pass_project_id_to_engine(
+    api_app, monkeypatch, route, engine_method, payload
+):
+    """The chapter handlers must reach the engine with the routed project id.
+
+    Regression: ``write_chapter``/``revise_chapter``/``batch_write`` referenced
+    an undefined local ``project_id`` when building the registry, so every
+    request raised ``NameError`` and the bare ``except Exception`` reported it
+    as an opaque HTTP 500.
+    """
+    app, _ = api_app
+    seen: dict[str, object] = {}
+
+    def fake(self, **kwargs):
+        seen.update(kwargs)
+        return _StubDraft(chapter_index=kwargs["chapter_index"], text="ok")
+
+    monkeypatch.setattr(
+        f"awp_rp_runtime_v3.runtime.novel_api.NovelEngine.{engine_method}",
+        fake,
+        raising=True,
+    )
+
+    async with TestClient(TestServer(app)) as client:
+        response = await client.post(
+            f"/awp/api/v1/novels/project-a/{route}",
+            json=payload if payload is not None else {},
+        )
+        body = await response.json()
+
+    assert response.status == 200, body
+    assert seen["project_id"] == "project-a"
+    assert seen["chapter_index"] == 2
+    assert body["data"]["chapter_index"] == 2
+
+
+@pytest.mark.asyncio
+async def test_batch_write_route_passes_project_id_to_engine(api_app, monkeypatch):
+    """``batch_write`` had the same undefined ``project_id`` defect."""
+    app, _ = api_app
+    seen: dict[str, object] = {}
+
+    def fake_batch(self, **kwargs):
+        seen.update(kwargs)
+        return [_StubDraft(chapter_index=index) for index in (1, 2)]
+
+    monkeypatch.setattr(
+        "awp_rp_runtime_v3.runtime.novel_api.NovelEngine.batch_write",
+        fake_batch,
+        raising=True,
+    )
+
+    async with TestClient(TestServer(app)) as client:
+        response = await client.post(
+            "/awp/api/v1/novels/project-a/batch-write",
+            json={"chapter_start": 1, "chapter_end": 2},
+        )
+        body = await response.json()
+
+    assert response.status == 200, body
+    assert seen["project_id"] == "project-a"
+    assert body["data"]["count"] == 2

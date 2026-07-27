@@ -395,3 +395,99 @@ async def test_project_registry_isolation_prevents_cross_db_writes(tmp_path):
     assert reg_b.novel_project_store.load("island-a") is None
 
     catalog.close()
+
+
+@pytest.mark.asyncio
+async def test_non_main_branch_turn_never_writes_to_main(tmp_path):
+    """Every event of a non-main turn must carry that branch id and turn id.
+
+    Regression: ``_emit_event`` / ``_emit_delta`` / ``complete_editor_message``
+    used to call ``store.append`` without ``branch_id``, so the store's
+    ``main`` default silently redirected sub-branch deltas, completions and
+    plan events onto the main branch.
+    """
+    catalog = _catalog(tmp_path)
+
+    def runtime_factory(registry, callbacks, project_dir, project_id, **kwargs):
+        return _Runtime(callbacks)
+
+    store = NovelConversationStore(tmp_path / "novels" / "book", "p1")
+    branch = store.create_branch("chapter:1", title="alternate opening")
+
+    manager = EditorSessionManager(catalog, runtime_factory=runtime_factory)
+    key = EditorRoomKey.parse("p1", "chapter:1", branch_id=branch.branch_id)
+    socket = _Socket()
+    subscription = await manager.subscribe(key, socket)
+
+    await manager.handle_author_message(key, "换一个开场", "client-branch-1")
+    await asyncio.sleep(0)
+
+    # Nothing may land on main.
+    main_events = store.replay("chapter:1", branch_id="main")
+    assert main_events == []
+
+    branch_events = store.replay("chapter:1", branch_id=branch.branch_id)
+    assert [event.type for event in branch_events] == [
+        "turn_started",
+        "author_message_saved",
+        "editor_delta",
+        "editor_delta",
+        "editor_message_completed",
+        "turn_completed",
+    ]
+    assert {event.branch_id for event in branch_events} == {branch.branch_id}
+
+    # A single turn id ties the whole turn together, deltas included.
+    turn_ids = {event.turn_id for event in branch_events}
+    assert len(turn_ids) == 1
+    assert turn_ids.pop()
+
+    await subscription.close()
+    await manager.close()
+    catalog.close()
+
+
+@pytest.mark.asyncio
+async def test_cancel_event_carries_active_turn_id(tmp_path):
+    """``turn_cancelled`` must reference the turn it cancelled."""
+    catalog = _catalog(tmp_path)
+    started = asyncio.Event()
+    release = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    class _BlockingRuntime(_Runtime):
+        def handle_message(self, text: str) -> str:
+            loop.call_soon_threadsafe(started.set)
+            asyncio.run_coroutine_threadsafe(
+                _wait(release), loop
+            ).result(timeout=10)
+            return self.answer
+
+    async def _wait(event: asyncio.Event) -> None:
+        await event.wait()
+
+    def runtime_factory(registry, callbacks, project_dir, project_id, **kwargs):
+        return _BlockingRuntime(callbacks)
+
+    store = NovelConversationStore(tmp_path / "novels" / "book", "p1")
+    manager = EditorSessionManager(catalog, runtime_factory=runtime_factory)
+    key = EditorRoomKey.parse("p1", "book")
+
+    turn = asyncio.create_task(
+        manager.handle_author_message(key, "写一段", "client-cancel-1")
+    )
+    await asyncio.wait_for(started.wait(), timeout=10)
+
+    await manager.cancel(key)
+    release.set()
+    await turn
+
+    events = store.replay("book", branch_id="main")
+    cancelled = [event for event in events if event.type == "turn_cancelled"]
+    assert len(cancelled) == 1
+    started_events = [e for e in events if e.type == "turn_started"]
+    assert cancelled[0].turn_id
+    assert cancelled[0].turn_id == started_events[0].turn_id
+
+    await manager.close()
+    catalog.close()

@@ -417,13 +417,14 @@ class NovelApiHandlers:
             return _json({"error": str(exc)[:200]}, 500)
 
     async def write_chapter(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
         idx = _chapter_index(request.match_info["idx"])
         if idx is None:
             return _json({"error": "Invalid chapter index"}, 400)
         try:
             draft = await asyncio.to_thread(
                 NovelEngine(self._registry(project_id)).write_chapter,
-                project_id=request.match_info["project_id"],
+                project_id=project_id,
                 chapter_index=idx,
             )
             return _json(draft.to_dict())
@@ -447,6 +448,7 @@ class NovelApiHandlers:
             return _json({"error": str(exc)[:200]}, 500)
 
     async def revise_chapter(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
         idx = _chapter_index(request.match_info["idx"])
         if idx is None:
             return _json({"error": "Invalid chapter index"}, 400)
@@ -454,7 +456,7 @@ class NovelApiHandlers:
         try:
             draft = await asyncio.to_thread(
                 NovelEngine(self._registry(project_id)).revise_chapter,
-                project_id=request.match_info["project_id"],
+                project_id=project_id,
                 chapter_index=idx,
                 feedback=body.get("feedback", ""),
             )
@@ -463,6 +465,7 @@ class NovelApiHandlers:
             return _json({"error": str(exc)[:200]}, 500)
 
     async def batch_write(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
         body = await request.json()
         chapter_start = body.get("chapter_start", 1)
         chapter_end = body.get("chapter_end", 3)
@@ -476,7 +479,7 @@ class NovelApiHandlers:
         try:
             drafts = await asyncio.to_thread(
                 NovelEngine(self._registry(project_id)).batch_write,
-                project_id=request.match_info["project_id"],
+                project_id=project_id,
                 chapter_start=chapter_start,
                 chapter_end=chapter_end,
             )

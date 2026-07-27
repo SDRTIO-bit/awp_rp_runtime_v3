@@ -121,6 +121,7 @@ class _RoomSession:
     project_dir: Path
     runtime: Any | None = None
     active_message_id: str = ""
+    active_turn_id: str = ""
     active_editor_turn: bool = False
     active_action: bool = False
     action_commit_started: bool = False
@@ -288,6 +289,7 @@ class EditorSessionManager:
             prompt_text = text + "\n\n" + materialized.prompt_context
 
         async with session.turn_lock:
+            session.active_turn_id = turn_id
             # Durable turn lifecycle start
             started = session.store.append(
                 key.room,
@@ -313,56 +315,67 @@ class EditorSessionManager:
             self._broadcast(session, saved)
             session.active_message_id = uuid.uuid4().hex
             try:
-                runtime = await self.ensure_runtime(key)
-                session.active_editor_turn = True
-                result = await asyncio.to_thread(
-                    runtime.handle_message, prompt_text
-                )
-            except Exception as exc:
-                failed = session.store.append(
+                try:
+                    runtime = await self.ensure_runtime(key)
+                    session.active_editor_turn = True
+                    result = await asyncio.to_thread(
+                        runtime.handle_message, prompt_text
+                    )
+                except Exception as exc:
+                    failed = session.store.append(
+                        key.room,
+                        "turn_failed",
+                        {"message": str(exc)[-4000:]},
+                        branch_id=key.branch_id,
+                        turn_id=turn_id,
+                    )
+                    self._broadcast(session, failed)
+                    return
+                finally:
+                    session.active_editor_turn = False
+                    message_id = session.active_message_id
+                    session.active_message_id = ""
+                completed = session.store.complete_editor_message(
                     key.room,
-                    "turn_failed",
-                    {"message": str(exc)[-4000:]},
+                    message_id,
+                    result,
                     branch_id=key.branch_id,
                     turn_id=turn_id,
                 )
-                self._broadcast(session, failed)
-                return
+                self._broadcast(session, completed)
+                # Durable turn lifecycle end
+                turn_done = session.store.append(
+                    key.room,
+                    "turn_completed",
+                    {"status": "completed"},
+                    branch_id=key.branch_id,
+                    turn_id=turn_id,
+                )
+                self._broadcast(session, turn_done)
+                chapter_index = (
+                    int(key.room.split(":", 1)[1])
+                    if key.room.startswith("chapter:")
+                    else None
+                )
+                context = NovelAuthoringService(
+                    session.project_dir, key.project_id
+                ).authoring_context(chapter_index)
+                for plan in context["plans"]:
+                    if plan["status"] in {
+                        "draft",
+                        "pending_confirmation",
+                        "approved",
+                    }:
+                        plan_event = session.store.append(
+                            key.room,
+                            "author_plan_saved",
+                            plan,
+                            branch_id=key.branch_id,
+                            turn_id=turn_id,
+                        )
+                        self._broadcast(session, plan_event)
             finally:
-                session.active_editor_turn = False
-                message_id = session.active_message_id
-                session.active_message_id = ""
-            completed = session.store.complete_editor_message(
-                key.room, message_id, result
-            )
-            self._broadcast(session, completed)
-            # Durable turn lifecycle end
-            turn_done = session.store.append(
-                key.room,
-                "turn_completed",
-                {"status": "completed"},
-                branch_id=key.branch_id,
-                turn_id=turn_id,
-            )
-            self._broadcast(session, turn_done)
-            chapter_index = (
-                int(key.room.split(":", 1)[1])
-                if key.room.startswith("chapter:")
-                else None
-            )
-            context = NovelAuthoringService(
-                session.project_dir, key.project_id
-            ).authoring_context(chapter_index)
-            for plan in context["plans"]:
-                if plan["status"] in {
-                    "draft",
-                    "pending_confirmation",
-                    "approved",
-                }:
-                    plan_event = session.store.append(
-                        key.room, "author_plan_saved", plan
-                    )
-                    self._broadcast(session, plan_event)
+                session.active_turn_id = ""
 
     async def handle_author_action(
         self,
@@ -393,122 +406,179 @@ class EditorSessionManager:
         session = self._require_session(key)
         workspace = self.catalog.require(key.project_id)
 
+        turn_id = f"turn-{uuid.uuid4().hex}"
+
         async with session.turn_lock:
-            authoring = NovelAuthoringService(
-                workspace.root, workspace.project_id
-            )
-            turn = authoring.next_turn()
-            message_id = authoring.record_author_message(
-                author_text,
-                f"web-{key.room}",
-                turn,
-                source="web_action",
-            )
-            saved = session.store.append(
-                key.room,
-                "author_message_saved",
-                {
-                    "client_message_id": message_id,
-                    "text": author_text,
-                    "source": "web_action",
-                },
-            )
-            self._broadcast(session, saved)
-
-            loop = asyncio.get_running_loop()
-            session.action_cancel.clear()
-            session.action_commit_started = False
-            callbacks = NovelStreamCallbacks(
-                on_phase=lambda event, phase, data: self._from_worker(
-                    loop,
-                    self._emit_pipeline_phase(
-                        key, event, phase, data
-                    ),
-                ),
-                on_chunk=lambda text: self._from_worker(
-                    loop,
-                    self._emit_event(
-                        key, "writer_delta", {"text": text}
-                    ),
-                ),
-                on_error=lambda phase, message: self._from_worker(
-                    loop,
-                    self._emit_event(
-                        key,
-                        "turn_failed",
-                        {"phase": phase, "message": message[-4000:]},
-                    ),
-                ),
-                on_draft_saved=lambda payload: self._from_worker(
-                    loop,
-                    self._emit_draft_saved(key, payload),
-                ),
-                should_cancel=session.action_cancel.is_set,
-            )
-            prompt_snapshot_id = ""
-            if action == "execute_plan":
-                prompt_snapshot_id = NovelPromptService(workspace).snapshot(
-                    {
-                        "writer",
-                        "continuity_checker",
-                        "style_cleaner",
-                        "ledger_curator",
-                    }
-                ).snapshot_id
-
-            def execute_action() -> dict[str, object]:
-                service = NovelPiToolService(
-                    self.catalog.registry(key.project_id),
-                    project_id=key.project_id,
-                    project_dir=workspace.root,
-                    callbacks=callbacks,
-                    current_turn=turn,
-                    current_message_id=message_id,
-                    current_author_message=author_text,
-                    prompt_snapshot_id=prompt_snapshot_id,
-                )
-                return service.execute(
-                    tool_name,
-                    {
-                        "plan_id": plan_id,
-                        "revision": revision,
-                        "confirmation_quote": quote,
-                    },
-                )
-
-            session.active_action = True
+            session.active_turn_id = turn_id
             try:
-                await asyncio.to_thread(execute_action)
-            except NovelPipelineCancelled:
-                return
-            except Exception as exc:
-                rejected = session.store.append(
-                    key.room,
-                    "action_rejected",
-                    {
-                        "action": action,
-                        "plan_id": plan_id,
-                        "revision": revision,
-                        "message": str(exc)[-4000:],
-                    },
+                await self._run_author_action(
+                    key,
+                    session,
+                    workspace,
+                    action=action,
+                    plan_id=plan_id,
+                    revision=revision,
+                    tool_name=tool_name,
+                    author_text=author_text,
+                    quote=quote,
+                    success_type=success_type,
+                    turn_id=turn_id,
                 )
-                self._broadcast(session, rejected)
-                return
             finally:
-                session.active_action = False
+                session.active_turn_id = ""
 
-            plan = authoring.get_plan(plan_id, revision)
-            success = session.store.append(
-                key.room,
-                success_type,
+    async def _run_author_action(
+        self,
+        key: EditorRoomKey,
+        session: _RoomSession,
+        workspace: Any,
+        *,
+        action: str,
+        plan_id: str,
+        revision: int,
+        tool_name: str,
+        author_text: str,
+        quote: str,
+        success_type: str,
+        turn_id: str,
+    ) -> None:
+        authoring = NovelAuthoringService(
+            workspace.root, workspace.project_id
+        )
+        turn = authoring.next_turn()
+        message_id = authoring.record_author_message(
+            author_text,
+            f"web-{key.room}",
+            turn,
+            source="web_action",
+        )
+        started = session.store.append(
+            key.room,
+            "turn_started",
+            {"status": "queued", "action": action},
+            branch_id=key.branch_id,
+            turn_id=turn_id,
+        )
+        self._broadcast(session, started)
+        saved = session.store.append(
+            key.room,
+            "author_message_saved",
+            {
+                "client_message_id": message_id,
+                "text": author_text,
+                "source": "web_action",
+            },
+            branch_id=key.branch_id,
+            turn_id=turn_id,
+        )
+        self._broadcast(session, saved)
+
+        loop = asyncio.get_running_loop()
+        session.action_cancel.clear()
+        session.action_commit_started = False
+        callbacks = NovelStreamCallbacks(
+            on_phase=lambda event, phase, data: self._from_worker(
+                loop,
+                self._emit_pipeline_phase(
+                    key, event, phase, data
+                ),
+            ),
+            on_chunk=lambda text: self._from_worker(
+                loop,
+                self._emit_event(
+                    key, "writer_delta", {"text": text}
+                ),
+            ),
+            on_error=lambda phase, message: self._from_worker(
+                loop,
+                self._emit_event(
+                    key,
+                    "turn_failed",
+                    {"phase": phase, "message": message[-4000:]},
+                ),
+            ),
+            on_draft_saved=lambda payload: self._from_worker(
+                loop,
+                self._emit_draft_saved(key, payload),
+            ),
+            should_cancel=session.action_cancel.is_set,
+        )
+        prompt_snapshot_id = ""
+        if action == "execute_plan":
+            prompt_snapshot_id = NovelPromptService(workspace).snapshot(
                 {
-                    "plan_id": plan.plan_id,
-                    "revision": plan.revision,
-                    "chapter_index": plan.chapter_index,
-                    "status": plan.status.value,
+                    "writer",
+                    "continuity_checker",
+                    "style_cleaner",
+                    "ledger_curator",
+                }
+            ).snapshot_id
+
+        def execute_action() -> dict[str, object]:
+            service = NovelPiToolService(
+                self.catalog.registry(key.project_id),
+                project_id=key.project_id,
+                project_dir=workspace.root,
+                callbacks=callbacks,
+                current_turn=turn,
+                current_message_id=message_id,
+                current_author_message=author_text,
+                prompt_snapshot_id=prompt_snapshot_id,
+            )
+            return service.execute(
+                tool_name,
+                {
+                    "plan_id": plan_id,
+                    "revision": revision,
+                    "confirmation_quote": quote,
                 },
             )
-            self._broadcast(session, success)
+
+        session.active_action = True
+        try:
+            await asyncio.to_thread(execute_action)
+        except NovelPipelineCancelled:
+            return
+        except Exception as exc:
+            rejected = session.store.append(
+                key.room,
+                "action_rejected",
+                {
+                    "action": action,
+                    "plan_id": plan_id,
+                    "revision": revision,
+                    "message": str(exc)[-4000:],
+                },
+                branch_id=key.branch_id,
+                turn_id=turn_id,
+            )
+            self._broadcast(session, rejected)
+            return
+        finally:
+            session.active_action = False
+
+        plan = authoring.get_plan(plan_id, revision)
+        success = session.store.append(
+            key.room,
+            success_type,
+            {
+                "plan_id": plan.plan_id,
+                "revision": plan.revision,
+                "chapter_index": plan.chapter_index,
+                "status": plan.status.value,
+            },
+            branch_id=key.branch_id,
+            turn_id=turn_id,
+        )
+        self._broadcast(session, success)
+        turn_done = session.store.append(
+            key.room,
+            "turn_completed",
+            {"status": "completed", "action": action},
+            branch_id=key.branch_id,
+            turn_id=turn_id,
+        )
+        self._broadcast(session, turn_done)
 
     async def cancel(self, key: EditorRoomKey) -> None:
         session = self._require_session(key)
@@ -524,7 +594,11 @@ class EditorSessionManager:
         else:
             raise RuntimeError("no active editor runtime")
         cancelled = session.store.append(
-            key.room, "turn_cancelled", {}
+            key.room,
+            "turn_cancelled",
+            {},
+            branch_id=key.branch_id,
+            turn_id=session.active_turn_id or None,
         )
         self._broadcast(session, cancelled)
 
@@ -573,6 +647,8 @@ class EditorSessionManager:
                 "message_id": session.active_message_id or "active",
                 "text": text,
             },
+            branch_id=key.branch_id,
+            turn_id=session.active_turn_id or None,
         )
         self._broadcast(session, event)
 
@@ -688,7 +764,13 @@ class EditorSessionManager:
         payload: dict[str, Any],
     ) -> None:
         session = self._require_session(key)
-        event = session.store.append(key.room, event_type, payload)
+        event = session.store.append(
+            key.room,
+            event_type,
+            payload,
+            branch_id=key.branch_id,
+            turn_id=session.active_turn_id or None,
+        )
         self._broadcast(session, event)
 
     @staticmethod
@@ -717,13 +799,9 @@ class EditorSessionManager:
         history = NovelProjectHistoryService(session.project_dir)
         turn_id = f"turn-{uuid.uuid4().hex}"
 
-        # Preview the restore
-        preview = history.preview("edit", {
-            "path": path,
-            "edits": [{"oldText": "", "newText": ""}],  # placeholder
-        })
-
-        # Actually get the restore diff
+        # ``history.restore`` produces the authoritative before/after hashes and
+        # diff for the receipt below. No separate preview is needed, and an
+        # empty-match ``preview("edit", ...)`` could never succeed anyway.
         receipt = await asyncio.to_thread(
             history.restore,
             path,
