@@ -44,10 +44,13 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
     subscription = await manager.subscribe(key, websocket)
     tasks: set[asyncio.Task[None]] = set()
 
-    async def run_author_message(text: str, client_message_id: str) -> None:
+    async def run_author_message(
+        text: str, client_message_id: str,
+        references: list[dict[str, str]] | None = None,
+    ) -> None:
         try:
             await manager.handle_author_message(
-                key, text, client_message_id
+                key, text, client_message_id, references=references,
             )
         except Exception as exc:
             if not websocket.closed:
@@ -65,14 +68,18 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
                     raise ValueError("frame must be a JSON object")
                 frame_type = frame.get("type")
                 if frame_type == "author_message":
-                    if set(frame) != {
-                        "type",
-                        "client_message_id",
-                        "text",
-                    }:
+                    allowed = {"type", "client_message_id", "text", "references"}
+                    extra = set(frame) - allowed
+                    if extra:
+                        raise ValueError(
+                            f"unknown author_message fields: {', '.join(sorted(extra))}"
+                        )
+                    # Must have at least the legacy 3 keys
+                    if not all(k in frame for k in ("type", "client_message_id", "text")):
                         raise ValueError("invalid author_message frame")
                     text = frame["text"]
                     client_message_id = frame["client_message_id"]
+                    references = frame.get("references")
                     if not isinstance(text, str) or not isinstance(
                         client_message_id, str
                     ):
@@ -83,8 +90,14 @@ async def editor_websocket(request: web.Request) -> web.WebSocketResponse:
                         raise ValueError(
                             "author message must contain 1-20000 characters"
                         )
+                    if references is not None:
+                        if not isinstance(references, list) or len(references) > 12:
+                            raise ValueError("references must be a list of at most 12 paths")
+                        for ref in references:
+                            if not isinstance(ref, dict) or set(ref) != {"path"}:
+                                raise ValueError("each reference must have only a 'path' key")
                     task = asyncio.create_task(
-                        run_author_message(text, client_message_id)
+                        run_author_message(text, client_message_id, references)
                     )
                     tasks.add(task)
                     task.add_done_callback(tasks.discard)

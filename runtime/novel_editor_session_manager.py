@@ -253,6 +253,7 @@ class EditorSessionManager:
         key: EditorRoomKey,
         text: str,
         client_message_id: str,
+        references: list[dict[str, str]] | None = None,
     ) -> None:
         if not text.strip():
             raise ValueError("author message cannot be empty")
@@ -262,6 +263,20 @@ class EditorSessionManager:
             raise ValueError("invalid client message id")
         session = self._require_session(key)
         turn_id = f"turn-{uuid.uuid4().hex}"
+
+        # Materialize references into prompt context
+        prompt_text = text
+        validated_refs: list[dict[str, Any]] | None = None
+        if references:
+            from .novel_project_context_service import NovelProjectContextService
+            context_svc = NovelProjectContextService(session.project_dir)
+            materialized = context_svc.materialize(references)
+            validated_refs = [
+                {"path": r.path, "sha256": r.sha256, "size_bytes": r.size_bytes}
+                for r in materialized.references
+            ]
+            prompt_text = text + "\n\n" + materialized.prompt_context
+
         async with session.turn_lock:
             # Durable turn lifecycle start
             started = session.store.append(
@@ -272,13 +287,16 @@ class EditorSessionManager:
                 turn_id=turn_id,
             )
             self._broadcast(session, started)
+            save_payload: dict[str, Any] = {
+                "client_message_id": client_message_id,
+                "text": text,
+            }
+            if validated_refs:
+                save_payload["references"] = validated_refs
             saved = session.store.append(
                 key.room,
                 "author_message_saved",
-                {
-                    "client_message_id": client_message_id,
-                    "text": text,
-                },
+                save_payload,
                 branch_id=key.branch_id,
                 turn_id=turn_id,
             )
@@ -287,7 +305,9 @@ class EditorSessionManager:
             try:
                 runtime = await self.ensure_runtime(key)
                 session.active_editor_turn = True
-                result = await asyncio.to_thread(runtime.handle_message, text)
+                result = await asyncio.to_thread(
+                    runtime.handle_message, prompt_text
+                )
             except Exception as exc:
                 failed = session.store.append(
                     key.room,
