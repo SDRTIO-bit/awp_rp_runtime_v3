@@ -188,10 +188,27 @@ export async function writeNovelChapter(
   );
 }
 
-export async function getAutonomySummary(
+export interface LlmRoleOverride {
+  model?: string;
+  max_tokens?: number;
+  thinking_level?: string;
+  provider?: string;
+  api_base?: string;
+  api_key_env?: string;
+}
+
+export interface LlmConfig {
+  overrides: Record<string, LlmRoleOverride>;
+  defaults: Record<string, LlmRoleOverride>;
+}
+
+export async function getLlmConfig(projectId: string): Promise<LlmConfig> {
+  return get<LlmConfig>(`/novels/${encodeURIComponent(projectId)}/llm-config`);
+}
+
+export async function updateLlmConfig(
   projectId: string,
-): Promise<AutonomySummary> {
-  return get<AutonomySummary>(
-    `/novels/${encodeURIComponent(projectId)}/autonomy-summary`,
-  );
+  overrides: Record<string, Partial<LlmRoleOverride>>,
+): Promise<{ ok: boolean; overrides: Record<string, LlmRoleOverride> }> {
+  return post(`/novels/${encodeURIComponent(projectId)}/llm-config`, { overrides });
 }

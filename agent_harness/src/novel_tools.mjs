@@ -73,6 +73,16 @@ function createRpcTool(requestPython, name, description, parameters) {
   });
 }
 
+const workPlanItem = Type.Object({
+  description: shortText,
+  status: Type.Optional(Type.String({ minLength: 1, maxLength: 50 })),
+}, strict);
+
+const workPlanParameters = Type.Object({
+  explanation: Type.Optional(Type.String({ maxLength: 2000 })),
+  items: Type.Array(workPlanItem, { minItems: 1, maxItems: 50 }),
+}, strict);
+
 export function createNovelTools(requestPython, options = {}) {
   return [
     ...createNovelProjectTools(requestPython, options),
@@ -113,6 +123,12 @@ export function createNovelTools(requestPython, options = {}) {
       "execute_author_plan",
       "依据批准之后的新一轮作者指令，将计划交给写作管线。",
       planActionParameters,
+    ),
+    createRpcTool(
+      requestPython,
+      "update_work_plan",
+      "更新当前工作计划面板，向作者展示工作步骤与进度。",
+      workPlanParameters,
     ),
   ];
 }

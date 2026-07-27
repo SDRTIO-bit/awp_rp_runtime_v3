@@ -1,13 +1,13 @@
-# AWP Novel Runtime V3
+# AWP Novel Runtime
 
-一个作者主导、项目管线执行的小说创作运行时。
+作者主导、项目管线执行的小说创作运行时。仓库名 `awp_rp_runtime_v3` 是历史遗留，当前不含任何 RP（角色扮演）功能；RP Mode 与 ComfyUI 集成已于 2026-07-26 正式退役。
 
 ## 推荐入口：Novel Coding 网页
 
 在仓库根目录运行：
 
 ```powershell
-.\web.bat daily_high_school
+.\web.bat &lt;project-name&gt;
 ```
 
 它会在本机 `127.0.0.1:8188` 启动服务并打开浏览器。网页中央始终保留作者与编辑对话，
@@ -38,8 +38,8 @@ npm test
 ## TUI
 
 ```powershell
-tui novels\<project-name>
-python -m awp_rp_runtime_v3.scripts.awp_tui novels\<project-name>
+tui novels\&lt;project-name&gt;
+python -m awp_rp_runtime_v3.scripts.awp_tui novels\&lt;project-name&gt;
 ```
 
 默认使用嵌入式 Pi 专属写作编辑。作者直接说剧情、人物或世界观想法即可，无需调用技能；消息会先保存到项目的 `.awp/authoring/`，再进入编辑对话。编辑不会直接写整章，只有跨轮确认的作者计划才能交给 Writer。

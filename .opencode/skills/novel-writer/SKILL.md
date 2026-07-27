@@ -46,7 +46,7 @@ Architect(plan)  →  Director + Writer + Quality(write)  →  Ledger(curation)
 
 ### plan `<dir> <章节号>` — 规划章节 (Architect)
 ```
-python scripts/novel_cli.py plan novels/daily_high_school 1
+python scripts/novel_cli.py plan novels/<project-dir> 1
 ```
 从 `outline.md` 读取任务描述，调用 Architect Agent (thinking=high) 生成 ChapterPlan。
 可选参数:
@@ -57,8 +57,8 @@ python scripts/novel_cli.py plan novels/daily_high_school 1
 
 ### write `<dir> <章节号>` — 生成章节 (Director + Writer + Quality)
 ```
-python scripts/novel_cli.py write novels/daily_high_school 1
-python scripts/novel_cli.py write novels/daily_high_school 1 --stream
+python scripts/novel_cli.py write novels/<project-dir> 1
+python scripts/novel_cli.py write novels/<project-dir> 1 --stream
 ```
 先生成 ChapterPlan 再生成正文。可选参数:
 - `--stream`  流式输出，实时展示 Director/Writer/Quality/Curator 各阶段进度
@@ -98,7 +98,7 @@ novels/<name>/guidance/chapter_02.md  ← 第 2 章
 ### 内联写法
 `--guidance` 标志与文件内容合并，用于临时补充:
 ```bash
-python scripts/novel_cli.py write novels/project 1 --guidance "确保沈溪脸红三次以上"
+python scripts/novel_cli.py write novels/project 1 --guidance "确保【具体人物】的某个行为重复出现三次以上"
 ```
 
 ### 合并规则

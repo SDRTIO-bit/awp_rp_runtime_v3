@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "plans": {
+    "author-ch1-844f2311": {
+      "latest_revision": 1,
+      "chapter_index": 1,
+      "status": "pending_confirmation"
+    }
+  },
+  "last_event_id": 10000,
+  "last_turn": 20
+}

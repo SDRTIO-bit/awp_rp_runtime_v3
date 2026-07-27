@@ -65,10 +65,15 @@ class NovelLLMFactory:
       NOVEL_LLM_PROVIDER=opencode  -> OpenAICompatibleAdapter @ OpenCode Zen gateway
       NOVEL_LLM_PROVIDER=deepseek  -> DeepSeekAdapter (default)
       unset or other              -> DeepSeekAdapter (default)
+
+    Per-project overrides are a dict of role→config merged on top of
+    the hardcoded ROLE_CONFIGS.  They are stored in novel_projects.config
+    under the "llm_overrides" key and applied via set_project_overrides().
     """
 
     _instance: NovelLLMFactory | None = None
     _adapters: dict[str, Any] = {}
+    _project_overrides: dict[str, Any] = {}  # merged into _role_config
 
     @classmethod
     def get_instance(cls) -> NovelLLMFactory:
@@ -78,7 +83,13 @@ class NovelLLMFactory:
 
     @staticmethod
     def _provider_choice(role: str = "") -> str:
-        """Return provider for role, falling back to global NOVEL_LLM_PROVIDER."""
+        """Return provider for role, falling back to global NOVEL_LLM_PROVIDER.
+        Project overrides take priority over env."""
+        instance = NovelLLMFactory.get_instance()
+        project = instance._project_overrides.get(role, {})
+        p_provider = project.get("provider", "")
+        if p_provider:
+            return p_provider
         import os
         if role:
             per_role = os.environ.get(f"NOVEL_LLM_PROVIDER_{role.upper()}")
@@ -163,6 +174,16 @@ class NovelLLMFactory:
         unchanged so all existing tests pass.
         """
         base = ROLE_CONFIGS.get(role, ROLE_CONFIGS["writer"])
+        # Project-level overrides take highest priority
+        project = self._project_overrides.get(role, {})
+        if project:
+            overridden = dict(base)
+            for key in ("model", "max_tokens"):
+                if key in project:
+                    overridden[key] = project[key]
+            if "thinking" in project:
+                overridden["thinking"] = project["thinking"]
+            base = overridden
         if self._provider_choice(role) not in ("opencode", "mimo", "siliconflow"):
             return base
 
@@ -226,6 +247,7 @@ class NovelLLMFactory:
         """Resolve one role's non-secret Pi provider and generation settings."""
 
         provider = self._provider_choice(role)
+        project = self._project_overrides.get(role, {})
         role_suffix = role.upper()
         thinking = self.get_thinking_config(role).get("thinking", {})
         thinking_level = (
@@ -256,15 +278,21 @@ class NovelLLMFactory:
                 "ledger_curator": 2,
             }.get(role, 1)
             max_tokens *= kimi_budget_multiplier
+
+        # Per-project overrides for connection-level fields
+        p_provider = project.get("provider", "")
+        p_base = project.get("api_base", "")
+        p_key_env = project.get("api_key_env", "")
+
         if provider == "opencode":
             return NovelPiConnectionConfig(
-                provider="awp-opencode",
+                provider=p_provider or "awp-opencode",
                 model=model,
-                base_url=os.environ.get(
+                base_url=p_base or os.environ.get(
                     f"NOVEL_LLM_BASE_URL_{role_suffix}",
                     os.environ.get("NOVEL_LLM_BASE_URL", "https://opencode.ai/zen/go/v1"),
                 ),
-                api_key_env=os.environ.get(
+                api_key_env=p_key_env or os.environ.get(
                     f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
                     os.environ.get("NOVEL_LLM_API_KEY_ENV", "OPENCODE_API_KEY"),
                 ),
@@ -273,16 +301,16 @@ class NovelLLMFactory:
             )
         if provider == "mimo":
             return NovelPiConnectionConfig(
-                provider="awp-mimo",
+                provider=p_provider or "awp-mimo",
                 model=model,
-                base_url=os.environ.get(
+                base_url=p_base or os.environ.get(
                     f"NOVEL_LLM_BASE_URL_{role_suffix}",
                     os.environ.get(
                         "NOVEL_LLM_BASE_URL",
                         "https://token-plan-cn.xiaomimimo.com/v1",
                     ),
                 ),
-                api_key_env=os.environ.get(
+                api_key_env=p_key_env or os.environ.get(
                     f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
                     os.environ.get("NOVEL_LLM_API_KEY_ENV", "MIMO_API_KEY"),
                 ),
@@ -291,13 +319,13 @@ class NovelLLMFactory:
             )
         if provider == "siliconflow":
             return NovelPiConnectionConfig(
-                provider="awp-siliconflow",
+                provider=p_provider or "awp-siliconflow",
                 model=model,
-                base_url=os.environ.get(
+                base_url=p_base or os.environ.get(
                     f"NOVEL_LLM_BASE_URL_{role_suffix}",
                     os.environ.get("NOVEL_LLM_BASE_URL", "https://api.siliconflow.cn/v1"),
                 ),
-                api_key_env=os.environ.get(
+                api_key_env=p_key_env or os.environ.get(
                     f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
                     os.environ.get("NOVEL_LLM_API_KEY_ENV", "SILICONFLOW_API_KEY"),
                 ),
@@ -305,13 +333,13 @@ class NovelLLMFactory:
                 max_tokens=max_tokens,
             )
         return NovelPiConnectionConfig(
-            provider="awp-deepseek",
+            provider=p_provider or "awp-deepseek",
             model=model,
-            base_url=os.environ.get(
+            base_url=p_base or os.environ.get(
                 f"NOVEL_LLM_BASE_URL_{role_suffix}",
                 os.environ.get("NOVEL_LLM_BASE_URL", "https://api.deepseek.com/v1"),
             ),
-            api_key_env=os.environ.get(
+            api_key_env=p_key_env or os.environ.get(
                 f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
                 os.environ.get("NOVEL_LLM_API_KEY_ENV", "DEEPSEEK_API_KEY"),
             ),
@@ -353,5 +381,19 @@ class NovelLLMFactory:
             return False
 
     def reset(self) -> None:
-        """Reset all adapters (for testing)."""
+        """Reset all adapters and project overrides (for testing)."""
         self._adapters.clear()
+        self._project_overrides.clear()
+
+    def set_project_overrides(self, overrides: dict[str, dict[str, Any]]) -> None:
+        """Replace all per-project role overrides.  Clear adapter cache so
+        next get_adapter() picks up new config."""
+        self._project_overrides = dict(overrides or {})
+        self._adapters.clear()
+
+    def get_project_overrides(self) -> dict[str, dict[str, Any]]:
+        return dict(self._project_overrides)
+
+
+ROLE_NAMES = tuple(ROLE_CONFIGS.keys())
+"""All known role names for API introspection."""

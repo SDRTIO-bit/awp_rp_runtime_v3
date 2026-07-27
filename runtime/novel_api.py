@@ -28,6 +28,7 @@ from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_workspace_catalog import NovelWorkspaceCatalog
 from .novel_prompt_service import NovelPromptService
 from .novel_conversation_api import register_conversation_routes
+from .novel_llm_factory import NovelLLMFactory, ROLE_NAMES
 
 RegistryFactory = Callable[[], SessionRuntimeStoreRegistry]
 
@@ -596,6 +597,57 @@ class NovelApiHandlers:
         except Exception as exc:
             return _json({"error": str(exc)[:500]}, 500)
 
+    async def get_llm_config(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
+        try:
+            project = self._registry(project_id).novel_project_store.load(project_id)
+            if not project:
+                return _json({"error": "Project not found"}, 404)
+            config = getattr(project, "config", {}) or {}
+            overrides = config.get("llm_overrides", {})
+            factory = NovelLLMFactory.get_instance()
+            defaults = {}
+            for role in ROLE_NAMES:
+                connection = factory.get_pi_role_connection(role)
+                defaults[role] = {
+                    "model": connection.model,
+                    "max_tokens": connection.max_tokens,
+                    "thinking_level": connection.thinking_level,
+                    "provider": connection.provider,
+                }
+            return _json({"overrides": overrides, "defaults": defaults})
+        except Exception as exc:
+            return _json({"error": str(exc)[:500]}, 500)
+
+    async def update_llm_config(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
+        body = await request.json()
+        overrides = body.get("overrides", {})
+        if not isinstance(overrides, dict):
+            return _json({"error": "overrides must be an object"}, 400)
+        # Validate
+        for role, cfg in overrides.items():
+            if role not in ROLE_NAMES:
+                return _json({"error": f"unknown role: {role}"}, 400)
+            if not isinstance(cfg, dict):
+                return _json({"error": f"override for {role} must be an object"}, 400)
+            for key in cfg:
+                if key not in ("model", "max_tokens", "thinking_level", "provider", "api_base", "api_key_env"):
+                    return _json({"error": f"unknown override key for {role}: {key}"}, 400)
+        try:
+            project = self._registry(project_id).novel_project_store.load(project_id)
+            if not project:
+                return _json({"error": "Project not found"}, 404)
+            config = dict(getattr(project, "config", {}) or {})
+            config["llm_overrides"] = overrides
+            updated = replace(project, config=config)
+            self._registry(project_id).novel_project_store.update(updated)
+            # Push to the factory immediately
+            NovelLLMFactory.get_instance().set_project_overrides(overrides)
+            return _json({"ok": True, "overrides": overrides})
+        except Exception as exc:
+            return _json({"error": str(exc)[:500]}, 500)
+
 
 def register_novel_routes(
     app: web.Application,
@@ -688,6 +740,14 @@ def register_novel_routes(
 
     # Register conversation and project-file routes
     register_conversation_routes(app, registry_factory, workspace_catalog)
+
+    # LLM configuration
+    app.router.add_get(
+        f"{prefix}/{{project_id}}/llm-config", handlers.get_llm_config
+    )
+    app.router.add_put(
+        f"{prefix}/{{project_id}}/llm-config", handlers.update_llm_config
+    )
 
 
 __all__ = ["NovelApiHandlers", "register_novel_routes"]

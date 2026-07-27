@@ -26,6 +26,7 @@ export const NOVEL_TOOL_NAMES = Object.freeze([
   "edit",
   "bash",
   "delegate_project_task",
+  "update_work_plan",
   "project_status",
   "read_chapter",
   "audit_chapter",

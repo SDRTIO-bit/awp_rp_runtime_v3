@@ -16,6 +16,7 @@ from .novel_agent_runtime import create_novel_agent_runtime
 from .novel_brain import BrainCallbacks
 from .novel_conversation_store import NovelConversationStore
 from .novel_authoring_service import NovelAuthoringService
+from .novel_llm_factory import NovelLLMFactory
 from .novel_pi_tool_service import NovelPiToolService
 from .novel_prompt_service import NovelPromptService
 from .novel_trace import NovelPipelineCancelled, NovelStreamCallbacks
@@ -232,6 +233,14 @@ class EditorSessionManager:
             if key.branch_id != "main" or key.branch_id == "main":
                 context_seed = session.store.render_context(
                     key.room, branch_id=key.branch_id
+                )
+
+            # Push project LLM overrides into the factory before creating the runtime
+            project = self.catalog.registry(key.project_id).novel_project_store.load(key.project_id)
+            if project:
+                factory = NovelLLMFactory.get_instance()
+                factory.set_project_overrides(
+                    getattr(project, "config", {}).get("llm_overrides", {}) or {}
                 )
 
             def create_runtime() -> Any:

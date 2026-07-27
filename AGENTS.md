@@ -2,9 +2,9 @@
 
 ## Identity
 
-AWP Novel Runtime is a novel-only authoring system. Python 3.10+, React 18, SQLite, and an embedded Pi Coding Agent harness are used. RP Mode and ComfyUI integration are retired.
+AWP Novel Runtime is a novel-only authoring system: Python 3.10+, React 18, SQLite, and an embedded Pi Coding Agent harness. RP Mode and ComfyUI integration were retired on 2026-07-26.
 
-The Python import name remains `awp_rp_runtime_v3` for database/project and external-script compatibility; do not infer active RP features from that historical name.
+The repository and Python package are named `awp_rp_runtime_v3` for backward compatibility with existing databases, project files, and external scripts. The "rp" in the name is historical — it stands for "role play," the system's original purpose before it was rebuilt as a pure novel-writing runtime. No RP features remain active, and the name should not be read as a capability claim.
 
 ## Default Product Flow
 
