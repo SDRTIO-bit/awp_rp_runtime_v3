@@ -116,3 +116,4 @@ cd ..
 
 - `docs/architecture/2026-07-26-novel-only-cleanup-audit.md`
 - `docs/superpowers/specs/2026-07-26-author-editor-agent-design.md`
+- `docs/clean-clone-verification.md`
