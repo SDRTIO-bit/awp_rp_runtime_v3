@@ -33,7 +33,7 @@ export function TurnActivity({ turn }: Props) {
         <div className="activity-section">
           {turn.activity.map((entry, i) => {
             const key = entry.approval_id || `act-${i}`;
-            const isOpen = expanded[key] !== false; // default expanded for pending
+            const isOpen = expanded[key] === true;
             return (
               <div key={key} className={`activity-card ${entry.status}`}>
                 <button

@@ -21,7 +21,7 @@ export function ToolActivity({
     onDecision(approvalId, decision, remember);
   };
 
-  return <section className="tool-workbench" aria-label="编辑工具活动">
+  return <section className={`tool-workbench ${pending.length ? "pending" : "compact"}`} aria-label="编辑工具活动">
     {pending.map((item) => <article className="tool-approval-card" key={item.approval_id}>
       <div className="tool-approval-title">
         <strong>需要你的审批</strong><span>{item.tool}</span>
