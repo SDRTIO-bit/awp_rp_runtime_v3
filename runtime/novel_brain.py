@@ -522,12 +522,11 @@ class NovelBrain:
         lines.append(f"\n章节状态 ({len(plans)}):")
         for p in plans:
             chapter_id = p.chapter_id or f"ch-{project_id}-{p.chapter_index}"
-            draft = draft_store.load_latest(chapter_id)
+            draft = draft_store.load_latest_accepted(chapter_id)
             if draft:
-                status_icon = "✓" if draft.status == "accepted" else "⚠"
                 lines.append(
-                    f"  [{status_icon}] 第{p.chapter_index}章 {p.title} | "
-                    f"{p.chapter_position} | {draft.char_count}字 | {draft.status}"
+                    f"  [✓] 第{p.chapter_index}章 {p.title} | "
+                    f"{p.chapter_position} | {draft.char_count}字 | accepted"
                 )
             else:
                 lines.append(f"  [○] 第{p.chapter_index}章 {p.title} | {p.chapter_position} | 未生成")
@@ -590,7 +589,7 @@ class NovelBrain:
         if not plan:
             return f"第{chapter}章不存在。"
 
-        draft = self._registry.novel_chapter_draft_store.load_latest(
+        draft = self._registry.novel_chapter_draft_store.load_latest_accepted(
             plan.chapter_id or f"ch-{project_id}-{chapter}"
         )
         if not draft or not draft.text:

@@ -219,6 +219,18 @@ class SqliteNovelChapterDraftStore(NovelChapterDraftStore):
             return None
         return ChapterDraft.from_dict(json.loads(row["draft_json"]))
 
+    def load_latest_accepted(self, chapter_id: str) -> ChapterDraft | None:
+        conn = self._db.connect()
+        row = conn.execute(
+            "SELECT draft_json FROM novel_chapter_drafts "
+            "WHERE chapter_id = ? AND status = 'accepted' "
+            "ORDER BY revision DESC LIMIT 1",
+            (chapter_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return ChapterDraft.from_dict(json.loads(row["draft_json"]))
+
     def list_by_chapter(self, chapter_id: str) -> list[ChapterDraft]:
         conn = self._db.connect()
         rows = conn.execute(

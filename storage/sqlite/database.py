@@ -459,6 +459,68 @@ CREATE TABLE IF NOT EXISTS novel_plans (
 );
 """,
     ),
+    (
+        6,
+        "Controlled chapter revisions, audit dispositions, and project skills",
+        """
+CREATE TABLE IF NOT EXISTS novel_chapter_revision_plans (
+    plan_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    chapter_index INTEGER NOT NULL,
+    base_revision INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_novel_revision_plans_project
+    ON novel_chapter_revision_plans(project_id, chapter_index, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS novel_revision_audit_dispositions (
+    finding_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    disposition_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (finding_id, fingerprint)
+);
+
+CREATE TABLE IF NOT EXISTS novel_project_skill_versions (
+    project_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    skill_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (project_id, skill_id, version)
+);
+CREATE TABLE IF NOT EXISTS novel_project_skill_registry (
+    project_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (project_id, skill_id)
+);
+CREATE INDEX IF NOT EXISTS idx_novel_drafts_accepted
+    ON novel_chapter_drafts(chapter_id, status, revision DESC);
+""",
+    ),
+    (
+        7,
+        "Editor-proposed project skills",
+        """
+CREATE TABLE IF NOT EXISTS novel_project_skill_proposals (
+    proposal_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    proposal_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_novel_skill_proposals_project
+    ON novel_project_skill_proposals(project_id, created_at DESC);
+""",
+    ),
 ]
 
 

@@ -30,16 +30,25 @@ test("loader includes project agent skills but ignores project dot-pi", () => {
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awp-role-project-"));
   try {
     const allowed = path.join(projectRoot, "agent", "skills", "project-style");
+    const disabled = path.join(projectRoot, "agent", "skills", "disabled-style");
     const forbidden = path.join(projectRoot, ".pi", "skills", "global-style");
     fs.mkdirSync(allowed, { recursive: true });
+    fs.mkdirSync(disabled, { recursive: true });
     fs.mkdirSync(forbidden, { recursive: true });
     fs.writeFileSync(path.join(allowed, "SKILL.md"), "---\nname: project-style\ndescription: allowed\n---\nUse project style.\n");
+    fs.writeFileSync(path.join(disabled, "SKILL.md"), "---\nname: disabled-style\ndescription: disabled\n---\nDo not load.\n");
     fs.writeFileSync(path.join(forbidden, "SKILL.md"), "---\nname: global-style\ndescription: forbidden\n---\nDo not load.\n");
+    fs.mkdirSync(path.join(projectRoot, ".awp"), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectRoot, ".awp", "enabled-project-skills.json"),
+      JSON.stringify({ skills: [{ skill_id: "project-style", version: 1 }] }),
+    );
 
     const loader = createRoleResourceLoader("writer", resourcesRoot, projectRoot);
     const names = loader.getSkills().skills.map((skill) => skill.name);
 
     assert(names.includes("project-style"));
+    assert(!names.includes("disabled-style"));
     assert(!names.includes("global-style"));
   } finally {
     fs.rmSync(projectRoot, { recursive: true, force: true });

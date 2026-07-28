@@ -29,6 +29,10 @@ export const NOVEL_TOOL_NAMES = Object.freeze([
   "update_work_plan",
   "project_status",
   "read_chapter",
+  "save_revision_plan",
+  "approve_revision_plan",
+  "apply_revision_plan",
+  "propose_project_skill",
   "audit_chapter",
   "read_authoring_context",
   "capture_author_material",
@@ -37,7 +41,37 @@ export const NOVEL_TOOL_NAMES = Object.freeze([
   "execute_author_plan",
 ]);
 
-function createClosedResourceLoader(resourcesDir, projectRoot) {
+function readEnabledProjectSkillIds(projectRoot) {
+  const manifestPath = path.join(projectRoot, ".awp", "enabled-project-skills.json");
+  try {
+    const parsed = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    return new Set((Array.isArray(parsed.skills) ? parsed.skills : [])
+      .map((entry) => String(entry?.skill_id ?? ""))
+      .filter((skillId) => /^[a-z0-9-]{1,64}$/.test(skillId)));
+  } catch {
+    return new Set();
+  }
+}
+
+function loadSkills(skillsDir, source, enabledIds = undefined) {
+  if (!fs.existsSync(skillsDir)) return [];
+  return fs.readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && (!enabledIds || enabledIds.has(entry.name)))
+    .flatMap((entry) => {
+      const filePath = path.join(skillsDir, entry.name, "SKILL.md");
+      if (!fs.existsSync(filePath)) return [];
+      return [{
+        name: entry.name,
+        description: fs.readFileSync(filePath, "utf8").split("\n").find((line) => line.startsWith("description:"))?.replace("description:", "").trim() ?? entry.name,
+        filePath,
+        baseDir: path.dirname(filePath),
+        sourceInfo: createSyntheticSourceInfo(filePath, { source }),
+        disableModelInvocation: false,
+      }];
+    });
+}
+
+export function createClosedResourceLoader(resourcesDir, projectRoot) {
   const projectOverride = path.join(projectRoot, ".awp", "prompts", "editor.md");
   const systemPrompt = fs.readFileSync(
     fs.existsSync(projectOverride)
@@ -45,20 +79,14 @@ function createClosedResourceLoader(resourcesDir, projectRoot) {
       : path.join(resourcesDir, "system-prompt.md"),
     "utf8",
   );
-  const skillsDir = path.join(resourcesDir, "skills");
-  const skills = fs.readdirSync(skillsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      const filePath = path.join(skillsDir, entry.name, "SKILL.md");
-      return {
-        name: entry.name,
-        description: fs.readFileSync(filePath, "utf8").split("\n").find((line) => line.startsWith("description:"))?.replace("description:", "").trim() ?? entry.name,
-        filePath,
-        baseDir: path.dirname(filePath),
-        sourceInfo: createSyntheticSourceInfo(filePath, { source: "awp-novel-harness" }),
-        disableModelInvocation: false,
-      };
-    });
+  const skills = [
+    ...loadSkills(path.join(resourcesDir, "skills"), "awp-novel-harness"),
+    ...loadSkills(
+      path.join(projectRoot, "agent", "skills"),
+      "awp-novel-project",
+      readEnabledProjectSkillIds(projectRoot),
+    ),
+  ];
 
   return {
     getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),

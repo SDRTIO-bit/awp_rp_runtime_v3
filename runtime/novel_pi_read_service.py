@@ -99,7 +99,7 @@ class NovelPiReadService:
         )
         draft = None
         if plan is not None:
-            draft = self._registry.novel_chapter_draft_store.load_latest(plan.chapter_id)
+            draft = self._registry.novel_chapter_draft_store.load_latest_accepted(plan.chapter_id)
         return {
             "chapter_index": chapter_index,
             "found": draft is not None,

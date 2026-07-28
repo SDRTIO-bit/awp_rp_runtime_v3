@@ -15,10 +15,10 @@ function frontmatterValue(text, key, fallback) {
   return line ? line.trim().slice(prefix.length).trim() || fallback : fallback;
 }
 
-function loadSkills(skillsDir, source) {
+function loadSkills(skillsDir, source, enabledIds = undefined) {
   if (!fs.existsSync(skillsDir)) return [];
   return fs.readdirSync(skillsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && (!enabledIds || enabledIds.has(entry.name)))
     .flatMap((entry) => {
       const filePath = path.join(skillsDir, entry.name, "SKILL.md");
       if (!fs.existsSync(filePath)) return [];
@@ -32,6 +32,18 @@ function loadSkills(skillsDir, source) {
         disableModelInvocation: false,
       }];
     });
+}
+
+function readEnabledProjectSkillIds(projectRoot) {
+  const manifestPath = path.join(projectRoot, ".awp", "enabled-project-skills.json");
+  try {
+    const parsed = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    return new Set((Array.isArray(parsed.skills) ? parsed.skills : [])
+      .map((entry) => String(entry?.skill_id ?? ""))
+      .filter((skillId) => /^[a-z0-9-]{1,64}$/.test(skillId)));
+  } catch {
+    return new Set();
+  }
 }
 
 export function createRoleResourceLoader(role, resourcesRoot, projectRoot) {
@@ -52,6 +64,7 @@ export function createRoleResourceLoader(role, resourcesRoot, projectRoot) {
   const projectSkills = loadSkills(
     path.join(projectRoot, "agent", "skills"),
     "awp-novel-project",
+    readEnabledProjectSkillIds(projectRoot),
   );
   const skills = [...builtInSkills, ...projectSkills];
 

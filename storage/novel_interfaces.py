@@ -102,6 +102,10 @@ class NovelChapterDraftStore(ABC):
         ...
 
     @abstractmethod
+    def load_latest_accepted(self, chapter_id: str) -> ChapterDraft | None:
+        ...
+
+    @abstractmethod
     def list_by_chapter(self, chapter_id: str) -> list[ChapterDraft]:
         ...
 

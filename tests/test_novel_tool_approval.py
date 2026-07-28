@@ -40,6 +40,15 @@ def test_protected_write_is_a_hard_deny_instead_of_an_exception(tmp_path):
     assert request.targets == [".awp/authoring/plans/x.json"]
 
 
+def test_project_skill_write_is_a_hard_deny(tmp_path):
+    request = NovelProjectSandbox(tmp_path).classify(
+        "write", {"path": "agent/skills/voice-check/SKILL.md", "content": "正文"}
+    )
+
+    assert request.risk == "hard_deny"
+    assert "skill path" in request.reason
+
+
 def test_approval_contracts_are_strict_and_have_stable_signature():
     request = ToolApprovalRequest.create(
         tool="write",

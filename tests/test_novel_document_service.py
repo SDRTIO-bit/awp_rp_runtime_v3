@@ -113,6 +113,8 @@ def test_draft_edit_creates_new_store_and_document_revisions(tmp_path):
             text="旧正文",
             char_count=3,
             status="accepted",
+            quality_decision_id="quality-r1",
+            quality_annotations=("旧结论",),
         )
     )
     service = NovelDocumentService(workspace, registry)
@@ -124,11 +126,13 @@ def test_draft_edit_creates_new_store_and_document_revisions(tmp_path):
         resource_id="1",
     )
 
-    draft = registry.novel_chapter_draft_store.load_latest("ch1")
+    draft = registry.novel_chapter_draft_store.load_latest_accepted("ch1")
     assert saved.revision == 2
     assert draft.revision == 2
     assert draft.text == "作者修改后的正文"
     assert draft.source == "author_edit"
+    assert draft.quality_decision_id == ""
+    assert draft.quality_annotations == ()
     assert service.read_version("draft", 2, resource_id="1").content == draft.text
 
 

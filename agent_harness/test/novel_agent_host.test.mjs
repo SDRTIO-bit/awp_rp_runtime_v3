@@ -1,8 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createNovelAgentSession, NOVEL_TOOL_NAMES, NovelAgentHost } from "../src/novel_agent_host.mjs";
+import { createClosedResourceLoader, createNovelAgentSession, NOVEL_TOOL_NAMES, NovelAgentHost } from "../src/novel_agent_host.mjs";
+
+const resourcesRoot = fileURLToPath(new URL("../resources", import.meta.url));
 
 test("host initializes Pi with closed project and editor tools", async () => {
   let options;
@@ -30,11 +35,37 @@ test("host initializes Pi with closed project and editor tools", async () => {
     "read", "ls", "find", "grep", "write", "edit", "bash",
     "delegate_project_task",
     "update_work_plan",
-    "project_status", "read_chapter", "audit_chapter",
+    "project_status", "read_chapter", "save_revision_plan",
+    "approve_revision_plan", "apply_revision_plan", "propose_project_skill", "audit_chapter",
     "read_authoring_context", "capture_author_material", "save_author_plan",
     "approve_author_plan", "execute_author_plan",
   ]);
   assert.deepEqual(frames, [{ kind: "event", request_id: "init-1", payload: { type: "ready" } }]);
+});
+
+test("editor loader includes only manifest-enabled project skills", () => {
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awp-editor-skills-"));
+  try {
+    const enabled = path.join(projectRoot, "agent", "skills", "voice-check");
+    const disabled = path.join(projectRoot, "agent", "skills", "stray");
+    fs.mkdirSync(enabled, { recursive: true });
+    fs.mkdirSync(disabled, { recursive: true });
+    fs.writeFileSync(path.join(enabled, "SKILL.md"), "---\nname: voice-check\ndescription: enabled\n---\n正文\n");
+    fs.writeFileSync(path.join(disabled, "SKILL.md"), "---\nname: stray\ndescription: disabled\n---\n正文\n");
+    fs.mkdirSync(path.join(projectRoot, ".awp"), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectRoot, ".awp", "enabled-project-skills.json"),
+      JSON.stringify({ skills: [{ skill_id: "voice-check", version: 1 }] }),
+    );
+
+    const names = createClosedResourceLoader(resourcesRoot, projectRoot)
+      .getSkills().skills.map((skill) => skill.name);
+
+    assert(names.includes("voice-check"));
+    assert(!names.includes("stray"));
+  } finally {
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  }
 });
 
 test("editor tool calls use the active prompt request id", async () => {

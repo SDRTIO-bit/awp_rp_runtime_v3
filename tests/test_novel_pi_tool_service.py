@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
 from awp_rp_runtime_v3.contracts.novel_chapter import ChapterPlan
+from awp_rp_runtime_v3.contracts.novel_draft import ChapterDraft
 from awp_rp_runtime_v3.contracts.novel_authoring import AuthorChapterPlan
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
 from awp_rp_runtime_v3.runtime.novel_authoring_service import NovelAuthoringService
@@ -92,6 +95,84 @@ def test_audit_does_not_create_draft(monkeypatch, reg, tmp_path):
 
     assert result["ok"] is True
     assert reg.novel_chapter_draft_store.load_latest("ch1") is None
+
+
+def test_read_chapter_returns_accepted_revision_and_paragraph_anchors(reg, tmp_path):
+    reg.novel_chapter_draft_store.save(ChapterDraft(
+        draft_id="draft-ch1-r1", chapter_id="ch1", revision=1,
+        status="accepted", text="第一段。\n\n第二段。", char_count=9,
+    ))
+
+    result = NovelPiToolService(reg, project_id="p1", project_dir=tmp_path).execute(
+        "read_chapter", {"chapter": 1}
+    )
+
+    payload = json.loads(result["content"])
+    assert payload["accepted_revision"] == 1
+    assert payload["paragraphs"][0]["paragraph_id"] == "r1:p1"
+
+
+def test_revision_tools_require_separate_author_turns(reg, tmp_path):
+    reg.novel_chapter_draft_store.save(ChapterDraft(
+        draft_id="draft-ch1-r1", chapter_id="ch1", revision=1,
+        status="accepted", text="旧正文。", char_count=4,
+    ))
+    chapter = NovelPiToolService(reg, project_id="p1", project_dir=tmp_path).execute(
+        "read_chapter", {"chapter": 1}
+    )
+    paragraph = json.loads(chapter["content"])["paragraphs"][0]
+    plan_args = {
+        "plan_id": "revision-pi-tool",
+        "chapter_index": 1,
+        "base_revision": 1,
+        "patches": [{
+            "patch_id": "patch-pi-tool",
+            "paragraph_id": paragraph["paragraph_id"],
+            "expected_paragraph_hash": paragraph["sha256"],
+            "operation": "replace",
+            "replacement_text": "新正文。",
+            "reason": "减少解释。",
+        }],
+    }
+    proposed = NovelPiToolService(
+        reg, project_id="p1", project_dir=tmp_path,
+        current_turn=1, current_message_id="m1", current_author_message="请提出修订。",
+    ).execute("save_revision_plan", plan_args)
+    assert proposed["ok"] is True
+
+    approved = NovelPiToolService(
+        reg, project_id="p1", project_dir=tmp_path,
+        current_turn=2, current_message_id="m2", current_author_message="确认这组修订。",
+    ).execute("approve_revision_plan", {
+        "plan_id": "revision-pi-tool", "confirmation_quote": "确认这组修订",
+    })
+    assert approved["ok"] is True
+
+    applied = NovelPiToolService(
+        reg, project_id="p1", project_dir=tmp_path,
+        current_turn=3, current_message_id="m3", current_author_message="现在应用这组修订。",
+    ).execute("apply_revision_plan", {
+        "plan_id": "revision-pi-tool", "expected_revision": 1,
+        "confirmation_quote": "应用这组修订",
+    })
+    assert "r2" in applied["content"]
+
+
+def test_editor_can_propose_but_cannot_activate_project_skill(reg, tmp_path):
+    service = NovelPiToolService(
+        reg, project_id="p1", project_dir=tmp_path,
+        current_turn=1, current_message_id="m1", current_author_message="提议一个口吻检查技能。",
+    )
+
+    result = service.execute("propose_project_skill", {
+        "proposal_id": "skill-proposal-voice-check", "skill_id": "voice-check",
+        "purpose": "检查人物口吻", "behavior_impact": "只给出证据",
+        "content": "---\nname: voice-check\ndescription: 检查角色口吻\n---\n只报告证据。",
+    })
+
+    assert "等待作者确认" in result["content"]
+    with pytest.raises(ValueError, match="not allowed"):
+        service.execute("activate_project_skill", {"skill_id": "voice-check"})
 
 
 def test_service_refuses_unbound_or_unapproved_tool(reg, tmp_path):

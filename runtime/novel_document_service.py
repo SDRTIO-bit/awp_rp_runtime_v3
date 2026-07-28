@@ -15,7 +15,10 @@ from ..contracts.novel_document import (
     NovelDocumentKind,
     NovelDocumentVersion,
 )
-from ..contracts.novel_draft import ChapterDraft
+from .novel_chapter_revision_service import (
+    NovelChapterRevisionService,
+    RevisionConflictError,
+)
 from .novel_workspace_catalog import NovelWorkspace
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 
@@ -209,7 +212,7 @@ class NovelDocumentService:
         )
         if plan is None:
             raise FileNotFoundError("chapter plan not found")
-        draft = self.registry.novel_chapter_draft_store.load_latest(
+        draft = self.registry.novel_chapter_draft_store.load_latest_accepted(
             plan.chapter_id
         )
         if draft is None:
@@ -238,36 +241,19 @@ class NovelDocumentService:
                 raise ValueError("character document does not belong to project")
             self.registry.novel_character_store.save(character)
             return
-        chapter_index = int(version.resource_id)
-        plan = self.registry.novel_chapter_plan_store.load_by_index(
-            self.workspace.project_id, chapter_index
-        )
-        if plan is None:
-            raise FileNotFoundError("chapter plan not found")
-        previous = self.registry.novel_chapter_draft_store.load_latest(
-            plan.chapter_id
-        )
-        draft = ChapterDraft(
-            draft_id=f"draft-{plan.chapter_id}-r{version.revision}",
-            chapter_id=plan.chapter_id,
-            revision=version.revision,
-            source_plan_revision=(
-                previous.source_plan_revision if previous else 1
-            ),
-            text=version.content,
-            raw_text=version.content,
-            char_count=len(version.content),
-            status="accepted",
-            source="author_edit",
-            quality_decision_id=(
-                previous.quality_decision_id if previous else ""
-            ),
-            quality_annotations=(
-                previous.quality_annotations if previous else ()
-            ),
-            created_at=version.created_at,
-        )
-        self.registry.novel_chapter_draft_store.save(draft)
+        try:
+            draft = NovelChapterRevisionService(
+                self.registry, project_id=self.workspace.project_id
+            ).replace_chapter_text(
+                int(version.resource_id),
+                version.content,
+                expected_revision=version.revision - 1,
+                created_at=version.created_at,
+            )
+        except RevisionConflictError as exc:
+            raise DocumentConflictError(exc.current_revision) from exc
+        if draft.revision != version.revision:
+            raise RuntimeError("chapter replacement returned an unexpected revision")
 
     def _validate_identity(
         self, kind: str, resource_id: str

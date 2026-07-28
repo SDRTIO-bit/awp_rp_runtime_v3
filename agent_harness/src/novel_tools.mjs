@@ -57,6 +57,46 @@ const planActionParameters = Type.Object({
   confirmation_quote: Type.String({ minLength: 1, maxLength: 500 }),
 }, strict);
 
+const revisionPatchParameters = Type.Object({
+  patch_id: Type.String({ minLength: 1, maxLength: 100 }),
+  paragraph_id: Type.String({ minLength: 1, maxLength: 100 }),
+  expected_paragraph_hash: Type.String({ pattern: "^[0-9a-f]{64}$" }),
+  operation: Type.Union([
+    Type.Literal("replace"), Type.Literal("delete"),
+    Type.Literal("insert_before"), Type.Literal("insert_after"),
+  ]),
+  replacement_text: Type.String({ maxLength: 100000 }),
+  reason: shortText,
+  narrative_impact: Type.Optional(Type.String({ maxLength: 2000 })),
+  downstream_impact: Type.Optional(Type.String({ maxLength: 2000 })),
+}, strict);
+
+const saveRevisionPlanParameters = Type.Object({
+  plan_id: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+  chapter_index: Type.Integer({ minimum: 1, maximum: 100000 }),
+  base_revision: Type.Integer({ minimum: 1 }),
+  patches: Type.Array(revisionPatchParameters, { minItems: 1, maxItems: 100 }),
+  reason: Type.Optional(Type.String({ maxLength: 2000 })),
+}, strict);
+
+const revisionActionParameters = Type.Object({
+  plan_id: Type.String({ minLength: 1, maxLength: 100 }),
+  confirmation_quote: Type.String({ minLength: 1, maxLength: 500 }),
+}, strict);
+
+const applyRevisionPlanParameters = Type.Object({
+  ...revisionActionParameters.properties,
+  expected_revision: Type.Integer({ minimum: 1 }),
+}, strict);
+
+const proposeProjectSkillParameters = Type.Object({
+  proposal_id: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+  skill_id: Type.String({ pattern: "^[a-z0-9-]{1,64}$" }),
+  content: Type.String({ minLength: 1, maxLength: 32768 }),
+  purpose: shortText,
+  behavior_impact: shortText,
+}, strict);
+
 function createRpcTool(requestPython, name, description, parameters) {
   return defineTool({
     name,
@@ -88,6 +128,30 @@ export function createNovelTools(requestPython, options = {}) {
     ...createNovelProjectTools(requestPython, options),
     createRpcTool(requestPython, "project_status", "读取当前小说项目状态。", Type.Object({}, strict)),
     createRpcTool(requestPython, "read_chapter", "读取当前项目中已生成的一章。", chapterParameters),
+    createRpcTool(
+      requestPython,
+      "save_revision_plan",
+      "保存等待作者确认的既有正文修订计划；不能代替作者批准。",
+      saveRevisionPlanParameters,
+    ),
+    createRpcTool(
+      requestPython,
+      "approve_revision_plan",
+      "依据当前作者消息批准既有正文修订计划；只批准，不应用。",
+      revisionActionParameters,
+    ),
+    createRpcTool(
+      requestPython,
+      "apply_revision_plan",
+      "依据批准之后的新一轮作者指令，将正文修订应用为新版本。",
+      applyRevisionPlanParameters,
+    ),
+    createRpcTool(
+      requestPython,
+      "propose_project_skill",
+      "提出等待作者确认的项目编辑技能；不能保存为启用技能，也不能自行启用。",
+      proposeProjectSkillParameters,
+    ),
     createRpcTool(requestPython, "audit_chapter", "只读审计当前项目中已生成的一章。", chapterParameters),
     createRpcTool(
       requestPython,

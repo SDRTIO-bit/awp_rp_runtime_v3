@@ -10,8 +10,19 @@ from typing import Any
 
 from ..contracts.novel_authoring import AuthorChapterPlan
 from ..contracts.novel_conversation import EditorWorkPlan
+from ..contracts.novel_revision import (
+    ChapterRevisionPlan,
+    RevisionBatchStatus,
+    RevisionPatch,
+)
+from ..contracts.novel_project_skill import (
+    ProjectSkillProposal,
+    ProjectSkillVersion,
+)
 from .novel_author_plan_compiler import AuthorPlanCompiler
 from .novel_authoring_service import NovelAuthoringService
+from .novel_chapter_revision_service import NovelChapterRevisionService
+from .novel_project_skill_service import NovelProjectSkillService
 from .novel_engine import NovelEngine
 from .novel_project_sandbox import NovelProjectSandbox
 from .novel_trace import NovelStreamCallbacks
@@ -31,6 +42,10 @@ class NovelPiToolService:
             "bash",
             "project_status",
             "read_chapter",
+            "save_revision_plan",
+            "approve_revision_plan",
+            "apply_revision_plan",
+            "propose_project_skill",
             "audit_chapter",
             "read_authoring_context",
             "capture_author_material",
@@ -59,6 +74,7 @@ class NovelPiToolService:
         self._callbacks = callbacks
         self._authoring = NovelAuthoringService(project_dir, project_id)
         self._project_sandbox = NovelProjectSandbox(project_dir)
+        self._project_dir = Path(project_dir)
         self._current_turn = current_turn
         self._current_message_id = current_message_id
         self._current_author_message = current_author_message
@@ -134,16 +150,125 @@ class NovelPiToolService:
             }
         if name == "execute_author_plan":
             return self._execute_author_plan(args)
+        if name == "save_revision_plan":
+            self._require_turn_context()
+            return self._save_revision_plan(args)
+        if name == "approve_revision_plan":
+            self._require_turn_context()
+            return self._approve_revision_plan(args)
+        if name == "apply_revision_plan":
+            self._require_turn_context()
+            return self._apply_revision_plan(args)
+        if name == "propose_project_skill":
+            self._require_turn_context()
+            return self._propose_project_skill(args)
         if name == "update_work_plan":
             return self._handle_work_plan(args)
         chapter = self._chapter_argument(args)
         if name == "read_chapter":
-            return {"ok": True, "content": self._read_chapter(chapter)}
+            chapter_read = NovelChapterRevisionService(
+                self._registry, project_id=self._project_id
+            ).read_chapter(chapter)
+            return {
+                "ok": True,
+                "content": json.dumps(
+                    chapter_read.model_dump(mode="json"), ensure_ascii=False
+                ),
+            }
         report = self._engine().audit_chapter(
             project_id=self._project_id,
             chapter_index=chapter,
         )
         return {"ok": True, "content": json.dumps(report, ensure_ascii=False)}
+
+    def _revision_service(self) -> NovelChapterRevisionService:
+        return NovelChapterRevisionService(self._registry, project_id=self._project_id)
+
+    def _skill_service(self) -> NovelProjectSkillService:
+        return NovelProjectSkillService(
+            self._registry, project_id=self._project_id, project_root=self._project_dir
+        )
+
+    def _propose_project_skill(self, args: dict[str, Any]) -> dict[str, object]:
+        skill_id = str(args.get("skill_id", ""))
+        proposal = ProjectSkillProposal(
+            proposal_id=str(
+                args.get("proposal_id") or f"skill-proposal-{uuid.uuid4().hex[:12]}"
+            ),
+            project_id=self._project_id,
+            purpose=str(args.get("purpose", "")),
+            behavior_impact=str(args.get("behavior_impact", "")),
+            proposal_turn=self._current_turn,
+            skill=ProjectSkillVersion(
+                skill_id=skill_id,
+                version=1,
+                content=str(args.get("content", "")),
+                source="editor",
+            ),
+        )
+        saved = self._skill_service().save_editor_proposal(proposal)
+        return {
+            "ok": True,
+            "content": (
+                f"技能提议已保存并等待作者确认：{saved.proposal_id}。"
+                "编辑不能启用该技能；作者确认并显式启用后才会在下一轮生效。"
+            ),
+        }
+
+    def _save_revision_plan(self, args: dict[str, Any]) -> dict[str, object]:
+        chapter_index = self._chapter_argument({"chapter": args.get("chapter_index")})
+        base_revision = int(args.get("base_revision", 0))
+        patches = tuple(
+            RevisionPatch.model_validate({
+                **patch,
+                "chapter_index": chapter_index,
+                "base_revision": base_revision,
+            })
+            for patch in args.get("patches", [])
+        )
+        plan = ChapterRevisionPlan(
+            plan_id=str(args.get("plan_id") or f"revision-{uuid.uuid4().hex[:12]}"),
+            project_id=self._project_id,
+            chapter_index=chapter_index,
+            base_revision=base_revision,
+            status=RevisionBatchStatus.PENDING_CONFIRMATION,
+            patches=patches,
+            proposal_turn=self._current_turn,
+            reason=str(args.get("reason", "")),
+        )
+        saved = self._revision_service().save_plan(plan)
+        return {
+            "ok": True,
+            "content": f"正文修订计划已保存并等待确认：{saved.plan_id}（基于 r{saved.base_revision}）",
+        }
+
+    def _approve_revision_plan(self, args: dict[str, Any]) -> dict[str, object]:
+        quote = str(args.get("confirmation_quote", "")).strip()
+        self._require_current_quote(quote)
+        approved = self._revision_service().approve_plan(
+            str(args.get("plan_id", "")), turn=self._current_turn
+        )
+        return {
+            "ok": True,
+            "content": f"正文修订计划已批准：{approved.plan_id}。请在后续作者轮次确认应用。",
+        }
+
+    def _apply_revision_plan(self, args: dict[str, Any]) -> dict[str, object]:
+        quote = str(args.get("confirmation_quote", "")).strip()
+        self._require_current_quote(quote)
+        draft = self._revision_service().apply_plan(
+            str(args.get("plan_id", "")),
+            expected_revision=int(args.get("expected_revision", 0)),
+            turn=self._current_turn,
+        )
+        return {
+            "ok": True,
+            "content": f"正文修订已应用：{draft.draft_id}（r{draft.revision}）。",
+        }
+
+    def _require_current_quote(self, quote: str) -> None:
+        if not quote or quote not in self._current_author_message:
+            raise ValueError("confirmation_quote must occur in the current author message")
 
     def _handle_work_plan(self, args: dict[str, Any]) -> dict[str, object]:
         items = args.get("items", [])
@@ -327,7 +452,7 @@ class NovelPiToolService:
             raise ValueError(f"Project not found: {self._project_id}")
         plans = self._registry.novel_chapter_plan_store.list_by_project(self._project_id)
         generated = sum(
-            bool(self._registry.novel_chapter_draft_store.load_latest(plan.chapter_id))
+            bool(self._registry.novel_chapter_draft_store.load_latest_accepted(plan.chapter_id))
             for plan in plans
         )
         authoring = self._authoring.authoring_context()
@@ -349,7 +474,7 @@ class NovelPiToolService:
         )
         if not plan:
             return f"第{chapter}章尚未规划。"
-        draft = self._registry.novel_chapter_draft_store.load_latest(plan.chapter_id)
+        draft = self._registry.novel_chapter_draft_store.load_latest_accepted(plan.chapter_id)
         if not draft or not draft.text:
             return f"第{chapter}章尚未生成。"
         return (

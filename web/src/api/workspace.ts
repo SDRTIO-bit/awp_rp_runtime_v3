@@ -18,6 +18,23 @@ export interface ChapterSummary {
   chapter_id: string; chapter_index: number; title: string;
   target_chars: number; [key: string]: unknown;
 }
+export interface ProjectSkillVersion {
+  skill_id: string; version: number; content: string;
+  status: "proposed" | "saved" | "enabled" | "disabled";
+  source: string; created_at: string;
+}
+export interface ProjectSkillProposal {
+  proposal_id: string; project_id: string; purpose: string; behavior_impact: string;
+  proposal_turn: number; approval_turn: number; status: string;
+  skill: ProjectSkillVersion;
+}
+export interface ProjectSkillLibrary {
+  versions: ProjectSkillVersion[];
+  enabled: ProjectSkillVersion[];
+  proposals: ProjectSkillProposal[];
+}
+export interface ChapterParagraph { paragraph_id: string; ordinal: number; text: string; sha256: string; }
+export interface AcceptedChapter { chapter_index: number; title: string; draft_id: string; accepted_revision: number; text_sha256: string; paragraphs: ChapterParagraph[]; }
 
 export class ApiConflictError extends Error {
   currentRevision: number;
@@ -56,6 +73,8 @@ export const saveDocument = (projectId: string, kind: string, content: string, e
   });
 export const listChapters = (projectId: string) =>
   request<ChapterSummary[]>(`${root}/${encodeURIComponent(projectId)}/chapters`);
+export const getAcceptedChapter = (projectId: string, index: number) =>
+  request<AcceptedChapter>(`${root}/${encodeURIComponent(projectId)}/chapters/${index}/accepted`);
 export const getChapterPlan = (projectId: string, index: number) =>
   request<Record<string, unknown>>(`${root}/${encodeURIComponent(projectId)}/chapters/${index}/plan`);
 export const listPrompts = (projectId: string) =>
@@ -69,6 +88,17 @@ export const savePrompt = (projectId: string, role: string, content: string, exp
   });
 export const promptDiff = (projectId: string, role: string) =>
   request<{ diff: string }>(`${root}/${encodeURIComponent(projectId)}/prompts/${role}/diff`);
+
+export const listProjectSkills = (projectId: string) =>
+  request<ProjectSkillLibrary>(`${root}/${encodeURIComponent(projectId)}/skills`);
+export const saveProjectSkill = (projectId: string, skill: Pick<ProjectSkillVersion, "skill_id" | "version" | "content">) =>
+  request<ProjectSkillVersion>(`${root}/${encodeURIComponent(projectId)}/skills`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(skill),
+  });
+export const activateProjectSkill = (projectId: string, skillId: string, version: number) =>
+  request<ProjectSkillVersion>(`${root}/${encodeURIComponent(projectId)}/skills/${encodeURIComponent(skillId)}/versions/${version}/activate`, { method: "POST" });
+export const deactivateProjectSkill = (projectId: string, skillId: string) =>
+  request<{ skill_id: string; status: string }>(`${root}/${encodeURIComponent(projectId)}/skills/${encodeURIComponent(skillId)}/deactivate`, { method: "POST" });
 
 // ---------------------------------------------------------------------------
 // Conversation branching (Task 9)

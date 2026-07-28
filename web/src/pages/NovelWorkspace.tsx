@@ -5,6 +5,7 @@ import { RoomSwitcher } from "../components/workspace/RoomSwitcher";
 import { DocumentPane } from "../components/workspace/DocumentPane";
 import { EditorRoom } from "../components/workspace/EditorRoom";
 import { ChangesPane } from "../components/workspace/ChangesPane";
+import { SkillLibrary } from "../components/workspace/SkillLibrary";
 import { useEditorSocket } from "../hooks/useEditorSocket";
 import "./NovelWorkspace.css";
 
@@ -14,7 +15,7 @@ export default function NovelWorkspace() {
   const navigate = useNavigate();
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
-  const [rightTab, setRightTab] = useState<"documents" | "changes">("documents");
+  const [rightTab, setRightTab] = useState<"documents" | "changes" | "skills">("documents");
 
   const selectedRoom = decodeURIComponent(room);
   const branchId = searchParams.get("conversation") || "main";
@@ -72,15 +73,11 @@ export default function NovelWorkspace() {
           projectId={id}
           room={selectedRoom}
           extraTabs={
-            <button
-              className="tab-switch-btn"
-              onClick={() => setRightTab("changes")}
-            >
-              任务与改动
-            </button>
+            <><button className="tab-switch-btn" onClick={() => setRightTab("changes")}>任务与改动</button>
+            <button className="tab-switch-btn" onClick={() => setRightTab("skills")}>技能库</button></>
           }
         />
-      ) : (
+      ) : rightTab === "changes" ? (
         <div className={`document-pane ${rightOpen ? "open" : ""}`}>
           <div className="pane-toolbar">
             <button onClick={() => setRightTab("documents")}>← 文档</button>
@@ -92,6 +89,11 @@ export default function NovelWorkspace() {
             }}
             turnIds={["main"]}
           />
+        </div>
+      ) : (
+        <div className={`document-pane ${rightOpen ? "open" : ""}`}>
+          <div className="pane-toolbar"><button onClick={() => setRightTab("documents")}>← 文档</button></div>
+          <SkillLibrary projectId={id} />
         </div>
       )}
     </div>

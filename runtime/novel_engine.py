@@ -34,6 +34,7 @@ from ..contracts.quality_decision import QualityDecision, QualityVerdict
 from .active_memory_recall_runtime import ActiveMemoryRecallRuntime
 from .rag_recall_runtime import RagMemoryRecallRuntime
 from .novel_evolution_curator import novel_memory_scope
+from .novel_continuity_audit_service import NovelContinuityAuditService
 from .novel_role_context import novel_role_scope
 from .novel_role_runtime import get_novel_role_runtime
 from .novel_trace import (
@@ -221,7 +222,7 @@ class NovelEngine:
         if chapter_index > 1:
             prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
             if prev_plan:
-                prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
+                prev_draft = self._registry.novel_chapter_draft_store.load_latest_accepted(prev_plan.chapter_id)
                 if prev_draft:
                     prev_chapter_ending = prev_draft.text[-600:]
                 prev_ending_design = getattr(prev_plan, "ending_design", None) or getattr(prev_plan, "ending_hook", None)
@@ -304,7 +305,7 @@ class NovelEngine:
         prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
         prev_chapter_ending = ""
         if prev_plan:
-            prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
+            prev_draft = self._registry.novel_chapter_draft_store.load_latest_accepted(prev_plan.chapter_id)
             if prev_draft:
                 prev_chapter_ending = prev_draft.text[-500:]
 
@@ -982,7 +983,7 @@ class NovelEngine:
         prev_plan = self._registry.novel_chapter_plan_store.load_by_index(project_id, chapter_index - 1)
         prev_chapter_ending = ""
         if prev_plan:
-            prev_draft = self._registry.novel_chapter_draft_store.load_latest(prev_plan.chapter_id)
+            prev_draft = self._registry.novel_chapter_draft_store.load_latest_accepted(prev_plan.chapter_id)
             if prev_draft:
                 prev_chapter_ending = prev_draft.text[-500:]
 
@@ -1208,7 +1209,7 @@ class NovelEngine:
         )
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
-        draft = self._registry.novel_chapter_draft_store.load_latest(plan.chapter_id)
+        draft = self._registry.novel_chapter_draft_store.load_latest_accepted(plan.chapter_id)
         if not draft or not draft.text:
             raise ValueError(f"Chapter draft not found: {project_id} ch{chapter_index}")
 
@@ -1227,17 +1228,29 @@ class NovelEngine:
         )
         previous_ending = ""
         if prev_plan:
-            previous_draft = self._registry.novel_chapter_draft_store.load_latest(
+            previous_draft = self._registry.novel_chapter_draft_store.load_latest_accepted(
                 prev_plan.chapter_id
             )
             if previous_draft:
                 previous_ending = previous_draft.text[-500:]
+        continuity_audit = NovelContinuityAuditService(
+            self._registry, project_id=project_id
+        )
+        continuity_findings = continuity_audit.audit_project(chapter_index)
         return {
             "chapter": chapter_index,
+            "accepted_revision": draft.revision,
             "verdict": quality_decision.verdict.value,
             "blocking_reasons": list(quality_decision.blocking_reasons),
             "warnings": list(quality_decision.warnings),
-            "continuity_issues": [],  # V4: continuity merged into Mechanical Audit
+            "continuity_issues": [
+                finding.model_dump(mode="json")
+                for finding in continuity_findings
+            ],
+            "audit_dispositions": [
+                disposition.model_dump(mode="json")
+                for disposition in continuity_audit.list_dispositions()
+            ],
         }
 
     def _recall_novel_memory(
@@ -1368,7 +1381,7 @@ class NovelEngine:
         if not plan:
             raise ValueError(f"Chapter plan not found: {project_id} ch{chapter_index}")
 
-        current_draft = self._registry.novel_chapter_draft_store.load_latest(plan.chapter_id)
+        current_draft = self._registry.novel_chapter_draft_store.load_latest_accepted(plan.chapter_id)
         if not current_draft:
             raise ValueError(f"No draft to revise: {plan.chapter_id}")
 

@@ -693,7 +693,7 @@ class NovelTui(App):
         plans = self._store_registry.novel_chapter_plan_store.list_by_project(pid)
         for p in plans:
             chapter_id = p.chapter_id or f"ch-{pid}-{p.chapter_index}"
-            draft = self._store_registry.novel_chapter_draft_store.load_latest(chapter_id)
+            draft = self._store_registry.novel_chapter_draft_store.load_latest_accepted(chapter_id)
             icon = "✓" if (draft and draft.status == "accepted") else "○"
             char_cnt = draft.char_count if draft else 0
             chat.write(f"  [{icon}] Ch{p.chapter_index}: {p.title} ({char_cnt}字)")

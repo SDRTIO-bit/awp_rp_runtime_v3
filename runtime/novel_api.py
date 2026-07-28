@@ -26,6 +26,13 @@ from .novel_document_service import (
     DocumentConflictError,
     NovelDocumentService,
 )
+from .novel_chapter_revision_service import (
+    NovelChapterRevisionService,
+    RevisionConflictError,
+)
+from .novel_project_skill_service import NovelProjectSkillService
+from ..contracts.novel_project_skill import ProjectSkillVersion
+from ..contracts.novel_revision import ChapterRevisionPlan
 from .novel_planner_adapter import NovelPlannerAdapter
 from .session_runtime_registry import SessionRuntimeStoreRegistry
 from .novel_workspace_catalog import NovelWorkspaceCatalog
@@ -80,6 +87,33 @@ class NovelApiHandlers:
         return NovelDocumentService(
             workspace,
             self._workspace_catalog.registry(project_id),
+        )
+
+    def _revision_service(self, project_id: str) -> NovelChapterRevisionService:
+        if self._workspace_catalog is None:
+            raise KeyError("workspace catalog is unavailable")
+        return NovelChapterRevisionService(
+            self._workspace_catalog.registry(project_id), project_id=project_id
+        )
+
+    def _skill_service(self, project_id: str) -> NovelProjectSkillService:
+        if self._workspace_catalog is None:
+            raise KeyError("workspace catalog is unavailable")
+        return NovelProjectSkillService(
+            self._workspace_catalog.registry(project_id),
+            project_id=project_id,
+            project_root=self._workspace_catalog.require(project_id).root,
+        )
+
+    def _revision_conflict(self, project_id: str, chapter_index: int, exc: RevisionConflictError) -> web.Response:
+        current = self._revision_service(project_id).read_chapter(chapter_index)
+        return _json(
+            {
+                "error": str(exc),
+                "current_revision": exc.current_revision,
+                "current_sha256": current.text_sha256,
+            },
+            409,
         )
 
     def _prompt_service(self, project_id: str) -> NovelPromptService:
@@ -301,6 +335,169 @@ class NovelApiHandlers:
                 409,
             )
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def get_accepted_chapter(self, request: web.Request) -> web.Response:
+        try:
+            chapter = await asyncio.to_thread(
+                self._revision_service(request.match_info["project_id"]).read_chapter,
+                int(request.match_info["idx"]),
+            )
+            return _json(chapter.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def save_revision_plan(self, request: web.Request) -> web.Response:
+        try:
+            project_id = request.match_info["project_id"]
+            plan = ChapterRevisionPlan.model_validate(await request.json())
+            saved = await asyncio.to_thread(
+                self._revision_service(project_id).save_plan, plan
+            )
+            return _json(saved.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def approve_revision_plan(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            turn = body.get("author_turn")
+            if not isinstance(turn, int) or isinstance(turn, bool):
+                raise ValueError("author_turn must be an integer")
+            plan = await asyncio.to_thread(
+                self._revision_service(request.match_info["project_id"]).approve_plan,
+                request.match_info["plan_id"],
+                turn=turn,
+            )
+            return _json(plan.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def apply_revision_plan(self, request: web.Request) -> web.Response:
+        project_id = request.match_info["project_id"]
+        try:
+            body = await request.json()
+            expected = body.get("expected_revision")
+            turn = body.get("author_turn")
+            if not isinstance(expected, int) or isinstance(expected, bool):
+                raise ValueError("expected_revision must be an integer")
+            if not isinstance(turn, int) or isinstance(turn, bool):
+                raise ValueError("author_turn must be an integer")
+            service = self._revision_service(project_id)
+            plan = service.get_plan(request.match_info["plan_id"])
+            draft = await asyncio.to_thread(
+                service.apply_plan, request.match_info["plan_id"],
+                expected_revision=expected, turn=turn,
+            )
+            return _json({
+                "chapter_index": plan.chapter_index,
+                "draft": draft.to_dict(),
+            })
+        except RevisionConflictError as exc:
+            plan = self._revision_service(project_id).get_plan(request.match_info["plan_id"])
+            return self._revision_conflict(project_id, plan.chapter_index, exc)
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def export_current(self, request: web.Request) -> web.Response:
+        try:
+            project_id = request.match_info["project_id"]
+            if self._workspace_catalog is None:
+                raise KeyError("workspace catalog is unavailable")
+            manifest = await asyncio.to_thread(
+                self._revision_service(project_id).export_current,
+                self._workspace_catalog.require(project_id).root,
+            )
+            return _json(manifest)
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def list_project_skills(self, request: web.Request) -> web.Response:
+        try:
+            service = self._skill_service(request.match_info["project_id"])
+            return _json({
+                "versions": [item.model_dump(mode="json") for item in service.list_all_versions()],
+                "enabled": [item.model_dump(mode="json") for item in service.list_enabled()],
+                "proposals": [item.model_dump(mode="json") for item in service.list_proposals()],
+            })
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def save_project_skill(self, request: web.Request) -> web.Response:
+        try:
+            skill = ProjectSkillVersion.model_validate(await request.json())
+            saved = await asyncio.to_thread(
+                self._skill_service(request.match_info["project_id"]).save_author_version,
+                skill,
+            )
+            return _json(saved.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except KeyError as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def approve_project_skill_proposal(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            turn = body.get("author_turn")
+            if not isinstance(turn, int) or isinstance(turn, bool):
+                raise ValueError("author_turn must be an integer")
+            saved = await asyncio.to_thread(
+                self._skill_service(request.match_info["project_id"]).approve_proposal,
+                request.match_info["proposal_id"], author_turn=turn,
+            )
+            return _json(saved.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def activate_project_skill(self, request: web.Request) -> web.Response:
+        try:
+            from .novel_websocket_api import EDITOR_SESSION_MANAGER_KEY
+
+            await request.app[EDITOR_SESSION_MANAGER_KEY].invalidate_project_runtimes(
+                request.match_info["project_id"]
+            )
+            skill = await asyncio.to_thread(
+                self._skill_service(request.match_info["project_id"]).activate_version,
+                request.match_info["skill_id"], int(request.match_info["version"]),
+            )
+            return _json(skill.model_dump(mode="json"))
+        except RuntimeError as exc:
+            return _json({"error": str(exc)}, 409)
+        except (TypeError, ValueError) as exc:
+            return _json({"error": str(exc)}, 400)
+        except (KeyError, FileNotFoundError) as exc:
+            return _json({"error": str(exc)}, 404)
+
+    async def deactivate_project_skill(self, request: web.Request) -> web.Response:
+        try:
+            from .novel_websocket_api import EDITOR_SESSION_MANAGER_KEY
+
+            await request.app[EDITOR_SESSION_MANAGER_KEY].invalidate_project_runtimes(
+                request.match_info["project_id"]
+            )
+            await asyncio.to_thread(
+                self._skill_service(request.match_info["project_id"]).deactivate_skill,
+                request.match_info["skill_id"],
+            )
+            return _json({"skill_id": request.match_info["skill_id"], "status": "disabled"})
+        except RuntimeError as exc:
+            return _json({"error": str(exc)}, 409)
+        except (TypeError, ValueError) as exc:
             return _json({"error": str(exc)}, 400)
         except (KeyError, FileNotFoundError) as exc:
             return _json({"error": str(exc)}, 404)
@@ -817,11 +1014,43 @@ def register_novel_routes(
         f"{prefix}/{{project_id}}/chapters/{{idx}}/write", handlers.write_chapter
     )
     app.router.add_get(
+        f"{prefix}/{{project_id}}/chapters/{{idx}}/accepted",
+        handlers.get_accepted_chapter,
+    )
+    app.router.add_get(
         f"{prefix}/{{project_id}}/chapters/{{idx}}/drafts", handlers.list_drafts
     )
     app.router.add_post(
         f"{prefix}/{{project_id}}/chapters/{{idx}}/revise",
         handlers.revise_chapter,
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/revision-plans", handlers.save_revision_plan
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/revision-plans/{{plan_id}}/approve",
+        handlers.approve_revision_plan,
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/revision-plans/{{plan_id}}/apply",
+        handlers.apply_revision_plan,
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/exports/current", handlers.export_current
+    )
+    app.router.add_get(f"{prefix}/{{project_id}}/skills", handlers.list_project_skills)
+    app.router.add_post(f"{prefix}/{{project_id}}/skills", handlers.save_project_skill)
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/skills/proposals/{{proposal_id}}/approve",
+        handlers.approve_project_skill_proposal,
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/skills/{{skill_id}}/versions/{{version}}/activate",
+        handlers.activate_project_skill,
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/skills/{{skill_id}}/deactivate",
+        handlers.deactivate_project_skill,
     )
     app.router.add_post(
         f"{prefix}/{{project_id}}/batch-write", handlers.batch_write

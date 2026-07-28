@@ -133,6 +133,21 @@ class TestNovelChapterDraftStore:
         latest = reg.novel_chapter_draft_store.load_latest("ch1")
         assert latest.revision == 2
 
+    def test_load_latest_accepted_ignores_newer_rejected_draft(self, reg):
+        reg.novel_project_store.create(NovelProject(project_id="p1"))
+        reg.novel_chapter_plan_store.save(ChapterPlan(chapter_id="ch1", project_id="p1"))
+        reg.novel_chapter_draft_store.save(ChapterDraft(
+            draft_id="d1", chapter_id="ch1", revision=1, status="accepted"
+        ))
+        reg.novel_chapter_draft_store.save(ChapterDraft(
+            draft_id="d2", chapter_id="ch1", revision=2, status="rejected"
+        ))
+
+        latest = reg.novel_chapter_draft_store.load_latest_accepted("ch1")
+
+        assert latest is not None
+        assert latest.revision == 1
+
     def test_list_by_chapter(self, reg):
         reg.novel_project_store.create(NovelProject(project_id="p1"))
         reg.novel_chapter_plan_store.save(ChapterPlan(chapter_id="ch1", project_id="p1"))

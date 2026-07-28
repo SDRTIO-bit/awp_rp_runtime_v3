@@ -428,6 +428,8 @@ class NovelProjectSandbox:
             raise ValueError("project root is protected")
         if parts[0] == ".awp":
             raise ValueError("project runtime path is protected")
+        if len(parts) >= 2 and parts[0] == "agent" and parts[1] == "skills":
+            raise ValueError("project skill path is protected")
         if parts[0] == ".novel_cli.json" or parts[0].startswith("novel.db"):
             raise ValueError("project database or binding file is protected")
 

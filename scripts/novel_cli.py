@@ -29,6 +29,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT.parent))
 
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.runtime.novel_chapter_revision_service import (
+    NovelChapterRevisionService,
+)
 from awp_rp_runtime_v3.runtime.session_runtime_registry import SessionRuntimeStoreRegistry
 from awp_rp_runtime_v3.storage.sqlite.database import Database
 from awp_rp_runtime_v3.contracts.novel_project import NovelProject
@@ -846,6 +849,10 @@ def cmd_export(args: argparse.Namespace) -> None:
     engine = _get_engine(state["db_path"])
     pid = state["project_id"]
 
+    current_manifest = NovelChapterRevisionService(
+        engine._registry, project_id=pid
+    ).export_current(novel_dir)
+
     export_dir = _ensure_dir(novel_dir / "export")
 
     # Project
@@ -873,7 +880,7 @@ def cmd_export(args: argparse.Namespace) -> None:
     plans = engine._registry.novel_chapter_plan_store.list_by_project(pid)
     for plan in plans:
             chapter_id = plan.chapter_id or f"ch-{pid}-{plan.chapter_index}"
-            draft = draft_store.load_latest(chapter_id)
+            draft = draft_store.load_latest_accepted(chapter_id)
             if draft is not None and draft.text:
                 (export_dir / f"chapter_{plan.chapter_index:02d}.txt").write_text(draft.text, encoding="utf-8")
 
@@ -884,7 +891,11 @@ def cmd_export(args: argparse.Namespace) -> None:
         json.dumps(ledger_data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"  账本条目: {len(ledger_items)}个")
 
-    print(f"{GREEN}导出完成: {export_dir}{RESET}")
+    print(
+        f"{GREEN}当前接受正文已导出: {novel_dir / 'output'} "
+        f"({len(current_manifest['chapters'])}章){RESET}"
+    )
+    print(f"{DIM}附加资料导出: {export_dir}{RESET}")
 
 
 def cmd_status(args: argparse.Namespace) -> None:
@@ -924,9 +935,9 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"\n{GREEN}章节状态:{RESET}")
     for p in plans:
         chapter_id = p.chapter_id or f"ch-{pid}-{p.chapter_index}"
-        draft = draft_store.load_latest(chapter_id)
-        draft_info = f"{draft.char_count}字 | {draft.status}" if draft else "未生成"
-        status_icon = "✓" if (draft and draft.status == "accepted") else "○"
+        draft = draft_store.load_latest_accepted(chapter_id)
+        draft_info = f"{draft.char_count}字 | accepted" if draft else "未生成"
+        status_icon = "✓" if draft else "○"
         print(f"  [{status_icon}] 第{p.chapter_index:2d}章: {p.title:20s} | {p.chapter_position:15s} | {draft_info}")
 
     # Ledger

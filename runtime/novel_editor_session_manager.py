@@ -614,6 +614,20 @@ class EditorSessionManager:
         )
         self._broadcast(session, cancelled)
 
+    async def invalidate_project_runtimes(self, project_id: str) -> int:
+        """Close idle persistent editor runtimes so enabled skills reload next turn."""
+        sessions = [
+            session for session in self._sessions.values()
+            if session.key.project_id == project_id and session.runtime is not None
+        ]
+        if any(session.active_editor_turn or session.active_action for session in sessions):
+            raise RuntimeError("cannot reload project skills while an editor turn is active")
+        for session in sessions:
+            runtime = session.runtime
+            session.runtime = None
+            await asyncio.to_thread(runtime.close)
+        return len(sessions)
+
     async def close(self) -> None:
         if self._closed:
             return
