@@ -1,0 +1,77 @@
+- generic [ref=f1e4]:
+  - banner [ref=f1e5]:
+    - button "文 Novel Coding 专属写作工作区" [ref=f1e6] [cursor=pointer]:
+      - generic [ref=f1e7]: 文
+      - generic [ref=f1e8]:
+        - strong [ref=f1e9]: Novel Coding
+        - generic [ref=f1e10]: 专属写作工作区
+    - generic "主题" [ref=f1e11]:
+      - button "墨与纸" [ref=f1e12] [cursor=pointer]
+      - button "石墨" [ref=f1e13] [cursor=pointer]
+      - button "纯净白" [ref=f1e14] [cursor=pointer]
+  - generic [ref=f1e16]:
+    - complementary "项目目录" [ref=f1e17]:
+      - generic [ref=f1e18]:
+        - generic [ref=f1e19]: 本地小说项目
+        - strong [ref=f1e20]: abyss-library
+      - navigation [ref=f1e21]:
+        - button "⌂ 全书编辑室 总纲、世界、人物" [ref=f1e22] [cursor=pointer]:
+          - generic [ref=f1e23]: ⌂
+          - generic [ref=f1e24]:
+            - text: 全书编辑室
+            - generic [ref=f1e25]: 总纲、世界、人物
+        - generic [ref=f1e26]: 章节房间
+        - button "01 无名之书 独立编辑会话" [ref=f1e27] [cursor=pointer]:
+          - generic [ref=f1e28]: "01"
+          - generic [ref=f1e29]:
+            - text: 无名之书
+            - generic [ref=f1e30]: 独立编辑会话
+        - generic [ref=f1e31]: 工具
+        - button "⚙ Prompt Studio 角色提示词与版本" [ref=f1e32] [cursor=pointer]:
+          - generic [ref=f1e33]: ⚙
+          - generic [ref=f1e34]:
+            - text: Prompt Studio
+            - generic [ref=f1e35]: 角色提示词与版本
+      - generic [ref=f1e36]: 本地运行 · 已连接项目
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - tablist "编辑房间" [ref=f1e40]:
+          - button "全书编辑室" [ref=f1e41] [cursor=pointer]
+          - button "章节编辑室" [ref=f1e42] [cursor=pointer]
+        - generic [ref=f1e43]: 围绕整部作品讨论，不替你决定剧情
+      - main "全书编辑对话" [ref=f1e44]:
+        - generic [ref=f1e45]: 编辑在线
+        - toolbar "对话版本管理" [ref=f1e47]:
+          - combobox "选择对话版本" [ref=f1e48]:
+            - option "main" [selected]
+          - button "新建对话" [ref=f1e49] [cursor=pointer]: 新建
+          - generic [ref=f1e50]:
+            - checkbox "显示已归档" [ref=f1e51]
+            - text: 显示已归档
+        - generic [ref=f1e53]:
+          - text: 编辑室
+          - heading "先把你脑子里的东西都倒出来。" [level=1] [ref=f1e54]
+          - paragraph [ref=f1e55]: 我会追问、质疑和帮你补足，但不会替你选剧情。计划只有在你明确确认后，才会进入写作管线。
+        - generic [ref=f1e56]:
+          - button "添加项目文件引用" [ref=f1e58] [cursor=pointer]: "@文件"
+          - generic [ref=f1e59]:
+            - textbox "把你的剧情安排、犹豫和不确定都告诉编辑。Ctrl + Enter 发送。" [ref=f1e60]
+            - generic [ref=f1e61]:
+              - generic [ref=f1e62]: 0 / 20,000
+              - button "停止" [ref=f1e63] [cursor=pointer]
+              - button "发送给编辑" [disabled] [ref=f1e64]
+    - complementary "创作文档" [ref=f1e65]:
+      - tablist [ref=f1e66]:
+        - tab "计划" [selected] [ref=f1e67] [cursor=pointer]
+        - tab "正文" [ref=f1e68] [cursor=pointer]
+        - tab "批注" [ref=f1e69] [cursor=pointer]
+      - generic [ref=f1e70]:
+        - generic [ref=f1e71]: 只读预览
+        - generic [ref=f1e72]: 全书
+      - tabpanel "计划" [ref=f1e73]:
+        - generic [ref=f1e74]:
+          - generic [ref=f1e75]:
+            - generic [ref=f1e76]: v0 · project_file
+            - button "历史" [ref=f1e77] [cursor=pointer]
+            - button "编辑" [ref=f1e78] [cursor=pointer]
+          - generic [ref=f1e79]: "# 章节大纲 ## 第1章 - 定位: opening_hook - 目标情绪: 神秘感 + 好奇心 - 开篇钩子: 林默在老图书馆自习时，发现一本没有书名的古籍，当他翻开第一页，世界开始扭曲 - 内容概要: 林默是东华大学大二考古系学生，期末在破旧的老图书馆复习。他发现了一本夹在书架深处的无名古籍。翻开瞬间，物理规则开始失效——书架移动，灯光闪烁，他掉入了书中的世界：一个被无边迷雾笼罩的古老废墟。迷雾中有东西在移动。 - 结尾钩子: 迷雾中伸出一只苍白的手，抓住林默的手腕——手的温度和人类一样 - 任务描述: 主角从日常进入异常，节奏由慢到快；开篇建立角色性格（好奇心、谨慎、考古知识）；书中世界的视觉冲击力要强；结尾让读者必须翻下一章 ## 第2章 - 定位: progression - 目标情绪: 紧张 + 惊奇 - 开篇钩子: 抓住林默的是一个自称「初代书行者」的残影，它在消散前留下了诅咒般的警告 - 内容概要: 林默在废墟中探索，遇到各种危险——倒塌的建筑、迷雾中的幻象。他运用考古知识解读废墟中的铭文，拼凑出这个世界是一座被遗忘的图书馆的镜像。最终在废墟中心找到第一枚知识结晶。 - 结尾钩子: 当他握住结晶的瞬间，整个世界崩塌，他被弹回现实——发现自己只「消失」了5分钟，但方老正站在书架旁，微笑着递给他一杯茶 - 任务描述: 展现书中世界的规则和危险；主角第一次使用专业知识解决问题；方老正式登场 ## 第3章 - 定位: progression - 目标情绪: 揭秘 + 抉择 - 开篇钩子: 方老开口第一句话：「你和你父亲长得真像。」 - 内容概要: 方老向林默揭示深渊图书馆的真相，包括书行者的存在、知识结晶的体系，以及他父母曾是上一任书行者的事实。林默面临选择：回归平凡生活，还是继承父母的事业。 - 结尾钩子: 林默没有直接回答，而是问：「禁忌之书里，到底有什么？」方老的脸色第一次变了 - 任务描述: 世界观展开自然不突兀；方老的人物魅力要出来；林默的内心挣扎有说服力"

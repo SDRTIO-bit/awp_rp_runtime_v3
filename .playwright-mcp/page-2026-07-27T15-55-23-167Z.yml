@@ -1,0 +1,10 @@
+- banner [ref=e4]:
+  - button [ref=e5]:
+    - text: 文
+    - generic [ref=e6]:
+      - strong [ref=e7]: Novel Coding
+      - text: 专属写作工作区
+  - generic "主题" [ref=e8]:
+    - button "墨与纸" [ref=e9]
+    - button "石墨" [ref=e10]
+    - button "纯净白" [ref=e11]
