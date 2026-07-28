@@ -33,7 +33,7 @@ export default function NovelWorkspace() {
         projectId={id}
         room={selectedRoom}
         onRoom={(next) => { setLeftOpen(false); goRoom(next); }}
-        onPrompt={() => navigate(`/novels/${encodeURIComponent(id)}/prompts`)}
+        onPrompt={() => navigate(`/novels/${encodeURIComponent(id)}/prompts?tab=llm`)}
       />
       <section className="conversation-column">
         <div className="conversation-toolbar">

@@ -33,7 +33,7 @@ export function ProjectTree({
         {!chapters.length && !error && <p className="tree-empty">尚无章节计划</p>}
         {error && <p className="tree-error">章节载入失败</p>}
         <div className="tree-section">工具</div>
-        <button onClick={onPrompt}><span>⚙</span><span>Prompt Studio<small>角色提示词与版本</small></span></button>
+        <button onClick={onPrompt}><span>⚙</span><span>AI 模型设置<small>供应商、模型与角色提示词</small></span></button>
       </nav>
       <div className="tree-foot"><span className="status-dot" /> 本地运行 · 已连接项目</div>
     </aside>
