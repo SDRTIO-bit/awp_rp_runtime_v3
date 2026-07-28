@@ -67,17 +67,19 @@ class WebLauncher:
         if not (self.repository_root / "frontend" / "dist" / "index.html").is_file():
             raise LauncherError("网页尚未构建，请运行：cd web && npm ci && npm run build")
 
-    def start(self, project_name: str = "") -> LauncherResult:
+    def start(self, project_name: str = "", *, open_project_list: bool = False) -> LauncherResult:
         self.preflight()
-        workspaces = NovelWorkspaceCatalog(self.repository_root).list()
-        if not workspaces:
-            raise LauncherError("没有发现 novels/*/.novel_cli.json 小说项目。")
-        selected = next(
-            (item for item in workspaces if not project_name or item.project_id == project_name or item.root.name == project_name),
-            None,
-        )
-        if selected is None:
-            raise LauncherError(f"找不到小说项目：{project_name}")
+        selected = None
+        if not open_project_list:
+            workspaces = NovelWorkspaceCatalog(self.repository_root).list()
+            if not workspaces:
+                raise LauncherError("没有发现 novels/*/.novel_cli.json 小说项目。")
+            selected = next(
+                (item for item in workspaces if not project_name or item.project_id == project_name or item.root.name == project_name),
+                None,
+            )
+            if selected is None:
+                raise LauncherError(f"找不到小说项目：{project_name}")
         started = False
         if not self.health_probe():
             self.process_start()
@@ -89,7 +91,11 @@ class WebLauncher:
                 time.sleep(0.2)
             else:
                 raise LauncherError("本地服务在 15 秒内未就绪，请查看终端错误。")
-        url = f"http://127.0.0.1:8188/awp/novels/{selected.project_id}/workspace/book"
+        url = (
+            "http://127.0.0.1:8188/awp/novels"
+            if open_project_list
+            else f"http://127.0.0.1:8188/awp/novels/{selected.project_id}/workspace/book"
+        )
         self.browser_open(url)
         return LauncherResult(url=url, started_process=started)
 
@@ -112,9 +118,10 @@ class WebLauncher:
 def main() -> None:
     parser = argparse.ArgumentParser(description="启动 Novel Coding 写作工作区")
     parser.add_argument("project", nargs="?", default="")
+    parser.add_argument("--projects", action="store_true", help="打开小说项目列表")
     args = parser.parse_args()
     try:
-        result = WebLauncher().start(args.project)
+        result = WebLauncher().start(args.project, open_project_list=args.projects)
     except LauncherError as exc:
         raise SystemExit(f"启动失败：{exc}") from exc
     print(f"已打开：{result.url}")

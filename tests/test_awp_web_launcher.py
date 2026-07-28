@@ -27,6 +27,17 @@ def test_launcher_reuses_healthy_server_and_opens_workspace(monkeypatch, tmp_pat
     assert opened == ["http://127.0.0.1:8188/awp/novels/daily-high-school/workspace/book"]
 
 
+def test_launcher_reuses_healthy_server_and_opens_project_list(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda _: "node")
+    opened = []
+    launcher = WebLauncher(repository_root=_repository(tmp_path), health_probe=lambda: True, browser_open=opened.append)
+
+    result = launcher.start(open_project_list=True)
+
+    assert result.started_process is False
+    assert opened == ["http://127.0.0.1:8188/awp/novels"]
+
+
 def test_launcher_reports_incomplete_pi_dependencies(monkeypatch, tmp_path):
     monkeypatch.setattr("shutil.which", lambda _: "node")
     (tmp_path / "frontend" / "dist").mkdir(parents=True)
