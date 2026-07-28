@@ -72,7 +72,8 @@ export function ConversationToolbar({
   const selected = branches.find((b) => b.branch_id === selectedBranchId);
 
   return (
-    <div className="conversation-toolbar" role="toolbar" aria-label="对话版本管理">
+    <div className="conversation-history-toolbar" role="toolbar" aria-label="会话历史">
+      <span className="conversation-history-label">会话历史</span>
       <select
         className="branch-select"
         value={selectedBranchId}

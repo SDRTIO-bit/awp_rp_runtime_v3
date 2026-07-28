@@ -7,7 +7,6 @@ import { AuthorPlanCard } from "./AuthorPlanCard";
 import { PipelineTimeline } from "./PipelineTimeline";
 import { ToolActivity } from "./ToolActivity";
 import { ConversationToolbar } from "./ConversationToolbar";
-import { TurnActivity } from "./TurnActivity";
 import { ProjectFilePicker } from "./ProjectFilePicker";
 import "./EditorRoom.css";
 
@@ -20,7 +19,7 @@ interface Props {
 
 export function EditorRoom({ projectId, room, branchId = "main", onBranchChange }: Props) {
   const { state, status, send } = useEditorSocket({ projectId, room, branchId });
-  const partial = useMemo(() => Object.values(state.partial).join(""), [state.partial]);
+  const partialMessages = useMemo(() => Object.entries(state.partial), [state.partial]);
   const [references, setReferences] = useState<string[]>([]);
 
   const action = (type: string, plan: Record<string, any>) =>
@@ -53,9 +52,6 @@ export function EditorRoom({ projectId, room, branchId = "main", onBranchChange 
     } catch { /* ignore */ }
   }, [projectId, room, onBranchChange]);
 
-  const activeTurnId = state.turnIds.length > 0 ? state.turnIds[state.turnIds.length - 1] : undefined;
-  const activeTurn = activeTurnId ? state.turns[activeTurnId] : undefined;
-
   return (
     <main
       className="editor-room"
@@ -83,7 +79,7 @@ export function EditorRoom({ projectId, room, branchId = "main", onBranchChange 
       />
 
       <div className="message-scroll">
-        {!state.messages.length && !partial && (
+        {!state.messages.length && !partialMessages.length && (
           <div className="editor-welcome">
             <span>编辑室</span>
             <h1>先把你脑子里的东西都倒出来。</h1>
@@ -124,12 +120,17 @@ export function EditorRoom({ projectId, room, branchId = "main", onBranchChange 
           );
         })}
 
-        {partial && (
-          <article className="message editor streaming">
+        {partialMessages.map(([messageId, text]) => (
+          <article
+            className="message editor streaming"
+            key={messageId}
+            aria-label="编辑正在回应"
+            data-message-id={messageId}
+          >
             <div>编辑 · 正在回应</div>
-            <p>{partial}<span className="cursor" /></p>
+            <p>{text}<span className="cursor" /></p>
           </article>
-        )}
+        ))}
 
         {Object.values(state.plans).map((plan) => (
           <AuthorPlanCard
@@ -151,9 +152,6 @@ export function EditorRoom({ projectId, room, branchId = "main", onBranchChange 
           <div className="event-error" key={`${error}-${index}`}>{error}</div>
         ))}
       </div>
-
-      {/* Per-turn activity */}
-      {activeTurn && <TurnActivity turn={activeTurn} />}
 
       <ToolActivity
         activity={state.toolActivity}
