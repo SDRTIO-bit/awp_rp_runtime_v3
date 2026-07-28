@@ -553,6 +553,18 @@ class EditorSessionManager:
                 turn_id=turn_id,
             )
             self._broadcast(session, rejected)
+            failed = session.store.append(
+                key.room,
+                "turn_failed",
+                {
+                    "phase": action,
+                    "action": action,
+                    "message": str(exc)[-4000:],
+                },
+                branch_id=key.branch_id,
+                turn_id=turn_id,
+            )
+            self._broadcast(session, failed)
             return
         finally:
             session.active_action = False

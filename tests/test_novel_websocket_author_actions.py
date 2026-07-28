@@ -13,6 +13,7 @@ from awp_rp_runtime_v3.runtime.novel_editor_session_manager import (
     EditorSessionManager,
 )
 from awp_rp_runtime_v3.runtime.novel_engine import NovelEngine
+from awp_rp_runtime_v3.runtime.novel_trace import NovelPipelineCancelled
 from awp_rp_runtime_v3.runtime.novel_workspace_catalog import NovelWorkspaceCatalog
 from awp_rp_runtime_v3.scripts.awp_server import create_app
 
@@ -162,6 +163,143 @@ async def test_rejected_actions_never_call_writer(
 
     assert writer_calls == []
     assert any(frame["type"] == "action_rejected" for frame in socket.frames)
+    await subscription.close()
+    await manager.close()
+
+
+@pytest.mark.asyncio
+async def test_rejected_execute_plan_appends_turn_failed_and_blocks_stale_recovery(
+    tmp_path, monkeypatch
+):
+    """Rejected execute_plan must record action_rejected, persist turn_failed,
+    and prevent stale-turn recovery from appending turn_interrupted on session
+    recreation.
+    """
+    _, catalog, _, _, plan = _setup(tmp_path)
+
+    def raise_runtime_error(self, **kwargs):
+        raise RuntimeError("simulated writer failure")
+
+    monkeypatch.setattr(
+        NovelEngine, "write_chapter_stream", raise_runtime_error
+    )
+
+    manager = EditorSessionManager(catalog)
+    key = manager.key("p1", "chapter:1")
+    socket = type(
+        "Socket",
+        (),
+        {
+            "frames": [],
+            "send_json": lambda self, frame: _append_frame(self, frame),
+        },
+    )()
+    subscription = await manager.subscribe(key, socket)
+
+    await manager.handle_author_action(
+        key, "approve_plan", plan.plan_id, plan.revision
+    )
+    await manager.handle_author_action(
+        key, "execute_plan", plan.plan_id, plan.revision
+    )
+    await asyncio.sleep(0)
+
+    assert any(frame["type"] == "action_rejected" for frame in socket.frames)
+    assert any(frame["type"] == "turn_failed" for frame in socket.frames), (
+        "rejected execute_plan must persist turn_failed after action_rejected "
+        "so the turn is terminal"
+    )
+
+    # Detach the room session and recreate it so _require_session invokes
+    # interrupt_incomplete_turn on the persisted journal.
+    manager._sessions.pop(key, None)
+    manager._require_session(key)
+    session = manager._sessions[key]
+    event_types = [
+        event.type
+        for event in session.store.replay(
+            key.room, branch_id=key.branch_id, limit=500
+        )
+    ]
+    assert "turn_interrupted" not in event_types, (
+        "stale-turn recovery must not append turn_interrupted when a terminal "
+        "turn event already exists for the turn"
+    )
+
+    await subscription.close()
+    await manager.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_execute_plan_records_turn_cancelled_without_turn_failed(
+    tmp_path, monkeypatch
+):
+    """Cancelled execute_plan must record turn_cancelled, must not record
+    turn_failed, and session recreation must not append turn_interrupted.
+    """
+    _, catalog, _, _, plan = _setup(tmp_path)
+
+    def cancellable_writer(self, **kwargs):
+        while not self._callbacks.should_cancel():
+            pass
+        raise NovelPipelineCancelled("test cancel")
+
+    monkeypatch.setattr(
+        NovelEngine, "write_chapter_stream", cancellable_writer
+    )
+
+    manager = EditorSessionManager(catalog)
+    key = manager.key("p1", "chapter:1")
+    socket = type(
+        "Socket",
+        (),
+        {
+            "frames": [],
+            "send_json": lambda self, frame: _append_frame(self, frame),
+        },
+    )()
+    subscription = await manager.subscribe(key, socket)
+
+    await manager.handle_author_action(
+        key, "approve_plan", plan.plan_id, plan.revision
+    )
+    task = asyncio.create_task(
+        manager.handle_author_action(
+            key, "execute_plan", plan.plan_id, plan.revision
+        )
+    )
+    for _ in range(50):
+        await asyncio.sleep(0.01)
+        if any(
+            frame["type"] == "pipeline_phase"
+            and frame["payload"].get("phase") == "author_plan_compile"
+            and frame["payload"].get("event") == "end"
+            for frame in socket.frames
+        ):
+            break
+    await manager.cancel(key)
+    await task
+    await asyncio.sleep(0)
+
+    assert any(frame["type"] == "turn_cancelled" for frame in socket.frames)
+    assert not any(frame["type"] == "turn_failed" for frame in socket.frames), (
+        "cancelled execute_plan must not persist turn_failed"
+    )
+
+    manager._sessions.pop(key, None)
+    manager._require_session(key)
+    session = manager._sessions[key]
+    event_types = [
+        event.type
+        for event in session.store.replay(
+            key.room, branch_id=key.branch_id, limit=500
+        )
+    ]
+    assert "turn_interrupted" not in event_types, (
+        "stale-turn recovery must not append turn_interrupted when a terminal "
+        "turn event already exists for the turn"
+    )
+
     await subscription.close()
     await manager.close()
 
