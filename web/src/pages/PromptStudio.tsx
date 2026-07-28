@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiConflictError, getPrompt, listPrompts, PromptResource, promptDiff, savePrompt } from "../api/workspace";
-import { getLlmConfig, updateLlmConfig, LlmConfig, LlmRoleOverride } from "../api/client";
+import { getLlmConfig, listLlmModels, testLlmConnection, updateLlmConfig, LlmConfig, LlmRoleOverride } from "../api/client";
 import "./PromptStudio.css";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -20,14 +20,21 @@ const LOCAL_PROVIDERS: Array<{ id: string; label: string; defaultBase: string; d
   { id: "opencode", label: "OpenCode", defaultBase: "https://opencode.ai/zen/go/v1", defaultKeyEnv: "OPENCODE_API_KEY" },
   { id: "mimo", label: "小米 MiMo", defaultBase: "https://token-plan-cn.xiaomimimo.com/v1", defaultKeyEnv: "MIMO_API_KEY" },
   { id: "siliconflow", label: "硅基流动", defaultBase: "https://api.siliconflow.cn/v1", defaultKeyEnv: "SILICONFLOW_API_KEY" },
-  { id: "custom", label: "自定义 OpenAI 兼容", defaultBase: "", defaultKeyEnv: "" },
+  { id: "openai-compatible", label: "自定义 OpenAI 兼容", defaultBase: "", defaultKeyEnv: "" },
 ];
 
 type Tab = "prompts" | "llm";
 
 export default function PromptStudio() {
   const { id = "" } = useParams(); const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("prompts");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab: Tab = searchParams.get("tab") === "llm" ? "llm" : "prompts";
+  const [tab, setTab] = useState<Tab>(requestedTab);
+  useEffect(() => { setTab(requestedTab); }, [requestedTab]);
+  const selectTab = (next: Tab) => {
+    setTab(next);
+    setSearchParams({ tab: next });
+  };
 
   // Prompt tab state
   const [roles, setRoles] = useState<PromptResource[]>([]); const [role, setRole] = useState("editor");
@@ -47,6 +54,9 @@ export default function PromptStudio() {
   const [llmOverrides, setLlmOverrides] = useState<Record<string, LlmRoleOverride>>({});
   const [llmSelectedRole, setLlmSelectedRole] = useState("brain");
   const [llmSaving, setLlmSaving] = useState(false);
+  const [llmConnectionStatus, setLlmConnectionStatus] = useState("");
+  const [llmModels, setLlmModels] = useState<string[]>([]);
+  const [llmChecking, setLlmChecking] = useState(false);
 
   useEffect(() => {
     if (tab === "llm") {
@@ -67,6 +77,11 @@ export default function PromptStudio() {
       setError("");
     } catch (e) { setError(String(e)); }
     finally { setLlmSaving(false); }
+  };
+
+  const persistLlmOverrides = async () => {
+    const result = await updateLlmConfig(id, llmOverrides);
+    setLlmConfig((prev) => prev ? { ...prev, overrides: result.overrides } : null);
   };
 
   const updateOverride = (role: string, field: string, value: string | number | undefined) => {
@@ -98,15 +113,43 @@ export default function PromptStudio() {
     return llmOverrides[role] && Object.keys(llmOverrides[role]).length > 0;
   };
 
+  const testConnection = async () => {
+    setLlmChecking(true);
+    setLlmConnectionStatus("");
+    try {
+      const result = await testLlmConnection(id, llmSelectedRole, roleOverride(llmSelectedRole));
+      setLlmConnectionStatus(`连接成功，可读取 ${result.model_count} 个模型。`);
+    } catch (e) {
+      setLlmConnectionStatus(`连接失败：${String(e)}`);
+    } finally {
+      setLlmChecking(false);
+    }
+  };
+
+  const discoverModels = async () => {
+    setLlmChecking(true);
+    setLlmConnectionStatus("");
+    try {
+      const result = await listLlmModels(id, llmSelectedRole, roleOverride(llmSelectedRole));
+      setLlmModels(result.models);
+      await persistLlmOverrides();
+      setLlmConnectionStatus(`已获取 ${result.models.length} 个模型。`);
+    } catch (e) {
+      setLlmConnectionStatus(`获取模型失败：${String(e)}`);
+    } finally {
+      setLlmChecking(false);
+    }
+  };
+
   return <div className="prompt-studio">
     <aside>
       <button className="back" onClick={() => navigate(`/novels/${id}/workspace/book`)}>← 返回写作区</button>
       <h2>Prompt Studio</h2>
       <p>调整专属写作 AI 的角色提示词与模型配置。</p>
-      <button className={tab === "prompts" ? "selected" : ""} onClick={() => setTab("prompts")}>
+      <button className={tab === "prompts" ? "selected" : ""} onClick={() => selectTab("prompts")}>
         <strong>角色提示词</strong>
       </button>
-      <button className={tab === "llm" ? "selected" : ""} onClick={() => setTab("llm")}>
+      <button className={tab === "llm" ? "selected" : ""} onClick={() => selectTab("llm")}>
         <strong>LLM 模型配置</strong><small>供应商、模型、参数</small>
       </button>
       {tab === "prompts" && <>
@@ -124,7 +167,7 @@ export default function PromptStudio() {
             onClick={() => setLlmSelectedRole(roleKey)}
           >
             <strong>{ROLE_LABELS[roleKey] || roleKey}</strong>
-            <small>{hasOverrides(roleKey) ? "已自定义" : "使用默认"}</small>
+            <small>供应商：{roleOverride(roleKey).provider || "—"}{hasOverrides(roleKey) ? " · 已自定义" : ""}</small>
           </button>
         ))}
       </>}
@@ -156,8 +199,12 @@ export default function PromptStudio() {
 
         {llmEditing ? <LlmRoleEditor
           cfg={roleOverride(llmSelectedRole)}
-          role={llmSelectedRole}
           onChange={(field, value) => updateOverride(llmSelectedRole, field, value)}
+          onTestConnection={testConnection}
+          onDiscoverModels={discoverModels}
+          models={llmModels}
+          busy={llmChecking}
+          connectionStatus={llmConnectionStatus}
         /> : <LlmRoleView cfg={roleOverride(llmSelectedRole)} />}
       </>}
     </main>
@@ -173,48 +220,64 @@ function LlmRoleView({ cfg }: { cfg: LlmRoleOverride & { _default: LlmRoleOverri
         <tr><td>最大 Token</td><td>{cfg.max_tokens ?? cfg._default.max_tokens ?? "—"}{cfg.max_tokens && cfg.max_tokens !== cfg._default.max_tokens ? <mark>已覆盖</mark> : null}</td></tr>
         <tr><td>思考等级</td><td>{cfg.thinking_level || cfg._default.thinking_level || "off"}{cfg.thinking_level && cfg.thinking_level !== cfg._default.thinking_level ? <mark>已覆盖</mark> : null}</td></tr>
         <tr><td>API 地址</td><td>{cfg.api_base || "使用默认"}</td></tr>
-        <tr><td>密钥环境变量</td><td>{cfg.api_key_env || "使用默认"}</td></tr>
+        <tr><td>密钥来源</td><td>{cfg.api_key_env || cfg.api_key || "使用默认"}</td></tr>
       </tbody>
     </table>
   </div>;
 }
 
-function LlmRoleEditor({ cfg, role, onChange }: { cfg: LlmRoleOverride & { _default: LlmRoleOverride }; role: string; onChange: (field: string, value: string | number | undefined) => void }) {
+function LlmRoleEditor({ cfg, onChange, onTestConnection, onDiscoverModels, models, busy, connectionStatus }: {
+  cfg: LlmRoleOverride & { _default: LlmRoleOverride };
+  onChange: (field: string, value: string | number | undefined) => void;
+  onTestConnection: () => void;
+  onDiscoverModels: () => void;
+  models: string[];
+  busy: boolean;
+  connectionStatus: string;
+}) {
   const providerOptions = LOCAL_PROVIDERS;
   const selectedProvider = cfg.provider || cfg._default.provider || "";
-  const isCustom = selectedProvider && !providerOptions.slice(0, -1).some(p => p.id === selectedProvider);
+  const isCustom = selectedProvider === "openai-compatible" || !providerOptions.some(p => p.id === selectedProvider);
 
   return <div className="llm-config-editor">
     <div className="llm-field">
       <label>供应商</label>
-      <select value={isCustom ? "custom" : selectedProvider} onChange={(e) => {
+      <select value={isCustom ? "openai-compatible" : selectedProvider} onChange={(e) => {
         const v = e.target.value;
-        if (v === "custom") {
-          onChange("provider", "custom");
+        if (v === "openai-compatible") {
+          onChange("provider", "openai-compatible");
         } else {
           const p = providerOptions.find(x => x.id === v);
           if (p) {
-            onChange("provider", p.id === LOCAL_PROVIDERS[0].id ? undefined : p.id);
+            onChange("provider", p.id === cfg._default.provider ? undefined : p.id);
             // Only set api_base and api_key_env if they differ from defaults
             // Don't auto-set to avoid cluttering overrides
           }
         }
       }}>
         {providerOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        {isCustom && <option value="custom">自定义（已选）</option>}
       </select>
+    </div>
+    <div className="llm-connection-actions">
+      <button className="quiet-button" type="button" disabled={busy} onClick={onTestConnection}>测试连接</button>
+      <button className="quiet-button" type="button" disabled={busy} onClick={onDiscoverModels}>获取模型列表</button>
+      {connectionStatus && <span role="status">{connectionStatus}</span>}
     </div>
     <div className="llm-field">
       <label>API Base URL <small>{cfg._default.provider ? `默认: ${LOCAL_PROVIDERS.find(p => p.id === cfg._default.provider)?.defaultBase || "—"}` : ""}</small></label>
       <input type="text" value={cfg.api_base || ""} placeholder={selectedProvider && !isCustom ? LOCAL_PROVIDERS.find(p => p.id === selectedProvider)?.defaultBase || "" : ""} onChange={(e) => onChange("api_base", e.target.value || undefined)} />
     </div>
     <div className="llm-field">
-      <label>密钥环境变量 <small>{cfg._default.provider ? `默认: ${LOCAL_PROVIDERS.find(p => p.id === cfg._default.provider)?.defaultKeyEnv || "—"}` : ""}</small></label>
-      <input type="text" value={cfg.api_key_env || ""} placeholder={selectedProvider && !isCustom ? LOCAL_PROVIDERS.find(p => p.id === selectedProvider)?.defaultKeyEnv || "" : ""} onChange={(e) => onChange("api_key_env", e.target.value || undefined)} />
+      <label>密钥环境变量或直接 Key <small>{cfg._default.provider ? `默认: ${LOCAL_PROVIDERS.find(p => p.id === cfg._default.provider)?.defaultKeyEnv || "—"}` : ""}</small></label>
+      <input type="text" value={cfg.api_key ?? cfg.api_key_env ?? ""} placeholder={selectedProvider && !isCustom ? LOCAL_PROVIDERS.find(p => p.id === selectedProvider)?.defaultKeyEnv || "" : ""} onChange={(e) => onChange("api_key", e.target.value || undefined)} />
     </div>
     <div className="llm-field">
       <label>模型 ID <small>{cfg._default.model ? `默认: ${cfg._default.model}` : ""}</small></label>
       <input type="text" value={cfg.model || ""} placeholder={cfg._default.model || ""} onChange={(e) => onChange("model", e.target.value || undefined)} />
+      {models.length > 0 && <select aria-label="已发现模型" defaultValue="" onChange={(e) => onChange("model", e.target.value || undefined)}>
+        <option value="" disabled>选择已发现模型</option>
+        {models.map((model) => <option key={model} value={model}>{model}</option>)}
+      </select>}
     </div>
     <div className="llm-field">
       <label>最大 Token <small>{cfg._default.max_tokens ? `默认: ${cfg._default.max_tokens}` : ""}</small></label>

@@ -18,7 +18,13 @@ function errorMessage(body: ApiEnvelope<unknown> | undefined, status: number): s
 }
 
 async function parseJson<T>(res: Response): Promise<ApiEnvelope<T>> {
-  return (await res.json()) as ApiEnvelope<T>;
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as ApiEnvelope<T>;
+  } catch {
+    const summary = text.replace(/\s+/g, " ").trim().slice(0, 180) || "empty response";
+    throw new Error(`HTTP ${res.status}: expected JSON but received ${summary}`);
+  }
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -214,6 +220,7 @@ export interface LlmRoleOverride {
   provider?: string;
   api_base?: string;
   api_key_env?: string;
+  api_key?: string;
 }
 
 export interface LlmConfig {
@@ -230,4 +237,25 @@ export async function updateLlmConfig(
   overrides: Record<string, Partial<LlmRoleOverride>>,
 ): Promise<{ ok: boolean; overrides: Record<string, LlmRoleOverride> }> {
   return put(`/novels/${encodeURIComponent(projectId)}/llm-config`, { overrides });
+}
+
+export interface LlmConnectionResult {
+  ok: boolean;
+  model_count: number;
+}
+
+export async function testLlmConnection(
+  projectId: string,
+  role: string,
+  config: LlmRoleOverride,
+): Promise<LlmConnectionResult> {
+  return post(`/novels/${encodeURIComponent(projectId)}/llm-config/test`, { role, config });
+}
+
+export async function listLlmModels(
+  projectId: string,
+  role: string,
+  config: LlmRoleOverride,
+): Promise<{ models: string[] }> {
+  return post(`/novels/${encodeURIComponent(projectId)}/llm-config/models`, { role, config });
 }

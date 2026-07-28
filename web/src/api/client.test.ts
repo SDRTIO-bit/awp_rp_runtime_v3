@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { updateLlmConfig } from "./client";
 
 const BASE = "";
 
@@ -36,4 +37,15 @@ it("throws on non-ok response", async () => {
   } as Response);
 
   await expect(put("/novels/x/llm-config", {})).rejects.toThrow("method not allowed");
+});
+
+it("reports a non-JSON response instead of surfacing a JSON syntax error", async () => {
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: false,
+    status: 405,
+    headers: new Headers({ "Content-Type": "text/plain" }),
+    text: async () => "Method Not Allowed",
+  } as Response);
+
+  await expect(updateLlmConfig("x", {})).rejects.toThrow("HTTP 405: expected JSON but received Method Not Allowed");
 });
