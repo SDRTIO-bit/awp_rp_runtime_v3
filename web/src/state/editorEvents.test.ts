@@ -36,6 +36,27 @@ it("finalizes streamed editor text when a turn fails", () => {
   expect(state.errors).toEqual(["请求匹配失败"]);
 });
 
+it("preserves alternating author and editor messages across turns", () => {
+  let state = emptyEditorState();
+  const events = [
+    { event_id: 1, turn_id: "t1", type: "author_message_saved", payload: { client_message_id: "a1", text: "第一问" } },
+    { event_id: 2, turn_id: "t1", type: "editor_message_completed", payload: { message_id: "e1", text: "第一答" } },
+    { event_id: 3, turn_id: "t1", type: "turn_completed", payload: {} },
+    { event_id: 4, turn_id: "t2", type: "author_message_saved", payload: { client_message_id: "a2", text: "第二问" } },
+    { event_id: 5, turn_id: "t2", type: "editor_message_completed", payload: { message_id: "e2", text: "第二答" } },
+    { event_id: 6, turn_id: "t2", type: "turn_completed", payload: {} },
+  ];
+
+  for (const event of events) state = applyEditorEvent(state, event);
+
+  expect(state.messages.map(({ id, role, turnId }) => ({ id, role, turnId }))).toEqual([
+    { id: "a1", role: "author", turnId: "t1" },
+    { id: "e1", role: "editor", turnId: "t1" },
+    { id: "a2", role: "author", turnId: "t2" },
+    { id: "e2", role: "editor", turnId: "t2" },
+  ]);
+});
+
 it("clears the previous transient error when the author retries", () => {
   let state = emptyEditorState();
   state = applyEditorEvent(state, {
