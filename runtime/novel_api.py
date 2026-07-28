@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Callable
+import urllib.error
+import urllib.request
 
 from aiohttp import web
 
@@ -613,7 +616,7 @@ class NovelApiHandlers:
                 return _json({"error": "Project not found"}, 404)
             config = getattr(project, "config", {}) or {}
             overrides = config.get("llm_overrides", {})
-            factory = NovelLLMFactory.get_instance()
+            factory = NovelLLMFactory.for_project(project_id, overrides)
             defaults = {}
             for role in ROLE_NAMES:
                 connection = factory.get_pi_role_connection(role)
@@ -636,29 +639,114 @@ class NovelApiHandlers:
         overrides = body.get("overrides", {})
         if not isinstance(overrides, dict):
             return _json({"error": "overrides must be an object"}, 400)
-        # Validate
+        # Normalize the shared input before persisting it. A value which names
+        # an existing environment variable remains an env reference; all other
+        # values are project-local direct keys.
+        normalized_overrides: dict[str, dict[str, Any]] = {}
         for role, cfg in overrides.items():
             if role not in ROLE_NAMES:
                 return _json({"error": f"unknown role: {role}"}, 400)
             if not isinstance(cfg, dict):
                 return _json({"error": f"override for {role} must be an object"}, 400)
             for key in cfg:
-                if key not in ("model", "max_tokens", "thinking_level", "provider", "api_base", "api_key_env"):
+                if key not in ("model", "max_tokens", "thinking_level", "provider", "api_base", "api_key_env", "api_key"):
                     return _json({"error": f"unknown override key for {role}: {key}"}, 400)
+            normalized = self._normalize_api_key_input(cfg)
+            provider = normalized.get("provider")
+            if provider is not None and provider not in {
+                "deepseek", "opencode", "mimo", "siliconflow", "openai-compatible",
+            }:
+                return _json({"error": f"unsupported provider for {role}: {provider}"}, 400)
+            if provider == "openai-compatible":
+                missing = [
+                    key for key in ("model", "api_base")
+                    if not str(normalized.get(key, "")).strip()
+                ]
+                if not normalized.get("api_key_env") and not normalized.get("api_key"):
+                    missing.append("api_key")
+                if missing:
+                    return _json({
+                        "error": f"openai-compatible override for {role} requires: {', '.join(missing)}"
+                    }, 400)
+            normalized_overrides[role] = normalized
         try:
             project = self._registry(project_id).novel_project_store.load(project_id)
             if not project:
                 return _json({"error": "Project not found"}, 404)
             config = dict(getattr(project, "config", {}) or {})
-            config["llm_overrides"] = overrides
+            config["llm_overrides"] = normalized_overrides
             updated = replace(project, config=config)
             self._registry(project_id).novel_project_store.update(updated)
             # Do NOT mutate the global singleton — runtimes capture per-project
             # snapshots at construction time (see EditorSessionManager.ensure_runtime
             # and create_novel_role_runtime).
-            return _json({"ok": True, "overrides": overrides})
+            return _json({"ok": True, "overrides": normalized_overrides})
         except Exception as exc:
             return _json({"error": str(exc)[:500]}, 500)
+
+    async def test_llm_connection(self, request: web.Request) -> web.Response:
+        models, error = await self._provider_models(request)
+        if error:
+            return _json({"error": error}, 400)
+        return _json({"ok": True, "model_count": len(models)})
+
+    async def list_llm_models(self, request: web.Request) -> web.Response:
+        models, error = await self._provider_models(request)
+        if error:
+            return _json({"error": error}, 400)
+        return _json({"models": models})
+
+    async def _provider_models(self, request: web.Request) -> tuple[list[str], str | None]:
+        body = await request.json()
+        role = body.get("role")
+        config = body.get("config")
+        if role not in ROLE_NAMES:
+            return [], "unknown role"
+        if not isinstance(config, dict):
+            return [], "config must be an object"
+        config = self._normalize_api_key_input(config)
+
+        try:
+            connection = NovelLLMFactory.for_project(
+                request.match_info["project_id"], {role: config}
+            ).get_pi_role_connection(role)
+        except (TypeError, ValueError) as exc:
+            return [], str(exc)
+
+        api_key = os.environ.get(connection.api_key_env, "")
+        if not api_key:
+            return [], f"environment variable {connection.api_key_env} is not set"
+
+        endpoint = f"{connection.base_url.rstrip('/')}/models"
+        request_headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        try:
+            provider_request = urllib.request.Request(endpoint, headers=request_headers)
+            with urllib.request.urlopen(provider_request, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            return [], f"provider returned HTTP {exc.code}"
+        except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            return [], "could not connect to the provider or read its model list"
+
+        records = payload.get("data", []) if isinstance(payload, dict) else []
+        models = sorted({item.get("id") for item in records if isinstance(item, dict) and isinstance(item.get("id"), str)})
+        return models, None
+
+    @staticmethod
+    def _normalize_api_key_input(config: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(config)
+        key_input = normalized.get("api_key")
+        if isinstance(key_input, str) and key_input:
+            NovelLLMFactory._ensure_api_key_env(key_input)
+            if os.environ.get(key_input):
+                normalized["api_key_env"] = key_input
+                normalized.pop("api_key", None)
+            else:
+                normalized.pop("api_key_env", None)
+        return normalized
 
 
 def register_novel_routes(
@@ -759,6 +847,12 @@ def register_novel_routes(
     )
     app.router.add_put(
         f"{prefix}/{{project_id}}/llm-config", handlers.update_llm_config
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/llm-config/test", handlers.test_llm_connection
+    )
+    app.router.add_post(
+        f"{prefix}/{{project_id}}/llm-config/models", handlers.list_llm_models
     )
 
 

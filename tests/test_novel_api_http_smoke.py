@@ -173,6 +173,35 @@ async def test_llm_config_projects_do_not_cross_contaminate(api_app):
 
 
 @pytest.mark.asyncio
+async def test_custom_llm_config_persists_per_project_without_secrets(api_app):
+    app, _ = api_app
+    custom_a = {"writer": {
+        "provider": "openai-compatible",
+        "model": "vendor-a",
+        "api_base": "https://a.example/v1",
+        "api_key_env": "VENDOR_A_KEY",
+    }}
+    custom_b = {"writer": {
+        "provider": "openai-compatible",
+        "model": "vendor-b",
+        "api_base": "https://b.example/v1",
+        "api_key_env": "VENDOR_B_KEY",
+    }}
+
+    async with TestClient(TestServer(app)) as client:
+        await client.put("/awp/api/v1/novels/project-a/llm-config", json={"overrides": custom_a})
+        await client.put("/awp/api/v1/novels/project-b/llm-config", json={"overrides": custom_b})
+        body_a = await (await client.get("/awp/api/v1/novels/project-a/llm-config")).json()
+        body_b = await (await client.get("/awp/api/v1/novels/project-b/llm-config")).json()
+
+    assert body_a["data"]["overrides"] == custom_a
+    assert body_b["data"]["overrides"] == custom_b
+    assert "VENDOR_A_KEY" in json.dumps(body_a)
+    assert "VENDOR_B_KEY" in json.dumps(body_b)
+    assert "vendor-a-secret" not in json.dumps(body_a)
+
+
+@pytest.mark.asyncio
 async def test_llm_config_put_rejects_unknown_role(api_app):
     app, _ = api_app
 

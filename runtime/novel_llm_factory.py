@@ -200,6 +200,33 @@ class NovelLLMFactory:
         return (os.environ.get("NOVEL_LLM_PROVIDER") or "deepseek").lower()
 
     @staticmethod
+    def _ensure_api_key_env(name: str) -> None:
+        """Load a configured Windows environment variable into this process."""
+        if not name or os.environ.get(name) or os.name != "nt":
+            return
+        try:
+            import winreg
+
+            locations = (
+                (winreg.HKEY_CURRENT_USER, "Environment"),
+                (
+                    winreg.HKEY_LOCAL_MACHINE,
+                    r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+                ),
+            )
+            for root, path in locations:
+                try:
+                    with winreg.OpenKey(root, path) as key:
+                        value, _ = winreg.QueryValueEx(key, name)
+                except OSError:
+                    continue
+                if value:
+                    os.environ[name] = str(value)
+                    return
+        except ImportError:
+            return
+
+    @staticmethod
     def _is_siliconflow() -> bool:
         import os
         return (os.environ.get("NOVEL_LLM_PROVIDER") or "").lower() == "siliconflow"
@@ -327,7 +354,7 @@ class NovelLLMFactory:
                 "style_cleaner":      "mimo-v2.5-pro",
                 "ledger_curator":     "mimo-v2.5-pro",
             }
-            model_id = (
+            model_id = project.get("model") or (
                 os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}")
                 or os.environ.get("NOVEL_LLM_MODEL")
                 or default_map.get(role, "mimo-v2.5-pro")
@@ -352,7 +379,7 @@ class NovelLLMFactory:
             "ledger_curator":     "qwen3.7-plus",
             "mechanical_patch":   "qwen3.7-plus",
         }
-        model_id = (
+        model_id = project.get("model") or (
             os.environ.get(f"NOVEL_LLM_MODEL_{role.upper()}")
             or os.environ.get("NOVEL_LLM_MODEL")
             or default_map.get(role, "qwen3.7-max")
@@ -424,6 +451,12 @@ class NovelLLMFactory:
         p_provider = project.get("provider", "")
         p_base = project.get("api_base", "")
         p_key_env = project.get("api_key_env", "")
+        p_api_key = project.get("api_key", "")
+        if p_api_key:
+            p_key_env = f"AWP_LLM_DIRECT_KEY_{role_suffix}"
+            os.environ[p_key_env] = str(p_api_key)
+        else:
+            NovelLLMFactory._ensure_api_key_env(p_key_env)
 
         if provider == "opencode":
             return NovelPiConnectionConfig(
@@ -470,6 +503,19 @@ class NovelLLMFactory:
                     f"NOVEL_LLM_API_KEY_ENV_{role_suffix}",
                     os.environ.get("NOVEL_LLM_API_KEY_ENV", "SILICONFLOW_API_KEY"),
                 ),
+                thinking_level=thinking_level,
+                max_tokens=max_tokens,
+            )
+        if provider == "openai-compatible":
+            if not p_base or not p_key_env:
+                raise ValueError(
+                    f"role {role} openai-compatible provider requires api_base and api_key_env"
+                )
+            return NovelPiConnectionConfig(
+                provider="awp-openai-compatible",
+                model=model,
+                base_url=p_base,
+                api_key_env=p_key_env,
                 thinking_level=thinking_level,
                 max_tokens=max_tokens,
             )

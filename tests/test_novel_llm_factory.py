@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from awp_rp_runtime_v3.runtime.novel_llm_factory import (
@@ -86,6 +88,58 @@ def test_project_overrides_apply_to_role_config(monkeypatch):
     assert config.model == "custom-model"
     assert config.max_tokens == 12345
     assert config.thinking_level == "high"
+
+
+@pytest.mark.parametrize("provider", ["opencode", "mimo", "siliconflow"])
+def test_project_model_wins_over_provider_environment_defaults(monkeypatch, provider):
+    monkeypatch.setenv("NOVEL_LLM_PROVIDER", provider)
+    monkeypatch.setenv("NOVEL_LLM_MODEL", "environment-model")
+
+    snapshot = NovelLLMFactory.for_project(
+        "project-a",
+        {"writer": {"provider": provider, "model": "project-model"}},
+    )
+
+    assert snapshot.get_pi_role_connection("writer").model == "project-model"
+
+
+def test_custom_provider_uses_project_connection_fields(monkeypatch):
+    monkeypatch.setenv("NOVEL_LLM_PROVIDER", "deepseek")
+
+    snapshot = NovelLLMFactory.for_project(
+        "project-a",
+        {
+            "writer": {
+                "provider": "openai-compatible",
+                "model": "vendor-model",
+                "api_base": "https://vendor.example/v1",
+                "api_key_env": "VENDOR_API_KEY",
+            }
+        },
+    )
+
+    connection = snapshot.get_pi_role_connection("writer")
+    assert connection.provider == "awp-openai-compatible"
+    assert connection.model == "vendor-model"
+    assert connection.base_url == "https://vendor.example/v1"
+    assert connection.api_key_env == "VENDOR_API_KEY"
+    assert connection.api_key is None
+
+
+def test_direct_project_key_is_injected_into_the_role_connection_environment(monkeypatch):
+    monkeypatch.delenv("AWP_LLM_DIRECT_KEY_BRAIN", raising=False)
+    snapshot = NovelLLMFactory.for_project(
+        "project-a",
+        {"brain": {
+            "provider": "openai-compatible", "model": "vendor-model",
+            "api_base": "https://vendor.example/v1", "api_key": "direct-test-key",
+        }},
+    )
+
+    connection = snapshot.get_pi_role_connection("brain")
+
+    assert connection.api_key_env == "AWP_LLM_DIRECT_KEY_BRAIN"
+    assert os.environ["AWP_LLM_DIRECT_KEY_BRAIN"] == "direct-test-key"
 
 
 def test_thinking_level_overrides_default_thinking(monkeypatch):
